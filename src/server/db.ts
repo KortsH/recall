@@ -3,11 +3,17 @@ import pg from "pg";
 export const databaseUrl = () =>
   process.env.DATABASE_URL ?? "postgres://recall:recall@127.0.0.1:55432/recall";
 export function createPool(url = databaseUrl()) {
-  return new pg.Pool({
+  const pool = new pg.Pool({
     connectionString: url,
     max: 6,
     connectionTimeoutMillis: 5000,
   });
+  // Idle sockets can fail when PostgreSQL restarts. The pool removes that client;
+  // handling the event prevents a recoverable disconnect from killing Node.
+  pool.on("error", (error) => {
+    console.error(`PostgreSQL idle connection closed: ${error.message}`);
+  });
+  return pool;
 }
 export type DB = pg.Pool | pg.PoolClient;
 export async function transaction<T>(

@@ -43,7 +43,7 @@ before(async () => {
 after(async () => {
   await new Promise<void>((r) => server.close(() => r()));
   await pool.end();
-  await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+  await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
   await admin.end();
 });
 async function fresh() {
@@ -112,6 +112,29 @@ test("parallel submissions credit exactly one answer", async () => {
     1,
   );
 });
+test(
+  "idle PostgreSQL disconnects are handled and the pool reconnects",
+  { timeout: 5000 },
+  async (t) => {
+    t.mock.method(console, "error", () => {});
+    const recovery = createPool(testUrl.toString());
+    try {
+      const pid = (await recovery.query("SELECT pg_backend_pid() AS pid"))
+        .rows[0].pid;
+      const disconnected = new Promise<void>((resolve) =>
+        recovery.once("error", () => resolve()),
+      );
+      await admin.query("SELECT pg_terminate_backend($1)", [pid]);
+      await disconnected;
+      assert.equal(
+        (await recovery.query("SELECT 1 AS value")).rows[0].value,
+        1,
+      );
+    } finally {
+      await recovery.end();
+    }
+  },
+);
 test("mistakes return after intervening objectives", async () => {
   const id = await fresh();
   const s = await store.createSession(id, { mode: "cram", count: 5 });
@@ -278,6 +301,7 @@ test("HTTP validates imports atomically and rejects cross-origin mutations", asy
     }),
   });
   assert.equal(r.status, 400);
+  await r.json();
   assert.equal((await store.decks()).length, before);
   r = await fetch(base + "/api/import", {
     method: "POST",
@@ -288,6 +312,7 @@ test("HTTP validates imports atomically and rejects cross-origin mutations", asy
     body: JSON.stringify(bank),
   });
   assert.equal(r.status, 403);
+  await r.json();
 });
 test("CLI import, export and stats operate on the same real database", async () => {
   const dir = await mkdtemp(join(tmpdir(), "recall-cli-"));

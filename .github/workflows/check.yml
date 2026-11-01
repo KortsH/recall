@@ -19,10 +19,21 @@ jobs:
     env:
       DATABASE_URL: postgres://recall:recall@127.0.0.1:5432/recall
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run check
+      - name: Build and start Docker stack
+        run: docker compose up -d --build --wait
+      - name: Verify packaged app and CLI
+        run: |
+          curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:4310/api/health
+          curl --fail --silent http://127.0.0.1:4310/ > /dev/null
+          docker compose exec -T app npm run seed
+          docker compose exec -T app npm run recall -- stats "Principles of Data Protection" --json
+      - name: Stop test stack
+        if: always()
+        run: docker compose down -v
