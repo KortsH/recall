@@ -11,7 +11,14 @@ const app = createServer((req, res) => {
     res.end("Host not allowed");
     return;
   }
-  const target = new URL(req.url ?? "/", origin);
+  let target: URL;
+  try {
+    target = new URL(req.url ?? "/", origin);
+  } catch {
+    res.writeHead(400);
+    res.end("Invalid request target");
+    return;
+  }
   if (target.origin !== origin.origin) {
     res.writeHead(400);
     res.end("Invalid request target");
