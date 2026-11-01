@@ -1,8 +1,10 @@
 # Architecture
 
-`React → Node HTTP → Store → pure learning engine + PostgreSQL`. The CLI calls Store directly. PostgreSQL is the source of truth; the browser keeps only the current interaction state, and server sessions persist their queue/cursor/answers. A small connection pool avoids reconnecting for every question. No cross-request question cache can become stale after a correction.
+`React → Node HTTP → Store → pure learning engine + PostgreSQL`. The CLI calls Store directly in local-database mode or uses the HTTP adapter in shared-server mode. PostgreSQL is the shared source of truth. Downloaded mode retains the full bank, progress, sessions and pending evidence in IndexedDB and runs the same browser-safe engine locally. Live-server mode remains available. A small PostgreSQL pool avoids reconnecting for every request.
 
-Tables: decks, versioned JSONB question definitions, objective progress, sessions, and immutable attempt snapshots with invalidation flags. JSONB lets formats evolve while ordinary keys and constraints enforce identity. SQL queries are parameterised.
+Downloaded sessions make no per-answer requests. A batched sync recomputes grading against current question revisions and merges new attempt evidence transactionally; an existing session/ordinal cannot receive credit twice. Server corrections invalidate obsolete evidence. Pending uploads survive browser restarts, and a manual refresh syncs them before replacing a download. Devices see each other's progress on refresh. Clearing browser storage can discard unsynced evidence; current offline authoring is limited to studying, while question edits/imports are explicit online actions.
+
+Tables: decks, versioned JSONB questions with archival timestamps, objective progress, sessions, attempt snapshots with invalidation flags, and offline-event identities. JSONB lets formats evolve while keys and constraints enforce identity. SQL queries are parameterised. Replacement imports archive absent records instead of purging history; unchanged records keep progress.
 
 Submission locks the session and objective, checks the session version and question revision, writes attempt/progress, and advances the queue in one transaction. Duplicate or stale submissions fail instead of double-counting. Imports and edits use the same question-write service. Semantic hashes use canonical key ordering; explanation-only edits preserve mastery.
 
@@ -10,4 +12,4 @@ Learn ranks weak/unseen objectives, rotates topic groups, starts with recognitio
 
 Mastery is an initial scheduling state, not a guarantee of long-term retention: three consecutive correct responses, at least two active recalls, and later due reviews. Wrong answers clear the streak and recall count. Self-assessed evidence is counted separately, even when it contributes to mastery. Accuracy excludes obsolete revisions and ungraded written answers; unanswered test items are shown separately.
 
-No multi-user account system, public deployment, PDF processing, AI calls, or executable question generators. Storage can evolve without changing the pure engine or format adapters.
+No multi-user account system, public deployment, PDF processing, AI calls, or executable question generators. Private home-server deployment and an installable PWA are supported. Native clients and portable progress bundles are future work. Storage can evolve without changing the pure engine or format adapters.

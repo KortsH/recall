@@ -73,7 +73,7 @@ npm run recall -- wrong "Data Protection"
 npm run recall -- export "Data Protection" -o questions.json
 ```
 
-Optionally run `npm link` to make `recall` available directly. Run commands from the repository directory so `.env` resolves predictably. The CLI talks directly to the same PostgreSQL database through the same learning engine; the HTTP server need not be running.
+Optionally run `npm link` to make `recall` available directly. Run commands from the repository directory so `.env` resolves predictably. In local-database mode the CLI talks directly to PostgreSQL through the shared engine, without requiring the HTTP server. Shared-server mode uses the same HTTP API as other connected clients.
 
 JSON is canonical. CSV/TSV imports need `--deck`; headers are `id,question,answer,topic,explanation,difficulty,tags` (only the first three are required; tags use `|`). CSV/TSV produces written/self-rated objectives and flashcards. Use JSON for choices, structured grading, matching, and scenarios. Validation reports malformed fields before any changes are made. Stable question IDs are required and unique within a deck; repeat imports update those IDs without duplicating questions.
 
