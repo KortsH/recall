@@ -1,16 +1,22 @@
-# Recall mobile
+# Recall on mobile
 
-The Android starter is a small native container for your self-hosted Recall application. Enter your own HTTPS server origin on first launch; no deployment address or credentials are compiled into the app. It uses the same quiz UI, IndexedDB downloads, learning engine and batched sync as the browser, with local storage isolated by server origin.
+End-user installation is documented in the root [README](../README.md#android), including the Android APK download and browser/iPhone PWA option.
 
-Features: persistent server selection, safe navigation, normal TLS validation, JSON file picker, system-bar insets and WebView state restoration. It requests only internet access, uses no JavaScript-to-native bridge, disables mixed content and third-party cookies, and does not back up local study data to the Android cloud-backup service.
+Android bundles the standalone React study interface. Choose **Use without a server** to use IndexedDB and portable quiz files, including on first launch without a network. Imports, editing, dependency learning, sessions and exports all run locally. Optional server mode loads your explicitly entered HTTPS server; no deployment URL or credentials are compiled into the APK. The two origins keep separate storage.
 
-Build with JDK 17+, Android SDK 35 and Gradle:
+Import through the JSON file picker, or Open with Recall for supported JSON content URIs from another app. The UI previews all imports. Native export opens ACTION_CREATE_DOCUMENT; the user chooses where the JSON file is written. A narrow WebMessage listener accepts only main-frame messages from the chosen HTTPS origin, with a 5 MB limit. It can signal readiness or request a JSON save picker; it exposes no arbitrary filesystem reads or methods. External import URIs must use content:// and their data is passed as quoted text into the local import preview, never executed as code. See [Android's WebViewAssetLoader guidance](https://developer.android.com/develop/ui/views/layout/webapps/load-local-content).
+
+TLS validation is normal; mixed content, file:// access, third-party cookies and WebView debugging are disabled. App data is excluded from Android cloud backup. Keep Android System WebView current for native file export. Clear app data only after exporting personal backups.
+
+## Build
+
+Run `npm ci` in the repository, then with JDK 17+ and Android SDK 35 installed:
 
 ```sh
 cd mobile/android
 ./gradlew testDebugUnitTest assembleDebug
 ```
 
-Install the resulting debug APK on your own Android phone. It is a development build, not a Play Store release. Connect your private VPN before opening a private server. The initial successful online visit downloads the app; study progress stays on the device until it can sync. Use Recall's Settings to select downloaded or live-server mode. Sync before changing servers or clearing app data.
+Gradle's pre-build step bundles the web UI into generated assets using Node. It does not contact a quiz server or include private banks. The debug APK is under `app/build/outputs/apk/debug/`. Development tools are not required to install the published APK.
 
-No physical device is needed to compile the starter. Device testing and a signed release, native navigation polish, iOS and portable progress-bundle import/export remain on the roadmap. iPhone users can already use the installable PWA through Safari's Add to Home Screen.
+The current APK is a preview signed with the development certificate. Physical-device verification and stable release signing remain open. iPhone uses the browser app through Safari's Add to Home Screen; native iOS is future work. Portable files transfer quizzes and optional progress between all clients without a central server.

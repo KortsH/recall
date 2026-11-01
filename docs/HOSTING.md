@@ -1,5 +1,7 @@
 # Local, shared-server, and mobile use
 
+For installation without any server, use the Windows/Android downloads or browser app in the [README](../README.md#install-and-use). Device-only workspaces support offline authoring and portable quiz/progress files; PostgreSQL is only required for the optional shared-server mode described here. The owner's private deployment is not a public service for other installations.
+
 One PostgreSQL database serves quizzes and progress to computers and phones. The owner's installation uses a private home server; its addresses, credentials, disk identifiers and operational handoff stay outside this public repository. Any Node + PostgreSQL host can run the app.
 
 ## Downloaded study mode
@@ -12,7 +14,7 @@ Initial download and editing/importing need a connection. Visit successfully onl
 
 ## Phone app
 
-Open your HTTPS URL in Chrome (Android) or Safari (iPhone) and choose **Install app / Add to Home Screen**. Android also has a [native app starter](../mobile/README.md). Enter your server address on first launch; no deployment address is embedded in the app. Both options use the same quizzes and progress. Native iOS and portable transfer bundles remain future work.
+Open your HTTPS URL in Chrome (Android) or Safari (iPhone) and choose **Install app / Add to Home Screen**. Android also has a [bundled native container](../mobile/README.md) with device-only study and an optional server connection. Choose your own server address explicitly to use shared progress; no deployment address is embedded. [Portable files](PORTABLE.md) work across clients. Native iOS remains future work.
 
 ## CLI against the same server
 

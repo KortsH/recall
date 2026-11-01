@@ -1,6 +1,6 @@
 {
   "name": "recall-study",
-  "version": "0.1.0",
+  "version": "0.2.0-preview.1",
   "private": true,
   "type": "module",
   "description": "A focused, local adaptive exam learning tool.",
@@ -19,12 +19,14 @@
     "recall": "tsx src/cli.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "seed": "tsx src/cli.ts import examples/demo.json",
-    "test": "tsx --test tests/engine.test.ts tests/import.test.ts tests/cache.test.ts tests/prerequisites.test.ts tests/library.test.tsx tests/proxy.test.ts",
+    "test": "tsx --test tests/engine.test.ts tests/import.test.ts tests/cache.test.ts tests/prerequisites.test.ts tests/library.test.tsx tests/proxy.test.ts tests/portable.test.ts tests/personal.test.ts",
     "test:integration": "tsx --test tests/integration.test.ts",
     "check": "npm run check:public && npm test && npm run test:integration && npm run build",
     "schema": "tsx scripts/schema.ts",
     "format": "prettier --write src scripts tests vite.config.ts",
-    "check:public": "tsx scripts/check-public.ts"
+    "check:public": "tsx scripts/check-public.ts",
+    "build:standalone": "tsc --noEmit && tsx scripts/standalone.ts",
+    "test:installer": "tsx --test tests/windows-installer.test.ts"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

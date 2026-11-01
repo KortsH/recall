@@ -1,3 +1,13 @@
+import { parseBank, semanticContent } from "../core/schema.ts";
+import {
+  parsePortable,
+  importPersonal,
+  exportPortable,
+} from "../core/portable.ts";
+import {
+  prospectiveQuestions,
+  validatePrerequisites,
+} from "../core/prerequisites.ts";
 import type { DeckSummary } from "../server/store.ts";
 import type { Item, Session } from "../core/types.ts";
 import { emptyProgress } from "../core/types.ts";
@@ -30,6 +40,15 @@ const serial = <T>(fn: () => Promise<T>) => {
   chain = promise.catch(() => {});
   return promise;
 };
+export const personalMode = () =>
+  (localStorage.getItem("recall-workspace") ??
+    (import.meta.env?.VITE_RECALL_STANDALONE === "true"
+      ? "personal"
+      : "server")) === "personal";
+export function selectWorkspace(personal: boolean) {
+  localStorage.setItem("recall-workspace", personal ? "personal" : "server");
+}
+const workspaceKey = () => (personalMode() ? "personal" : "workspace");
 export const downloadedMode = () =>
   localStorage.getItem("recall-storage") !== "live";
 export function setDownloadedMode(enabled: boolean) {
@@ -37,9 +56,10 @@ export function setDownloadedMode(enabled: boolean) {
   window.dispatchEvent(new Event("recall-cache"));
 }
 export const downloadStatus = () => ({
-  enabled: downloadedMode(),
+  personal: personalMode(),
+  enabled: personalMode() || downloadedMode(),
   downloadedAt: state?.downloadedAt,
-  pending: state ? Object.keys(state.dirty).length : 0,
+  pending: !personalMode() && state ? Object.keys(state.dirty).length : 0,
   error: lastError,
 });
 export async function serverApi<T>(
@@ -64,7 +84,7 @@ async function database() {
     r.onerror = () =>
       reject(
         new Error(
-          "Device storage is unavailable. Select live-server mode in Settings.",
+          "Device storage is unavailable. Use a normal browser profile with site storage enabled.",
         ),
       );
   });
@@ -74,7 +94,7 @@ async function persist() {
   try {
     await new Promise<void>((resolve, reject) => {
       const t = db.transaction("state", "readwrite");
-      t.objectStore("state").put(state, "workspace");
+      t.objectStore("state").put(state, workspaceKey());
       t.oncomplete = () => resolve();
       t.onerror = () => reject(t.error);
     });
@@ -88,7 +108,10 @@ async function load() {
   const db = await database();
   try {
     state = await new Promise<State | undefined>((resolve, reject) => {
-      const r = db.transaction("state").objectStore("state").get("workspace");
+      const r = db
+        .transaction("state")
+        .objectStore("state")
+        .get(workspaceKey());
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error);
     });
@@ -96,13 +119,22 @@ async function load() {
     db.close();
   }
   if (!state) {
-    const snapshot = await serverApi<Snapshot>("/snapshot");
+    const snapshot = personalMode()
+      ? {
+          downloadedAt: new Date().toISOString(),
+          decks: [],
+          items: {},
+          recent: {},
+          sessions: {},
+        }
+      : await serverApi<Snapshot>("/snapshot");
     state = { ...snapshot, dirty: {} };
     await persist();
   }
   return state;
 }
 function stats(items: Item[]): DeckSummary["stats"] {
+  items = items.filter((i) => !i.archived);
   const locked = new Set(
     prerequisiteStatus(items)
       .filter((s) => !s.unlocked)
@@ -188,6 +220,7 @@ function view(s: State, session: Session) {
   return sessionView(session, items);
 }
 async function syncInternal(s: State) {
+  if (personalMode()) return;
   for (const id of Object.keys(s.dirty)) {
     const current = s.sessions[id];
     const result = await serverApi<{
@@ -237,6 +270,10 @@ export const syncDownloads = () =>
   });
 export const refreshDownloads = () =>
   serial(async () => {
+    if (personalMode()) {
+      await load();
+      return;
+    }
     const s = await load();
     await syncInternal(s);
     const snapshot = await serverApi<Snapshot>("/snapshot");
@@ -257,7 +294,8 @@ export async function api<T>(
   body?: any,
   method?: string,
 ): Promise<T> {
-  if (!downloadedMode()) return serverApi(path, body, method);
+  if (!personalMode() && !downloadedMode())
+    return serverApi(path, body, method);
   return serial(async () => {
     const s = await load();
     const url = new URL(path, "http://local");
@@ -265,6 +303,35 @@ export async function api<T>(
     const verb = method ?? (body ? "POST" : "GET");
     let result: any;
     if (p === "/decks" && verb === "GET") return decks(s) as T;
+    if (personalMode() && p === "/import" && verb === "POST") {
+      const parsed = parsePortable(body);
+      const current = s.decks.find((d) => d.name === parsed.bank.deck);
+      const plan = await importPersonal(
+        current ? s.items[current.id] : [],
+        body,
+        {
+          replace: url.searchParams.get("replace") === "1",
+          topic: url.searchParams.get("topic") ?? undefined,
+          restoreProgress: url.searchParams.get("progress") === "replace",
+        },
+      );
+      if (url.searchParams.get("dryRun") === "1")
+        return { ...plan.counts, deckId: current?.id ?? "", dryRun: true } as T;
+      const id = current?.id ?? `personal-${crypto.randomUUID()}`;
+      if (!current)
+        s.decks.push({
+          id,
+          name: plan.bank.deck,
+          description: plan.bank.description,
+          created_at: new Date().toISOString(),
+          stats: stats(plan.items),
+        });
+      else if (plan.bank.description)
+        current.description = plan.bank.description;
+      s.items[id] = plan.items;
+      await persist();
+      return { ...plan.counts, deckId: id, dryRun: false } as T;
+    }
     const d = p.match(/^\/decks\/([^/]+)(?:\/(.*))?$/);
     if (d) {
       const id = decodeURIComponent(d[1]),
@@ -272,15 +339,45 @@ export async function api<T>(
       const deck = decks(s).find((d) => d.id === id);
       if (!deck) throw new Error("Deck not downloaded. Refresh quizzes.");
       if (!rest && verb === "GET") return deck as T;
+      if (personalMode() && !rest && verb === "PATCH") {
+        const target = s.decks.find((d) => d.id === id)!;
+        if (body.name !== undefined) {
+          if (
+            !body.name.trim() ||
+            s.decks.some((d) => d.id !== id && d.name === body.name.trim())
+          )
+            throw new Error("Choose a unique nonempty deck name");
+          target.name = body.name.trim();
+        }
+        if (body.description !== undefined)
+          target.description = String(body.description);
+        await persist();
+        return { ...target, stats: stats(s.items[id]) } as T;
+      }
       if (rest === "questions" && verb === "GET")
-        return (s.items[id] ?? []) as T;
+        return (s.items[id] ?? []).filter((i) => !i.archived) as T;
       if (rest === "export" && verb === "GET")
         return {
           schemaVersion: 1,
           deck: deck.name,
           description: deck.description,
-          questions: s.items[id].map((i) => i.question),
+          questions: s.items[id]
+            .filter((i) => !i.archived)
+            .map((i) => i.question),
         } as T;
+      if (rest === "portable" && verb === "GET")
+        return (await exportPortable(
+          {
+            schemaVersion: 1,
+            deck: deck.name,
+            description: deck.description,
+            questions: s.items[id]
+              .filter((i) => !i.archived)
+              .map((i) => i.question),
+          },
+          s.items[id],
+          url.searchParams.get("progress") === "1",
+        )) as T;
       if (rest === "sessions" && verb === "GET")
         return Object.values(s.sessions)
           .filter((x) => x.deckId === id)
@@ -297,7 +394,7 @@ export async function api<T>(
       if (rest === "sessions" && verb === "POST") {
         const session = newSession(id, s.items[id], body);
         s.sessions[session.id] = session;
-        s.dirty[session.id] = true;
+        if (!personalMode()) s.dirty[session.id] = true;
         await persist();
         return view(s, session) as T;
       }
@@ -309,6 +406,23 @@ export async function api<T>(
         if (!item) throw new Error("Question not downloaded");
         if (verb === "GET") return structuredClone(item) as T;
         if (verb === "PUT") {
+          if (personalMode()) {
+            if (item.revision !== body.revision)
+              throw new Error("Question changed. Reload before saving.");
+            const question = parseBank({
+              deck: deck.name,
+              questions: [body.question],
+            }).questions[0];
+            if (question.id !== item.question.id)
+              throw new Error("Question IDs cannot change");
+            const plan = await importPersonal(s.items[id], {
+              deck: deck.name,
+              questions: [question],
+            });
+            s.items[id] = plan.items;
+            await persist();
+            return { kind: "updated", reset: !!plan.counts.reviewReset } as T;
+          }
           await syncInternal(s);
           result = await serverApi(path, body, verb);
           const updated = await serverApi<Item>(
@@ -331,7 +445,7 @@ export async function api<T>(
         const wasFinished = session.finished;
         result = view(s, session);
         if (!wasFinished && session.finished) {
-          s.dirty[session.id] = true;
+          if (!personalMode()) s.dirty[session.id] = true;
           setTimeout(() => void syncDownloads().catch(() => {}), 0);
         }
         await persist();
@@ -426,12 +540,14 @@ export async function api<T>(
         session.version++;
         result = view(s, session);
       } else throw new Error("Unsupported downloaded-session action");
-      s.dirty[session.id] = true;
+      if (!personalMode()) s.dirty[session.id] = true;
       await persist();
       if (session.finished)
         setTimeout(() => void syncDownloads().catch(() => {}), 0);
       return result as T;
     }
+    if (personalMode())
+      throw new Error("This action is unavailable in the device workspace");
     // Bank management is an explicit online action; ordinary studying never enters this path.
     await syncInternal(s);
     result = await serverApi(path, body, method);

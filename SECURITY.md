@@ -2,6 +2,8 @@
 
 Recall is a single-user app intended for loopback or an authenticated private network. It has no application login. Anyone who can reach its API can view and change its questions and progress. Add authentication before making it publicly reachable. Keep PostgreSQL private.
 
+Device-only workspaces have no quiz API connection. The public browser app serves static application files; quizzes/progress stay in the browser. Windows publishes bundled static assets on loopback only, with Host/path checks and a token-protected local quit endpoint. Android loads its packaged assets over a local HTTPS origin and provides only an origin-bound, main-frame JSON save picker helper; incoming attachment URIs must be content://. Portable question exports omit progress by default and contain no connection configuration. Progress files are user-controlled snapshots, not authenticated proof of exam performance.
+
 Store deployment URLs, credentials, SSH material, real question banks, database exports, backup configuration and disk identifiers outside Git. Production settings belong in ignored files. Android asks for its server address on the device and does not embed it in source.
 
 Run `npm run check:public` before sharing a branch. It checks tracked paths and text for common private-deployment material. Use a dedicated secret scanner over Git history as well; pattern checks cannot prove that every secret has been found. Never paste secrets into an issue or security report.

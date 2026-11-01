@@ -1,3 +1,6 @@
+import { parsePortable, exportPortable } from "../core/portable.ts";
+import { saveJson } from "./files.ts";
+import { emptyProgress } from "../core/types.ts";
 import { QuestionLibrary } from "./library.tsx";
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
@@ -41,6 +44,8 @@ import "@fontsource/manrope/latin-700.css";
 import "./readability.css";
 import {
   api,
+  personalMode,
+  selectWorkspace,
   downloadedMode,
   setDownloadedMode,
   refreshDownloads,
@@ -50,6 +55,8 @@ import {
 
 type Deck = Awaited<ReturnType<Store["decks"]>>[number];
 type SessionView = Awaited<ReturnType<Store["getSession"]>>;
+const sessionKey = () =>
+  personalMode() ? "recall-session-personal" : "recall-session";
 type Feedback = Attempt & { rubric?: string[] };
 type Reveal = Awaited<ReturnType<Store["reveal"]>>;
 const fmt = (s: string) => s.replaceAll("_", " ");
@@ -101,7 +108,9 @@ function App() {
   const [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [importOpen, setImportOpen] = useState(false);
+    [importOpen, setImportOpen] = useState(false),
+    [importRaw, setImportRaw] = useState(""),
+    [shareOpen, setShareOpen] = useState(false);
   const [response, setResponse] = useState<any>(""),
     [selected, setSelected] = useState<string[]>([]),
     [pairs, setPairs] = useState<Record<string, string>>({}),
@@ -112,6 +121,15 @@ function App() {
   const inputRef = useRef<HTMLTextAreaElement>(null),
     mainRef = useRef<HTMLElement>(null);
   const deck = decks.find((d) => d.id === deckId);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      setImportRaw(String((event as CustomEvent).detail));
+      setImportOpen(true);
+    };
+    window.addEventListener("recall-import", receive);
+    window.RecallFiles?.postMessage(JSON.stringify({ action: "ready" }));
+    return () => window.removeEventListener("recall-import", receive);
+  }, []);
   const refresh = async () => {
     const d = await api<Deck[]>("/decks");
     setDecks(d);
@@ -121,7 +139,7 @@ function App() {
     void refresh().catch((e) => setError(e.message));
   }, []);
   useEffect(() => {
-    const id = localStorage.getItem("recall-session");
+    const id = localStorage.getItem(sessionKey());
     if (id)
       void api<SessionView>(`/sessions/${id}`)
         .then((s) => {
@@ -130,7 +148,7 @@ function App() {
             setDeckId(s.deckId);
           }
         })
-        .catch(() => localStorage.removeItem("recall-session"));
+        .catch(() => localStorage.removeItem(sessionKey()));
   }, []);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -189,7 +207,7 @@ function App() {
       setSession(s);
       setMode(chosen);
       resetAnswer();
-      localStorage.setItem("recall-session", s.id);
+      localStorage.setItem(sessionKey(), s.id);
     });
   const resume = (id: string) =>
     void run(async () => {
@@ -198,7 +216,7 @@ function App() {
       setSession(s);
       setDeckId(s.deckId);
       resetAnswer();
-      localStorage.setItem("recall-session", s.id);
+      localStorage.setItem(sessionKey(), s.id);
     });
   const leave = () => {
     if (downloadedMode()) void syncDownloads().catch(() => {});
@@ -323,6 +341,15 @@ function App() {
   const saveEdit = (question: Question) =>
     void run(async () => {
       if (!editor) return;
+      if (editor.revision === 0) {
+        if (!deck) throw new Error("Choose a quiz first");
+        await api("/import", { deck: deck.name, questions: [question] });
+        setEditor(null);
+        setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+        await refresh();
+        setNotice("Question added to this quiz.");
+        return;
+      }
       const result = await api<{ reset: boolean }>(
         `/decks/${deckId}/questions/${editor.question.id}`,
         { question, revision: editor.revision },
@@ -378,18 +405,58 @@ function App() {
       setBusy(false);
     }
   };
-  const exportDeck = () =>
+  const exportDeck = () => setShareOpen(true);
+  const shareDeck = (includeProgress: boolean) =>
     void run(async () => {
-      const bank = await api(`/decks/${deckId}/export`);
-      const url = URL.createObjectURL(
-        new Blob([JSON.stringify(bank, null, 2)], { type: "application/json" }),
+      const bank = await api<any>(`/decks/${deckId}/export`);
+      const current = includeProgress
+        ? await api<Item[]>(`/decks/${deckId}/questions`)
+        : [];
+      const bundle = await exportPortable(bank, current, includeProgress);
+      saveJson(
+        `${bank.deck.replace(/[^\p{L}\p{N}._-]+/gu, "-")}${includeProgress ? "-with-progress" : ""}.recall.json`,
+        bundle,
       );
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "recall-" + deckId + ".json";
-      a.click();
-      URL.revokeObjectURL(url);
+      setShareOpen(false);
+      setNotice(
+        "Export prepared. Save the file, then send it through Files, WhatsApp or another app.",
+      );
     });
+  const importBank = async (
+    input: unknown,
+    replace: boolean,
+    restoreProgress: boolean,
+    dryRun: boolean,
+  ) => {
+    if (busy) throw new Error("Another action is running");
+    setBusy(true);
+    setError("");
+    try {
+      const parsed = parsePortable(input);
+      const params = new URLSearchParams({
+        replace: replace ? "1" : "0",
+        dryRun: dryRun ? "1" : "0",
+        progress: restoreProgress ? "replace" : "keep",
+      });
+      const result = await api<any>(
+        `/import?${params}`,
+        personalMode() ? input : parsed.bank,
+      );
+      if (!dryRun) {
+        setImportOpen(false);
+        setImportRaw("");
+        await refresh();
+        setDeckId(result.deckId);
+        setItems(await api<Item[]>(`/decks/${result.deckId}/questions`));
+        setNotice(
+          `${result.created} added · ${result.updated} updated · ${result.unchanged} unchanged · ${result.archived} archived`,
+        );
+      }
+      return result;
+    } finally {
+      setBusy(false);
+    }
+  };
   const due = decks.reduce((n, d) => n + d.stats.due, 0),
     total = decks.reduce((n, d) => n + d.stats.total, 0);
   const inStudy = !!session;
@@ -513,10 +580,12 @@ function App() {
           </div>
           <div className="local-badge">
             <span className="status-dot" />
-            {cache.enabled
-              ? `Downloaded on device${cache.pending ? ` · ${cache.pending} to sync` : ""}`
-              : "Live server"}
-            {cache.enabled && (
+            {cache.personal
+              ? "On this device · no server"
+              : cache.enabled
+                ? `Downloaded on device${cache.pending ? ` · ${cache.pending} to sync` : ""}`
+                : "Live server"}
+            {!cache.personal && cache.enabled && (
               <button
                 className="icon-button"
                 aria-label="Refresh downloaded quizzes"
@@ -890,6 +959,32 @@ function App() {
 
                   <button
                     className="button secondary"
+                    disabled={!deck || busy}
+                    onClick={() =>
+                      setEditor({
+                        revision: 0,
+                        progress: emptyProgress(),
+                        question: {
+                          id: `q-${crypto.randomUUID().slice(0, 8)}`,
+                          topic: topic || items[0]?.question.topic || "General",
+                          concept: "",
+                          skill: "recall",
+                          question: "",
+                          answer: "",
+                          explanation: "",
+                          difficulty: 1,
+                          tags: [],
+                          variants: [],
+                          depends_on: [],
+                        },
+                      })
+                    }
+                  >
+                    <Plus size={16} />
+                    New question
+                  </button>
+                  <button
+                    className="button secondary"
                     disabled={!deck}
                     onClick={exportDeck}
                   >
@@ -1044,66 +1139,117 @@ function App() {
                     Your workspace<span className="heading-dot">.</span>
                   </h1>
                   <p>
-                    A local learning tool. Your question banks and progress live
-                    in PostgreSQL.
+                    {cache.personal
+                      ? "Your quizzes and progress stay in this browser or app. No account or server is needed."
+                      : "Your server stores shared questions and progress; downloaded mode keeps a copy on this device."}
                   </p>
                 </div>
-                <div className="settings-card">
-                  <h2>Keep quizzes on this device</h2>
-                  <p>
-                    Download the full quiz and study without contacting the
-                    server for each answer. Progress saves here immediately,
-                    then syncs when you finish, leave, or refresh. New questions
-                    arrive only when you refresh.
-                  </p>
-                  <label className="storage-choice">
-                    <input
-                      type="checkbox"
-                      checked={cache.enabled}
-                      onChange={(e) =>
+                {cache.personal && (
+                  <div className="settings-card">
+                    <h2>Learn here. Share anywhere.</h2>
+                    <p>
+                      Import a .recall.json or ordinary question-bank JSON file.
+                      Study, edit and organize without a server. Export a quiz
+                      for your friend, or include progress to move your own
+                      learning to another device.
+                    </p>
+                    <p className="small">
+                      Your browser and phone keep separate copies. Clearing
+                      app/site data removes local quizzes and progress, so keep
+                      exported backup files.
+                    </p>
+                    <button
+                      className="button primary"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <Upload size={16} />
+                      Import a quiz file
+                    </button>
+                  </div>
+                )}
+                {!cache.personal && (
+                  <div className="settings-card">
+                    <h2>Keep quizzes on this device</h2>
+                    <p>
+                      Download the full quiz and study without contacting the
+                      server for each answer. Progress saves here immediately,
+                      then syncs when you finish, leave, or refresh. New
+                      questions arrive only when you refresh.
+                    </p>
+                    <label className="storage-choice">
+                      <input
+                        type="checkbox"
+                        checked={cache.enabled}
+                        onChange={(e) =>
+                          void run(async () => {
+                            const enabled = e.target.checked;
+                            if (!enabled) await syncDownloads();
+                            else await refreshDownloads();
+                            setDownloadedMode(enabled);
+                            await refresh();
+                            setNotice(
+                              enabled
+                                ? "Downloaded study mode enabled."
+                                : "Live-server mode enabled.",
+                            );
+                          })
+                        }
+                      />
+                      Use downloaded study mode
+                    </label>
+                    <p className="small">
+                      {cache.downloadedAt
+                        ? `Last downloaded: ${new Date(cache.downloadedAt).toLocaleString()}`
+                        : "No quiz download yet."}{" "}
+                      {cache.pending
+                        ? `${cache.pending} session(s) waiting to sync.`
+                        : "Progress is synced."}
+                    </p>
+                    <button
+                      className="button secondary"
+                      disabled={busy}
+                      onClick={() =>
                         void run(async () => {
-                          const enabled = e.target.checked;
-                          if (!enabled) await syncDownloads();
-                          else await refreshDownloads();
-                          setDownloadedMode(enabled);
+                          await refreshDownloads();
                           await refresh();
-                          setNotice(
-                            enabled
-                              ? "Downloaded study mode enabled."
-                              : "Live-server mode enabled.",
-                          );
+                          setNotice("Downloaded quizzes are up to date.");
                         })
                       }
-                    />
-                    Use downloaded study mode
-                  </label>
-                  <p className="small">
-                    {cache.downloadedAt
-                      ? `Last downloaded: ${new Date(cache.downloadedAt).toLocaleString()}`
-                      : "No quiz download yet."}{" "}
-                    {cache.pending
-                      ? `${cache.pending} session(s) waiting to sync.`
-                      : "Progress is synced."}
+                    >
+                      <RotateCcw size={16} />
+                      Sync progress & refresh quizzes
+                    </button>
+                    <p className="small">
+                      Phone and computer keep their own downloads. Refresh
+                      either device to pick up progress from the other. Clearing
+                      browser storage removes unsynced local attempts.
+                    </p>
+                  </div>
+                )}
+                <div className="settings-card">
+                  <h2>Workspace</h2>
+                  <p>
+                    {cache.personal
+                      ? "Device-only storage is independent of any server workspace. To use a shared server, open its HTTPS address in your browser, or select it in the Android connection screen."
+                      : "You can also use an independent device-only workspace. Your existing server downloads and pending progress are kept separately."}
                   </p>
-                  <button
-                    className="button secondary"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        await refreshDownloads();
-                        await refresh();
-                        setNotice("Downloaded quizzes are up to date.");
-                      })
-                    }
-                  >
-                    <RotateCcw size={16} />
-                    Sync progress & refresh quizzes
-                  </button>
-                  <p className="small">
-                    Phone and computer keep their own downloads. Refresh either
-                    device to pick up progress from the other. Clearing browser
-                    storage removes unsynced local attempts.
-                  </p>
+                  {!import.meta.env.VITE_RECALL_STANDALONE && (
+                    <button
+                      className="button secondary"
+                      onClick={() =>
+                        void run(async () => {
+                          if (!cache.personal && cache.pending)
+                            await syncDownloads();
+                          selectWorkspace(!cache.personal);
+                          window.location.reload();
+                        })
+                      }
+                    >
+                      {cache.personal
+                        ? "Return to server workspace"
+                        : "Use a device-only workspace"}
+                    </button>
+                  )}
                 </div>
                 <div className="settings-card">
                   <h2>Bring your own questions</h2>
@@ -1495,27 +1641,23 @@ function App() {
           onSave={saveEdit}
         />
       )}
+      {shareOpen && (
+        <ShareDialog
+          busy={busy}
+          onClose={() => setShareOpen(false)}
+          onExport={shareDeck}
+        />
+      )}
       {importOpen && (
         <ImportDialog
           busy={busy}
-          onClose={() => setImportOpen(false)}
-          onImport={(bank, replace) =>
-            void run(async () => {
-              const r = await api<{
-                deckId: string;
-                created: number;
-                updated: number;
-                unchanged: number;
-                archived: number;
-              }>(`/import${replace ? "?replace=1" : ""}`, bank);
-              setImportOpen(false);
-              await refresh();
-              setDeckId(r.deckId);
-              setNotice(
-                `${r.created} added · ${r.updated} updated · ${r.unchanged} unchanged · ${r.archived} archived`,
-              );
-            })
-          }
+          initialRaw={importRaw}
+          personal={cache.personal}
+          onClose={() => {
+            setImportOpen(false);
+            setImportRaw("");
+          }}
+          onImport={importBank}
         />
       )}
     </div>
@@ -1734,7 +1876,14 @@ function Editor({
         ? JSON.parse(raw)
         : { ...q, depends_on: parents.split(/[,\s]+/).filter(Boolean) };
       setError("");
-      onSave(value);
+      onSave(
+        parsePortable({
+          deck: "editor",
+          questions: [
+            { ...value, concept: value.concept?.trim() || value.question },
+          ],
+        }).bank.questions[0],
+      );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1751,7 +1900,9 @@ function Editor({
         <div className="modal-head">
           <div>
             <div className="eyebrow">KEEP YOUR MATERIAL ACCURATE</div>
-            <h2 id="editor-title">Edit question</h2>
+            <h2 id="editor-title">
+              {item.revision === 0 ? "Add question" : "Edit question"}
+            </h2>
           </div>
           <button
             className="icon-button"
@@ -1996,8 +2147,80 @@ function Editor({
             Cancel
           </button>
           <button className="button primary" disabled={busy} onClick={save}>
-            {busy ? "Saving…" : "Save correction"}
+            {busy
+              ? "Saving…"
+              : item.revision === 0
+                ? "Add question"
+                : "Save correction"}
             <Check size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function ShareDialog({
+  busy,
+  onClose,
+  onExport,
+}: {
+  busy: boolean;
+  onClose: () => void;
+  onExport: (progress: boolean) => void;
+}) {
+  const ref = useDialog(onClose);
+  const [progress, setProgress] = useState(false);
+  return (
+    <div className="modal-backdrop">
+      <div
+        className="modal"
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-title"
+      >
+        <div className="modal-head">
+          <div>
+            <div className="eyebrow">TAKE YOUR LEARNING WITH YOU</div>
+            <h2 id="share-title">Share this quiz</h2>
+          </div>
+          <button
+            className="icon-button"
+            aria-label="Close export"
+            onClick={onClose}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <p className="quiet">
+          A .recall.json file works on computer and mobile, without a server.
+          Your friend can add questions and send an updated copy back. IDs
+          prevent duplicates; dependencies stay intact.
+        </p>
+        <label className="storage-choice">
+          <input
+            type="checkbox"
+            checked={progress}
+            onChange={(e) => setProgress(e.target.checked)}
+          />
+          Include my learning progress
+        </label>
+        <p className="small quiet">
+          {progress
+            ? "Use this to move your own progress between devices. The recipient can choose whether to restore it."
+            : "Questions only: your friend starts with their own progress. No server addresses, credentials or learning history are included."}
+        </p>
+        <div className="modal-foot">
+          <button className="button secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="button primary"
+            disabled={busy}
+            onClick={() => onExport(progress)}
+          >
+            <Download size={16} />
+            {busy ? "Preparing…" : "Save quiz file"}
           </button>
         </div>
       </div>
@@ -2006,16 +2229,32 @@ function Editor({
 }
 function ImportDialog({
   busy,
+  initialRaw,
+  personal,
   onClose,
   onImport,
 }: {
   busy: boolean;
   onClose: () => void;
-  onImport: (bank: unknown, replace: boolean) => void;
+  initialRaw: string;
+  personal: boolean;
+  onImport: (
+    bank: unknown,
+    replace: boolean,
+    restoreProgress: boolean,
+    dryRun: boolean,
+  ) => Promise<any>;
 }) {
   const [replace, setReplace] = useState(false);
-  const [raw, setRaw] = useState(""),
+  const [raw, setRaw] = useState(initialRaw),
     [error, setError] = useState("");
+  const [restoreProgress, setRestoreProgress] = useState(false),
+    [preview, setPreview] = useState<any>(null);
+  useEffect(() => setPreview(null), [raw, replace, restoreProgress]);
+  let hasProgress = false;
+  try {
+    hasProgress = !!parsePortable(JSON.parse(raw)).progress;
+  } catch {}
   const ref = useDialog(onClose);
   const load = async (file?: File) => {
     if (!file) return;
@@ -2030,10 +2269,16 @@ function ImportDialog({
     }
     setRaw(await file.text());
   };
-  const submit = () => {
+  const submit = async () => {
     try {
       setError("");
-      onImport(JSON.parse(raw), replace);
+      const result = await onImport(
+        JSON.parse(raw),
+        replace,
+        restoreProgress,
+        !preview,
+      );
+      if (!preview) setPreview(result);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -2061,8 +2306,8 @@ function ImportDialog({
           </button>
         </div>
         <p className="quiet">
-          Drop in a bank prepared by you or your assistant. Matching IDs update
-          existing questions.
+          Import a shared .recall.json file or a plain JSON bank. Matching IDs
+          update existing questions. Preview changes before applying them.
         </p>
         <label className="file-drop">
           <Upload size={25} />
@@ -2086,6 +2331,34 @@ function ImportDialog({
             }
           />
         </label>
+        {hasProgress && (
+          <label className="storage-choice">
+            <input
+              type="checkbox"
+              checked={restoreProgress}
+              disabled={!personal}
+              onChange={(e) => setRestoreProgress(e.target.checked)}
+            />
+            {personal
+              ? "Restore progress from this file (replace progress for matching questions)"
+              : "This file includes progress. Use a device-only workspace to restore it; server imports use questions only."}
+          </label>
+        )}
+        {preview && (
+          <div className="import-preview" role="status">
+            <strong>Review import</strong>
+            <p>
+              {preview.created} added · {preview.updated} updated ·{" "}
+              {preview.unchanged} unchanged · {preview.archived} archived
+            </p>
+            <p>
+              {preview.reviewReset} objectives will have progress reset
+              {restoreProgress
+                ? "; matching progress from this file will then be restored"
+                : ". Your existing progress is kept for unchanged questions."}
+            </p>
+          </div>
+        )}
         <label className="storage-choice">
           <input
             type="checkbox"
@@ -2106,9 +2379,9 @@ function ImportDialog({
           <button
             className="button primary"
             disabled={busy || !raw.trim()}
-            onClick={submit}
+            onClick={() => void submit()}
           >
-            {busy ? "Importing…" : "Import questions"}
+            {busy ? "Checking…" : preview ? "Apply import" : "Preview import"}
             <ArrowRight size={17} />
           </button>
         </div>
@@ -2117,5 +2390,11 @@ function ImportDialog({
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);
-if ("serviceWorker" in navigator && import.meta.env.PROD)
-  void navigator.serviceWorker.register("/sw.js").catch(() => {});
+if (
+  "serviceWorker" in navigator &&
+  import.meta.env.PROD &&
+  location.hostname !== "appassets.androidplatform.net"
+)
+  void navigator.serviceWorker
+    .register(`${import.meta.env.BASE_URL}sw.js`)
+    .catch(() => {});

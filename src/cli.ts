@@ -9,6 +9,11 @@ import { readBank } from "./core/bank.ts";
 import { remoteBackend, type Backend } from "./remote.ts";
 import { auditQuestions } from "./core/audit.ts";
 import {
+  parsePortable,
+  exportPortable,
+  importPersonal,
+} from "./core/portable.ts";
+import {
   prerequisiteStatus,
   validatePrerequisites,
 } from "./core/prerequisites.ts";
@@ -16,7 +21,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.1.0");
+  .version("0.2.0-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",
@@ -121,15 +126,60 @@ program
   });
 program
   .command("export <deck>")
+  .option("--portable", "Write a .recall.json file for mobile/computer import")
+  .option("--progress", "Include personal progress in a portable export")
   .requiredOption("-o, --output <file>")
   .action(async (deck, o) => {
     const s = await connect();
     const d = await s.deck(deck);
     await writeFile(
       o.output,
-      JSON.stringify(await s.exportBank(d.id), null, 2) + "\n",
+      JSON.stringify(
+        o.portable || o.progress
+          ? await exportPortable(
+              await s.exportBank(d.id),
+              o.progress ? await s.items(d.id) : [],
+              !!o.progress,
+            )
+          : await s.exportBank(d.id),
+        null,
+        2,
+      ) + "\n",
     );
     console.log(`Exported ${d.name} to ${o.output}`);
+  });
+program
+  .command("pack <file>")
+  .requiredOption("-o, --output <file>")
+  .description("Make a portable quiz file without a server or database")
+  .action(async (file, o) => {
+    const bank = await readBank(file);
+    await writeFile(
+      o.output,
+      JSON.stringify(await exportPortable(bank), null, 2) + "\n",
+    );
+    print({
+      output: o.output,
+      questions: bank.questions.length,
+      progressIncluded: false,
+    });
+  });
+program
+  .command("bundle-inspect <file>")
+  .description("Validate and inspect a portable file without importing it")
+  .action(async (file) => {
+    const input = JSON.parse(await readFile(file, "utf8"));
+    const { bank, progress } = parsePortable(input);
+    await importPersonal([], input, { restoreProgress: !!progress });
+    print({
+      deck: bank.deck,
+      questions: bank.questions.length,
+      dependencies: bank.questions.reduce(
+        (n, q) => n + (q.depends_on?.length ?? 0),
+        0,
+      ),
+      progressEntries: Object.keys(progress ?? {}).length,
+    });
   });
 program
   .command("question <deck> <id>")

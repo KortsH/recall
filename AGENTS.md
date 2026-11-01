@@ -1,11 +1,12 @@
 # Working on Recall
 
-Recall is a small, single-user study tool, usable locally or through a private home server. Prioritise a smooth study loop and correct progress over infrastructure. No in-app AI, PDF ingestion, cloud accounts, or paid APIs. Native clients and portable file-transfer bundles belong in `docs/FUTURE.md`.
+Recall is a small, single-user study tool, usable in a device-only workspace or through a private server. Prioritise a smooth study loop and correct progress over infrastructure. No in-app AI, PDF ingestion, cloud accounts, or paid APIs. Android bundles the study UI; Windows has a per-user installer. Read `docs/PORTABLE.md` for file sharing and `docs/FUTURE.md` for remaining work.
 
 ## Where things live
 
 - `src/core/types.ts`: question/variant, progress, session and attempt types.
 - `src/core/bank.ts`: canonical validation, file import, generated formats, semantic hashing.
+- `src/core/schema.ts` and `portable.ts`: browser-safe bank validation, semantic representation and portable quiz/progress files. Node hashing must stay identical to the browser digest; metadata-only changes must not invalidate progress.
 - `src/core/engine.ts`: pure grading, scheduling, topic interleaving, retry selection.
 - `src/core/questions.ts` and `study.ts`: browser-safe format projection, session transitions and results shared by downloaded and server study.
 - `src/web/cache.ts`: whole-bank IndexedDB downloads, local sessions and batched sync. Do not add per-answer network requests in downloaded mode.
@@ -35,7 +36,10 @@ Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --f
 - Author and preserve `depends_on` prerequisite IDs. Read the prerequisite section in `docs/QUESTION_BANK.md` before generating questions. Run `recall prerequisites <deck>` alongside the coverage audit. Definitions precede variant definitions and applications; every listed parent is required. Keep dependency-only updates separate from wording corrections so mastery is preserved. Validate the complete prospective graph, including cross-topic links, before replacing or archiving records.
 - Normal Learn must never bypass locks. Only an explicit Cram/Test override may do so. Unlocking is independent of review dates. Keep live and downloaded session transitions in `src/core/study.ts`; newly eligible objectives can enter a running learning session.
 
-- The browser and CLI must use the same engine and database. No SQLite fallback.
+- Server clients and the CLI use the same PostgreSQL services. Device-only clients use IndexedDB with the same grading/session engine. No SQLite fallback. Keep the personal workspace separate from server downloads and outbox state; never silently turn a failed server download into an empty personal workspace.
+- Device-only mode must work on first launch with zero quiz API requests, including import/edit/export. Sharing defaults to questions only. Progress restore must be explicit and idempotent, with content-hash checks; never add counters from two exported snapshots. Validate the complete graph before applying any local changes.
+- Never embed deployment addresses or credentials in installers, static web assets or APKs. Android native file handling is origin-bound, main-frame only, capped at 5 MB, and limited to user-selected JSON imports/exports. Do not expose a general filesystem bridge.
+- Build installers with `desktop/windows/build.ps1`, then run `npm run test:installer` on Windows. Android's Gradle pre-build bundles the standalone UI. Release assets must contain synthetic app assets only; real study banks stay outside Git and public downloads.
 - `--server URL` or `RECALL_SERVER_URL` selects HTTP; otherwise the CLI uses PostgreSQL directly. Do not expose PostgreSQL to the internet for agents or mobile clients.
 - Downloaded clients pick up changes on explicit refresh. Sync progress before replacing downloads. Offline evidence for edited/archived questions is retained but excluded from mastery.
 - MC success alone cannot establish mastery. Self-assessment must stay explicit.

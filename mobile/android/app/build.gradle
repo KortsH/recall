@@ -2,9 +2,18 @@ plugins { id 'com.android.application' }
 android {
     namespace 'app.recall.mobile'
     compileSdk 35
-    defaultConfig { applicationId 'app.recall.mobile'; minSdk 26; targetSdk 35; versionCode 1; versionName '0.1.0' }
+    defaultConfig { applicationId 'app.recall.mobile'; minSdk 26; targetSdk 35; versionCode 2; versionName '0.2.0-preview.1' }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { release { minifyEnabled false } }
+    sourceSets { main.assets.srcDir "$buildDir/generated/assets/recall" }
     testOptions { unitTests.returnDefaultValues = true }
 }
-dependencies { testImplementation 'junit:junit:4.13.2' }
+dependencies { implementation 'androidx.webkit:webkit:1.14.0'; testImplementation 'junit:junit:4.13.2' }
+
+tasks.register('buildRecallWeb', Exec) {
+    workingDir rootProject.projectDir.toPath().resolve('../..').normalize().toFile()
+    commandLine 'node', '--import', 'tsx', 'scripts/standalone.ts', '--android'
+    inputs.files fileTree('../../..') { include 'src/**', 'public/**', 'scripts/standalone.ts', 'scripts/pwa.ts', 'vite.config.ts', 'package-lock.json' }
+    outputs.dir "$buildDir/generated/assets/recall"
+}
+tasks.named('preBuild').configure { dependsOn 'buildRecallWeb' }

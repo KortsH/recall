@@ -1,106 +1,131 @@
 # Recall
 
-A focused exam learning tool. Bring a question bank, download it to your device, and progress from recognition to active recall. React + TypeScript + Vite, a plain Node HTTP server, and PostgreSQL. Local or private home-server deployment; no account, or subscription.
+A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-Downloaded mode studies on the device and syncs progress in batches. Live-server mode is optional. Install the PWA on your phone to share quizzes and progress through the server. See [hosting and mobile use](docs/HOSTING.md) and [future work](docs/FUTURE.md).
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.2.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.2.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.2.0-preview.1)
 
+## Install and use
 
-## Installation
+The current release is a preview. Device-only study requires **no Node.js, PostgreSQL, Docker, account or home server**. Android includes the study interface in the APK; the browser app needs an initial online visit before offline use.
 
-A downloadable installer and one-command setup are planned; they are not available yet. The goal is to install and start Recall without manually assembling its dependencies, with a separate option to connect to an existing server. See the [installation to-do](docs/FUTURE.md#next-priority-simple-installation).
+### Windows
 
-The instructions below are the current manual setup. When the installer is ready, its download link and exact install/start commands will appear here, separately from contributor setup.
+1. Download **Recall-Setup.exe** above and run it. This is an unsigned preview executable; the publisher is not yet code-signed.
+2. Setup installs for your Windows user and adds **Recall** to the Start menu, then opens the app in your default browser. No administrator installation or database setup is needed on supported Windows 10/11 systems with .NET Framework 4.8.
+3. Choose **Import**, select a quiz JSON file, review the preview, then **Apply import**.
+4. Reopen **Recall** from the Start menu whenever you want. Its tray menu has **Open Recall** and **Quit Recall**.
 
-## Manual setup and development
+The app binds only to `http://127.0.0.1:4312/`. Questions and progress live in that browser profile's local storage. Keep using the same browser/profile, and export backups before clearing site data. Setup/update preserves the local address and does not erase browser storage. If port 4312 is in use, close the conflicting app; it will not silently switch ports and make your progress appear missing.
 
-Node 22.12+ (24 recommended), npm, and PostgreSQL 17 or Docker.
+Prefer cloning? Run one command from the checkout:
+
+```powershell
+.\setup.cmd
+```
+
+This downloads the versioned release installer, verifies its SHA-256 checksum, and runs it. It does not require a development environment. The PowerShell execution-policy setting applies only to this setup process, not your machine's policy. To remove Recall, quit its tray app, remove its Start-menu shortcut and `%LOCALAPPDATA%\RecallPersonal` installation folder. This leaves browser learning data alone; export it before separately clearing that site data.
+
+### Android
+
+1. Download **Recall-Android.apk** above on your phone and open it. Android may ask you to allow installation from the browser or Files app you used. This is a preview APK, not a Play Store release.
+2. Open Recall and choose **Use without a server**. No VPN or server address is needed.
+3. Choose **Import**, pick the `.recall.json` or ordinary question-bank JSON file you received, review the preview and choose **Apply import**.
+4. Study, add/edit questions and organize prerequisites offline. **Export → Save quiz file** opens Android's save-file picker. Share that saved file through your preferred app.
+
+You can also choose **Open with Recall** for a JSON attachment when the sending app supplies a supported content URI. Importing still shows a preview. Keep Android System WebView updated for native file export. The APK contains no private server address, database credentials or SSH keys. Optional **Workspace options → Connect to server** accepts your own HTTPS origin; a private server may require your VPN. Device and server workspaces remain separate.
+
+### Browser, iPhone, macOS and Linux
+
+Open [the browser app](https://kortsh.github.io/recall/). Import a file and start studying. All questions and progress stay in local browser storage; Recall does not upload your quiz to GitHub Pages. An initial visit downloads the application assets. Use your browser's install option, or Safari's **Add to Home Screen** on iPhone, for the PWA. Native iOS and native macOS/Linux installers are not available yet.
+
+Each browser/profile, phone app and Windows app keeps its own workspace. Use portable files to transfer quizzes or your own progress between them. There is no automatic cross-device sync in device-only mode.
+
+## Send a quiz to a friend
+
+1. Open **Question library → Export** and leave **Include my learning progress** unchecked.
+2. Save the `.recall.json` file and send it through Files, WhatsApp, email or any other channel you choose.
+3. Your friend installs/opens Recall, chooses **Import**, reviews **Preview import**, then selects **Apply import**. They start with their own progress.
+4. They can use **New question**, edit answers and dependencies, then export an updated copy to send back. Stable IDs prevent duplicate records. Missing questions remain unless you deliberately select **Replace this deck**.
+
+To move your own learning between devices, export with **Include my learning progress** and select **Restore progress from this file** when importing into a device-only workspace. This explicitly replaces matching progress; it does not add counters twice. Server imports take questions only. File exchange is manual updating, not automatic conflict resolution for simultaneous edits. See [portable files and progress](docs/PORTABLE.md).
+
+**Back up your files.** Clearing app/site data removes local quizzes and progress. A questions-only file does not contain your progress; export with progress when you want a personal backup.
+
+## Learn
+
+- **Learn:** prioritizes weak/unseen objectives and moves from recognition to recall, with interleaved retries.
+- **Cram:** ignores review dates. **Include locked questions** is an explicit prerequisite override.
+- **Flashcards:** reveal, then self-assess Again / Hard / Good / Easy.
+- **Test:** random questions, optional timer, answers withheld until the end. It also offers the explicit prerequisite override.
+
+Three consecutive successes, including two active recalls, establish initial mastery. Recognition alone cannot. Mistakes reset the streak; successful recall schedules a later review. This simple model is not a claim of measured long-term retention.
+
+`depends_on` lists all prerequisites a question requires. Learn unlocks dependent questions dynamically as foundations are mastered. A prerequisite becoming due does not relock its children; losing mastery can. Topic tabs organize material independently of prerequisites. Drag A onto B to make A depend on B, or drop onto a topic heading to move it. The editor's searchable prerequisite picker works on phones and with the keyboard.
+
+Use **Something off? Edit question** after an answer. Semantic corrections reset that objective's progress; explanation, topic and dependency changes preserve it. Exact aliases and explicit multi-part grading are supported; prose uses a model answer and self-assessment. There is no AI grader or in-app generation service.
+
+## Optional shared server
+
+For your own computer/phone to share a database automatically, run the Node + PostgreSQL server privately. Connected clients can download complete quizzes, study without per-answer requests, and sync progress in batches. Settings → **Sync progress & refresh quizzes** picks up updates explicitly.
+
+Read [hosting instructions](docs/HOSTING.md) and [security boundaries](SECURITY.md). This is currently a single-user service without an application login. Do not expose it publicly or grant untrusted users network access without adding authentication. A mobile install never grants access to someone else's server or runs database migrations. No deployment address is compiled into public artifacts.
+
+## Development and building from source
+
+These tools are for contributors/self-hosters; they are not required for the downloads above. Use Node 22.12+ (24 recommended), npm, and PostgreSQL 17+ or Docker for server development.
 
 ```sh
 npm ci
-# Copy .env.example to .env, then set DATABASE_URL if using your own PostgreSQL.
+# Copy .env.example to .env and configure your own database.
 docker compose up -d db
 npm run seed
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. `npm run dev` starts both the browser dev server and Node API. The schema is created automatically. `npm run seed` imports a synthetic four-question demo bank; it is an explicit command so startup cannot overwrite your corrections. Repeating it updates matching IDs.
-
-For the built app:
+Open `http://127.0.0.1:5173`. The seed is a synthetic four-question demo; it never runs automatically. `npm run build && npm start` serves the built server app at `http://127.0.0.1:4310`. Alternatively, `docker compose up --build -d` runs the app and PostgreSQL together; `docker compose exec app npm run seed` imports the demo. Stop with `docker compose down`; the database volume remains. Default Docker credentials are for local development only.
 
 ```sh
-npm run build
-npm start
+# Device-only static browser build; serve build/standalone over localhost or HTTPS.
+npm run build:standalone
+
+# Android (JDK 17+, Android SDK 35; npm ci first).
+cd mobile/android
+./gradlew testDebugUnitTest assembleDebug
 ```
 
-Open http://127.0.0.1:4310. This is one Node process serving the frontend and API. If a database isn't available, startup explains how to connect one. The database persists separately from the app.
+Build the Windows installer from PowerShell with `./desktop/windows/build.ps1`, then run `npm run test:installer`. It uses Windows' .NET Framework compiler and bundles the static UI. [Mobile source/build details](mobile/README.md).
 
-For an existing project-local PostgreSQL cluster, optionally set `RECALL_PGDATA` and `PG_BIN` in your ignored `.env`, then use `npm run local`. It starts that explicitly configured cluster if needed, then serves the built app. It never creates or changes a system PostgreSQL service.
-
-Or run the whole stack in Docker:
+### CLI and agent authoring
 
 ```sh
-docker compose up --build -d
-docker compose exec app npm run seed
+# File-only commands require no server/database connection.
+npm run recall -- pack bank.json -o quiz.recall.json
+npm run recall -- bundle-inspect quiz.recall.json
+npm run recall -- validate quiz.recall.json
+
+# Commands against your configured PostgreSQL database or --server URL.
+npm run recall -- import bank.json --replace --dry-run --json
+npm run recall -- import bank.json --replace --json
+npm run recall -- questions "My quiz" --json
+npm run recall -- prerequisites "My quiz"
+npm run recall -- audit "My quiz"
+npm run recall -- export "My quiz" --portable -o quiz.recall.json
+npm run recall -- export "My quiz" --portable --progress -o my-progress.recall.json
 ```
 
-Open http://127.0.0.1:4310. Stop with `docker compose down`; progress remains in the named volume. Host and Docker URLs differ: host CLI commands use the URL in `.env`; commands inside the app container use the configured `db` hostname. The default password is for local development. This is a single-user local application, bound to loopback by default; authentication and public hosting are outside its scope.
+Use stable IDs and preserve dependencies. Formats of one objective share progress; recall and application can be separate objectives. CSV/TSV imports are also supported by the CLI. Read [question authoring](docs/QUESTION_BANK.md), [JSON Schema](docs/question-bank.schema.json), [portable format](docs/PORTABLE.md) and [agent instructions](AGENTS.md). Real course documents, private banks, settings, signing keys and backups stay outside Git.
 
-## Study
-
-- **Learn:** weak and unseen objectives, recognition followed by written recall, with interleaved retries. Each objective has a bounded number of attempts per session; continue in another session when needed.
-- **Cram:** ignores future review dates, prioritises weak/unseen material, and rotates topics.
-- **Flashcards:** reveal, then Again / Hard / Good / Easy. Self-assessments are recorded as such.
-- **Test:** random questions, optional timer, feedback withheld until the end. Written answers without exact grading rules are self-assessed after the test. Unanswered and edited questions are reported separately from graded accuracy.
-
-Three consecutive successes, including two written or self-rated recalls, establish initial mastery. Recognition alone cannot. Mistakes reset the streak. Successful recall schedules a later review; mastered material returns after one day (three for Easy). Hard returns sooner. These are deliberately simple rules, not a claim of measured long-term retention.
-
-Questions can depend on earlier objectives through `depends_on`. All prerequisites must be mastered before a dependent question enters Learn. Unlocking happens during a session; a due review alone never relocks it. The library explains locks, topic lists show locked counts, and Cram/Test offer an explicit override. Inspect or edit the graph with `recall prerequisites`; see [authoring prerequisites](docs/QUESTION_BANK.md#prerequisite-learning).
-
-In the library, topic tabs and collapsible groups organize material without creating fake prerequisite questions. Drag a question onto its prerequisite, or onto a topic heading to move it; Undo reverses the last organization change. The editor's searchable question picker works on phones and with the keyboard. A new empty topic is saved once a question is assigned to it. Organization edits require a connection.
-
-Typed rule sets accept either order using explicit aliases, with semicolons/newlines between parts. General prose uses a model answer and rubric; there is no fuzzy or AI grader. Matching and scenario variants are authored explicitly. A one-objective deck won't immediately repeat the same question after a mistake; practise it again in another session.
-
-Use **“Something off? Edit question”** after answering. The simple editor handles wording, answers, choices, accepted wording, and multi-part rules. The JSON tab handles all variants and rubrics. Semantic corrections reset only that objective and exclude obsolete attempts from results; explanation/tag changes preserve progress. Imports are additive updates, not deletions.
-
-Keyboard: 1–9 select choices, Enter checks/continues, Ctrl/⌘+Enter submits typed answers, 1–4 rate revealed flashcards. Escape closes dialogs. Every submitted answer saves; Save & leave pauses the session, and Resume restores it.
-
-## Import and CLI
+### Verify
 
 ```sh
-npm run recall -- validate examples/demo.json
-npm run recall -- import questions.json --deck "Data Protection" --json
-npm run recall -- import replacement.json --replace --dry-run --json
-npm run recall -- import replacement.json --replace --json
-npm run recall -- questions "Data Protection" --topic MAC --json
-npm run recall -- audit "Data Protection"
-npm run recall -- decks
-npm run recall -- learn "Data Protection" --cram --topic MAC
-npm run recall -- flashcards "Data Protection"
-npm run recall -- test "Data Protection" --questions 25 --minutes 30
-npm run recall -- stats "Data Protection"
-npm run recall -- wrong "Data Protection"
-npm run recall -- export "Data Protection" -o questions.json
+npm test                    # Engine, file exchange, device-only storage and UI components
+npm run test:integration     # Disposable real PostgreSQL database, HTTP and CLI
+npm run build               # TypeScript and server frontend
+npm run build:standalone    # Device-only frontend
+npm run check               # Public-source guard + unit/integration tests + build
+npm run test:installer      # Windows only; build installer first
 ```
 
-Optionally run `npm link` to make `recall` available directly. Run commands from the repository directory so `.env` resolves predictably. In local-database mode the CLI talks directly to PostgreSQL through the shared engine, without requiring the HTTP server. Shared-server mode uses the same HTTP API as other connected clients.
-
-JSON is canonical. CSV/TSV imports need `--deck`; headers are `id,question,answer,topic,explanation,difficulty,tags` (only the first three are required; tags use `|`). CSV/TSV produces written/self-rated objectives and flashcards. Use JSON for choices, structured grading, matching, and scenarios. Validation reports malformed fields before any changes are made. Stable question IDs are required and unique within a deck; repeat imports update those IDs without duplicating questions.
-
-See [the bank format](docs/QUESTION_BANK.md), [the JSON Schema](docs/question-bank.schema.json), and [agent instructions](AGENTS.md).
-
-Use `--server URL` or `RECALL_SERVER_URL` for CLI operations against a shared server. `import --replace` archives missing IDs; `--topic` scopes replacement. Dry runs report IDs first. `archive`, `restore`, question editing, deck updates, sessions, self-assessment, statistics and exports are available through the CLI. Audit highlights potential concept/wording overlap without deleting useful recall/application pairs.
-
-## Verify
-
-```sh
-npm test                  # Grading, scheduling, bank validation; no database
-npm run test:integration   # Real PostgreSQL, HTTP and CLI
-npm run build             # TypeScript + production frontend
-npm run check             # All three
-```
-
-Integration tests create and drop a uniquely named test database on the configured server. The database user needs CREATEDB, or set `TEST_DATABASE_ADMIN_URL` to a suitable dedicated local test-server connection. Tests never truncate the development database. CI runs these checks against PostgreSQL 17.
-
-Course slides and past papers are not included in this repository. The example bank contains synthetic queue/stack exercises; keep real course material in your private bank. Other topics can be added through the same schema without application changes.
+Integration tests need a dedicated test PostgreSQL server with CREATEDB access. They create/drop uniquely named databases and never truncate the user's database. CI also builds and exercises the Windows installer. Physical phone testing, release signing and other remaining work are in [the roadmap](docs/FUTURE.md).
 
 MIT licensed.
