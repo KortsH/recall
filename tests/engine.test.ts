@@ -238,3 +238,13 @@ test("semantic hashes ignore property order and explanation edits", () => {
   );
   assert.notEqual(contentHash(q), contentHash({ ...q, answer: "Different" }));
 });
+test("related recall and application objectives are separated when other concepts exist", () => {
+  const qs = [
+    { id: "a1", concept: "A", skill: "recall" as const },
+    { id: "a2", concept: "A", skill: "application" as const },
+    { id: "b", concept: "B", skill: "recall" as const },
+    { id: "c", concept: "C", skill: "recall" as const },
+  ].map((q) => ({ ...item, question: { ...item.question, ...q } }));
+  const queue = buildQueue(qs, "cram", 4, Date.now(), () => 0.5);
+  assert.notEqual(queue[0].concept, queue[1].concept);
+});

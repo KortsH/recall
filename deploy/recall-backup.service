@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Recall PostgreSQL to the verified backup disk
+After=docker.service
+ConditionPathIsMountPoint=/srv/recall-backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/recall-backup.sh
+Nice=15
+IOSchedulingClass=idle

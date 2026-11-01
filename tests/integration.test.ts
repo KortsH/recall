@@ -9,6 +9,9 @@ import { createPool, migrate, databaseUrl } from "../src/server/db.ts";
 import { Store } from "../src/server/store.ts";
 import { parseBank } from "../src/core/bank.ts";
 import { createApp } from "../src/server/http.ts";
+import { newSession, advanceSession } from "../src/core/study.ts";
+import { syncOfflineSession } from "../src/server/offline.ts";
+import { remoteBackend } from "../src/remote.ts";
 
 // Isolated real PostgreSQL database. Never clear or reuse a user's development database.
 const name = "recall_test_" + randomUUID().replaceAll("-", "");
@@ -361,4 +364,91 @@ test("CLI import, export and stats operate on the same real database", async () 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+test("replacement archives absent IDs, is previewable, and preserves unchanged progress", async () => {
+  const id = await fresh();
+  const session = await store.createSession(id, { mode: "test", count: 1 });
+  await answer(session.id);
+  const before = await store.question(id, session.card!.questionId);
+  const bank = await store.exportBank(id);
+  bank.questions = bank.questions.filter((q) => q.id === before.question.id);
+  const preview = await store.importBank(bank, { replace: true, dryRun: true });
+  assert.equal(preview.archived, 4);
+  assert.equal((await store.items(id)).length, 5);
+  const result = await store.importBank(bank, { replace: true });
+  assert.equal(result.archived, 4);
+  assert.equal((await store.items(id)).length, 1);
+  assert.equal(
+    (await store.question(id, before.question.id)).progress.attempts,
+    1,
+  );
+  assert.equal((await store.listQuestions(id, { archived: true })).length, 5);
+  await store.archiveQuestion(id, result.archiveIds[0], true);
+  assert.equal((await store.items(id)).length, 2);
+});
+test("archived questions disappear safely from an active session", async () => {
+  const id = await fresh();
+  const s = await store.createSession(id, { mode: "test", count: 5 });
+  await store.archiveQuestion(id, s.card!.questionId);
+  const reloaded = await store.getSession(s.id);
+  assert.equal(reloaded.total, 4);
+  assert.notEqual(reloaded.card!.questionId, s.card!.questionId);
+});
+test("offline evidence is recomputed and duplicate uploads cannot inflate mastery", async () => {
+  const id = await fresh(),
+    items = await store.items(id);
+  const s = newSession(id, items, { mode: "test", count: 2 });
+  const item = items.find((i) => i.question.id === s.queue[0].questionId)!;
+  const { attempt } = advanceSession(s, item, {
+    version: 0,
+    revision: item.revision,
+    response: ["B"],
+  });
+  s.version++;
+  attempt.correct = true;
+  const first = await syncOfflineSession(store, s);
+  assert.equal(first.session.answers[0].correct, false);
+  await syncOfflineSession(store, s);
+  assert.equal(
+    (await store.question(id, item.question.id)).progress.attempts,
+    1,
+  );
+});
+test("offline answers against corrected questions are retained but excluded from progress", async () => {
+  const id = await fresh(),
+    items = await store.items(id);
+  const s = newSession(id, items, { mode: "test", count: 1 });
+  const item = items.find((i) => i.question.id === s.queue[0].questionId)!;
+  advanceSession(s, item, {
+    version: 0,
+    revision: item.revision,
+    response: ["A"],
+  });
+  s.version++;
+  await store.editQuestion(
+    id,
+    item.question.id,
+    { ...item.question, question: "Revised question" },
+    item.revision,
+  );
+  const result = await syncOfflineSession(store, s);
+  assert.equal(result.session.answers[0].invalidated, true);
+  assert.equal(
+    (await store.question(id, item.question.id)).progress.attempts,
+    0,
+  );
+});
+test("remote CLI adapter offers the same listing, audit and replacement operations", async () => {
+  const id = await fresh();
+  const remote = remoteBackend(base);
+  assert.equal((await remote.listQuestions(id)).length, 5);
+  assert.equal((await remote.audit(id)).total, 5);
+  const bank = await remote.exportBank(id);
+  bank.questions = bank.questions.slice(0, 2);
+  const r = await remote.importBank(bank, { replace: true });
+  assert.equal(r.archived, 3);
+  assert.equal((await remote.items(id)).length, 2);
+  await remote.archiveQuestion(id, bank.questions[0].id);
+  await remote.archiveQuestion(id, bank.questions[0].id, true);
+  assert.equal((await remote.items(id)).length, 2);
 });

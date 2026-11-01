@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    image: recall-home:latest
+    container_name: recall_app
+    env_file: ${RECALL_ENV_FILE:-.env.home}
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4310
+    ports:
+      - "127.0.0.1:4310:4310"
+    networks:
+      - postgres
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4310/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+networks:
+  postgres:
+    external: true
+    name: ${RECALL_POSTGRES_NETWORK:-postgres_private}

@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 // Optional convenience for an already initialised, explicitly configured local cluster.
 // Normal installations use an external PostgreSQL service or docker compose.
-if (process.env.RECALL_PGDATA) {
+if (!process.env.RECALL_SERVER_URL && process.env.RECALL_PGDATA) {
   const ctl = process.env.PG_BIN
     ? join(
         process.env.PG_BIN,
@@ -40,4 +40,5 @@ if (process.env.RECALL_PGDATA) {
     );
   }
 }
-await import("../src/server/main.ts");
+if (process.env.RECALL_SERVER_URL) await import("../src/server/proxy.ts");
+else await import("../src/server/main.ts");

@@ -4,6 +4,7 @@ import { extname } from "node:path";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
 import type { Bank, Question, Variant } from "./types.ts";
+export { variants, resolveVariant } from "./questions.ts";
 
 const text = z.string().trim().min(1).max(20000);
 const grading = {
@@ -16,6 +17,7 @@ const grading = {
 const variantSchema = z
   .object({
     id: text,
+    skill: z.enum(["recall", "application"]).optional(),
     type: z.enum([
       "multiple_choice",
       "multiple_select",
@@ -39,6 +41,7 @@ const questionSchema = z
     id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/),
     topic: text.default("General"),
     concept: text.optional(),
+    skill: z.enum(["recall", "application"]).default("recall"),
     question: text,
     answer: text,
     explanation: z.string().max(20000).default(""),
@@ -143,45 +146,6 @@ export async function readBank(path: string, deck?: string): Promise<Bank> {
       tags: r.tags ? r.tags.split("|") : undefined,
     })),
   });
-}
-export function variants(q: Question): Variant[] {
-  return [
-    ...(q.options
-      ? [
-          {
-            id: "choice",
-            type:
-              (q.correct?.length ?? 1) > 1
-                ? "multiple_select"
-                : "multiple_choice",
-            question: q.question,
-            answer: q.answer,
-            options: q.options,
-            correct: q.correct ?? [q.answer],
-          } as Variant,
-        ]
-      : []),
-    {
-      id: "written",
-      type: "written",
-      question: q.question,
-      answer: q.answer,
-      acceptedAnswers: q.acceptedAnswers,
-      requiredParts: q.requiredParts,
-      rubric: q.rubric,
-    },
-    {
-      id: "flashcard",
-      type: "flashcard",
-      question: q.question,
-      answer: q.answer,
-    },
-    ...q.variants,
-  ];
-}
-export function resolveVariant(q: Question, id: string): Variant {
-  const all = variants(q);
-  return all.find((v) => v.id === id) ?? all.find((v) => v.id === "written")!;
 }
 export function contentHash(q: Question): string {
   const { explanation, tags, topic, concept, difficulty, ...content } = q;

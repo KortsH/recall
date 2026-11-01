@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Recall database backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+OnBootSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

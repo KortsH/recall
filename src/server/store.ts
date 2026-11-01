@@ -1,3 +1,4 @@
+import { advanceSession, sessionView } from "../core/study.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type pg from "pg";
 import { contentHash, parseBank, resolveVariant } from "../core/bank.ts";
@@ -17,6 +18,7 @@ import {
   type Attempt,
 } from "../core/types.ts";
 import { transaction, type DB } from "./db.ts";
+import { auditQuestions } from "../core/audit.ts";
 
 export class AppError extends Error {
   constructor(
@@ -37,6 +39,16 @@ const slug = (s: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 70) || "deck";
+const sortKeys = (v: unknown): unknown =>
+  Array.isArray(v)
+    ? v.map(sortKeys)
+    : v && typeof v === "object"
+      ? Object.fromEntries(
+          Object.entries(v)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([k, x]) => [k, sortKeys(x)]),
+        )
+      : v;
 export interface DeckSummary {
   id: string;
   name: string;
@@ -46,15 +58,20 @@ export interface DeckSummary {
 }
 export class Store {
   constructor(public pool: pg.Pool) {}
-  async items(deckId: string, db: DB = this.pool): Promise<Item[]> {
+  async items(
+    deckId: string,
+    db: DB = this.pool,
+    includeArchived = false,
+  ): Promise<Item[]> {
     const { rows } = await db.query(
-      "SELECT q.data, q.revision, p.data AS progress FROM questions q LEFT JOIN progress p ON p.deck_id=q.deck_id AND p.question_id=q.id WHERE q.deck_id=$1 ORDER BY q.id",
+      `SELECT q.data, q.revision,q.archived_at, p.data AS progress FROM questions q LEFT JOIN progress p ON p.deck_id=q.deck_id AND p.question_id=q.id WHERE q.deck_id=$1 ${includeArchived ? "" : "AND q.archived_at IS NULL"} ORDER BY q.id`,
       [deckId],
     );
     return rows.map((r) => ({
       question: r.data,
       revision: r.revision,
       progress: r.progress ?? emptyProgress(),
+      archived: !!r.archived_at,
     }));
   }
   async decks(): Promise<DeckSummary[]> {
@@ -100,6 +117,23 @@ export class Store {
       ).length,
       attempts: items.reduce((n, i) => n + i.progress.attempts, 0),
       topics,
+      concepts: auditQuestions(items.map((i) => i.question)).concepts.map(
+        (c) => ({
+          ...c,
+          recallMastered: items.filter(
+            (i) =>
+              i.question.concept === c.concept &&
+              (i.question.skill ?? "recall") === "recall" &&
+              i.progress.mastered,
+          ).length,
+          applicationMastered: items.filter(
+            (i) =>
+              i.question.concept === c.concept &&
+              i.question.skill === "application" &&
+              i.progress.mastered,
+          ).length,
+        }),
+      ),
       weak: items
         .filter((i) => i.progress.wrong > 0)
         .sort((a, b) => b.progress.wrong - a.progress.wrong)
@@ -126,7 +160,63 @@ export class Store {
       stats: this.statsFor(await this.items(deck.id)),
     };
   }
-  async importBank(bank: Bank) {
+  async previewImport(
+    bank: Bank,
+    options: { replace?: boolean; topic?: string } = {},
+  ) {
+    const row = (
+      await this.pool.query("SELECT id FROM decks WHERE name=$1", [bank.deck])
+    ).rows[0];
+    const existing = row ? await this.items(row.id, this.pool, true) : [];
+    if (options.topic && bank.questions.some((q) => q.topic !== options.topic))
+      throw new AppError(
+        "All imported questions must match --topic for a scoped replacement",
+      );
+    const archiveIds = options.replace
+      ? existing
+          .filter(
+            (i) =>
+              !i.archived &&
+              (!options.topic || i.question.topic === options.topic) &&
+              !bank.questions.some((q) => q.id === i.question.id),
+          )
+          .map((i) => i.question.id)
+      : [];
+    const counts = {
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+      reviewReset: 0,
+      archived: archiveIds.length,
+      archiveIds,
+      deckId: row?.id ?? "",
+      dryRun: true,
+    };
+    for (const q of bank.questions) {
+      const old = existing.find((i) => i.question.id === q.id);
+      if (!old) counts.created++;
+      else if (
+        JSON.stringify(sortKeys(old.question)) ===
+          JSON.stringify(sortKeys(q)) &&
+        !old.archived
+      )
+        counts.unchanged++;
+      else {
+        counts.updated++;
+        if (contentHash(old.question) !== contentHash(q)) counts.reviewReset++;
+      }
+    }
+    return counts;
+  }
+  async importBank(
+    bank: Bank,
+    options: { replace?: boolean; topic?: string; dryRun?: boolean } = {},
+  ) {
+    if (options.dryRun) return this.previewImport(bank, options);
+    if (options.topic && bank.questions.some((q) => q.topic !== options.topic))
+      throw new AppError(
+        "All imported questions must match --topic for a scoped replacement",
+      );
     return transaction(this.pool, async (db) => {
       await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [bank.deck]);
       let { rows } = await db.query("SELECT * FROM decks WHERE name=$1", [
@@ -151,12 +241,25 @@ export class Store {
         updated: 0,
         unchanged: 0,
         reviewReset: 0,
+        archived: 0,
+        archiveIds: [] as string[],
+        dryRun: false,
         deckId: deck.id as string,
       };
       for (const q of bank.questions) {
         const result = await this.saveQuestion(db, deck.id, q);
         counts[result.kind]++;
         if (result.reset) counts.reviewReset++;
+      }
+      if (options.replace) {
+        const removed = await db.query(
+          `UPDATE questions SET archived_at=now() WHERE deck_id=$1 AND archived_at IS NULL AND NOT(id=ANY($2::text[])) ${options.topic ? "AND data->>'topic'=$3" : ""} RETURNING id`,
+          options.topic
+            ? [deck.id, bank.questions.map((q) => q.id), options.topic]
+            : [deck.id, bank.questions.map((q) => q.id)],
+        );
+        counts.archiveIds = removed.rows.map((r) => r.id);
+        counts.archived = removed.rowCount ?? 0;
       }
       return counts;
     });
@@ -168,18 +271,23 @@ export class Store {
     );
     const old = rows[0];
     const hash = contentHash(q);
-    if (old && JSON.stringify(old.data) === JSON.stringify(q))
+    if (
+      old &&
+      !old.archived_at &&
+      JSON.stringify(old.data) === JSON.stringify(q)
+    )
       return { kind: "unchanged" as const, reset: false };
     // JSONB key order is not significant.
     if (
       old &&
+      !old.archived_at &&
       (await db.query("SELECT $1::jsonb=$2::jsonb AS same", [old.data, q]))
         .rows[0].same
     )
       return { kind: "unchanged" as const, reset: false };
     const reset = !!old && old.content_hash !== hash;
     await db.query(
-      `INSERT INTO questions(deck_id,id,data,content_hash) VALUES($1,$2,$3,$4) ON CONFLICT(deck_id,id) DO UPDATE SET data=$3, content_hash=$4, revision=questions.revision+$5, updated_at=now()`,
+      `INSERT INTO questions(deck_id,id,data,content_hash) VALUES($1,$2,$3,$4) ON CONFLICT(deck_id,id) DO UPDATE SET data=$3, content_hash=$4, revision=questions.revision+$5, archived_at=NULL,updated_at=now()`,
       [deckId, q.id, q, hash, reset ? 1 : 0],
     );
     if (reset) {
@@ -199,6 +307,53 @@ export class Store {
       (await this.items(deckId)).find((i) => i.question.id === id),
       "Question not found",
     );
+  }
+  async listQuestions(
+    deckId: string,
+    filters: {
+      topic?: string;
+      concept?: string;
+      skill?: string;
+      search?: string;
+      archived?: boolean;
+    } = {},
+  ) {
+    return (await this.items(deckId, this.pool, filters.archived)).filter(
+      (i) =>
+        (!filters.topic || i.question.topic === filters.topic) &&
+        (!filters.concept || i.question.concept === filters.concept) &&
+        (!filters.skill || i.question.skill === filters.skill) &&
+        (!filters.search ||
+          JSON.stringify(i.question)
+            .toLowerCase()
+            .includes(filters.search.toLowerCase())),
+    );
+  }
+  async audit(deckId: string) {
+    return auditQuestions((await this.items(deckId)).map((i) => i.question));
+  }
+  async archiveQuestion(deckId: string, id: string, restore = false) {
+    const result = await this.pool.query(
+      `UPDATE questions SET archived_at=${restore ? "NULL" : "now()"} WHERE deck_id=$1 AND id=$2 RETURNING id`,
+      [deckId, id],
+    );
+    requireValue(result.rows[0], "Question not found");
+    return { id, archived: !restore };
+  }
+  async updateDeck(
+    deckId: string,
+    input: { name?: string; description?: string },
+  ) {
+    if (
+      input.name !== undefined &&
+      (!input.name.trim() || input.name.length > 200)
+    )
+      throw new AppError("Deck name must have 1–200 characters");
+    await this.pool.query(
+      "UPDATE decks SET name=COALESCE($2,name),description=COALESCE($3,description) WHERE id=$1",
+      [deckId, input.name?.trim(), input.description],
+    );
+    return this.deck(deckId);
   }
   async editQuestion(
     deckId: string,
@@ -301,70 +456,26 @@ export class Store {
     ]);
   }
   async view(s: Session, db: DB = this.pool) {
-    const items = await this.items(s.deckId, db);
-    const current = s.queue[s.cursor];
-    let card = null;
-    if (current && !s.finished) {
-      const item = items.find((i) => i.question.id === current.questionId);
-      if (item) {
-        const seed = createHash("sha256")
-          .update(`${s.id}:${s.cursor}`)
-          .digest()
-          .readUInt32LE();
-        let n = seed;
-        card = publicCard(
-          item,
-          current,
-          () => (n = (n * 1664525 + 1013904223) >>> 0) / 4294967296,
-        );
-      }
-    }
-    const valid = s.answers.map((a, index) => ({
-      ...a,
-      index,
-      outdated:
-        items.find((i) => i.question.id === a.questionId)?.revision !==
-        a.revision,
-    }));
-    const graded = valid.filter((a) => !a.outdated && a.correct !== null);
-    const correct = graded.filter((a) => a.correct).length;
-    const topics = [...new Set(valid.map((a) => a.topic))].map((topic) => {
-      const a = graded.filter((a) => a.topic === topic);
-      return {
-        topic,
-        correct: a.filter((x) => x.correct).length,
-        total: a.length,
-      };
-    });
-    return {
-      id: s.id,
-      deckId: s.deckId,
-      mode: s.mode,
-      topic: s.topic,
-      cursor: s.cursor,
-      total: s.queue.length,
-      finished: s.finished,
-      version: s.version,
-      deadline: s.deadline,
-      card,
-      revealed: s.revealed?.cursor === s.cursor ? s.revealed : undefined,
-      result: s.finished
-        ? {
-            answers: valid,
-            correct,
-            graded: graded.length,
-            total: s.queue.length,
-            pending: valid.filter((a) => a.correct === null && !a.outdated)
-              .length,
-            unanswered: s.queue.length - s.answers.length,
-            topics,
-          }
-        : null,
-    };
+    return sessionView(s, await this.items(s.deckId, db));
   }
   async getSession(id: string) {
     return transaction(this.pool, async (db) => {
       const s = await this.loadSession(id, db, true);
+      if (!s.finished) {
+        const active = new Set(
+          (await this.items(s.deckId, db)).map((i) => i.question.id),
+        );
+        const queue = [
+          ...s.queue.slice(0, s.cursor),
+          ...s.queue.slice(s.cursor).filter((e) => active.has(e.questionId)),
+        ];
+        if (queue.length !== s.queue.length) {
+          s.queue = queue;
+          s.finished = s.cursor >= queue.length;
+          delete s.revealed;
+          await this.saveSession(s, db);
+        }
+      }
       if (!s.finished && s.deadline && Date.parse(s.deadline) <= Date.now()) {
         s.finished = true;
         await this.saveSession(s, db);
@@ -449,11 +560,11 @@ export class Store {
       // Lock the question so an edit and an answer cannot silently cross revisions.
       const row = (
         await db.query(
-          "SELECT revision FROM questions WHERE deck_id=$1 AND id=$2 FOR UPDATE",
+          "SELECT revision,archived_at FROM questions WHERE deck_id=$1 AND id=$2 FOR UPDATE",
           [s.deckId, entry.questionId],
         )
       ).rows[0];
-      if (!row || row.revision !== input.revision)
+      if (!row || row.archived_at || row.revision !== input.revision)
         throw new AppError("Question changed. Reload this card.", 409);
       const item = requireValue(
         (await this.items(s.deckId, db)).find(
@@ -461,75 +572,24 @@ export class Store {
         ),
         "Question not found",
       );
-      const v = requireValue(
-        resolveVariant(item.question, entry.variantId),
-        "Variant not found",
-      );
-      let response = input.response;
-      let correct = grade(v, response);
-      const selfAssessed = correct === null;
-      if (selfAssessed && s.mode !== "test") {
-        if (s.revealed?.cursor !== s.cursor)
-          throw new AppError("Reveal the model answer before self-assessing");
-        if (!["again", "hard", "good", "easy"].includes(input.rating ?? ""))
-          throw new AppError("Choose Again, Hard, Good or Easy");
-        response = s.revealed.response;
-        correct = input.rating !== "again";
-      }
-      const attempt: Attempt = {
-        questionId: item.question.id,
-        variantId: v.id,
-        format: v.type,
-        response,
-        correct,
-        selfAssessed,
-        rating: input.rating,
-        revision: item.revision,
-        question: v.question,
-        answer: v.answer,
-        explanation: v.explanation ?? item.question.explanation,
-        topic: item.question.topic,
-        rubric: v.rubric ?? item.question.rubric,
-        at: new Date().toISOString(),
-      };
+      const ordinal = s.cursor;
+      const { attempt, progress } = advanceSession(s, item, input);
       await db.query(
         "INSERT INTO attempts(session_id,ordinal,deck_id,question_id,revision,data) VALUES($1,$2,$3,$4,$5,$6)",
-        [s.id, s.cursor, s.deckId, item.question.id, item.revision, attempt],
+        [s.id, ordinal, s.deckId, item.question.id, item.revision, attempt],
       );
-      let progress = item.progress;
-      if (correct !== null) {
-        progress = updateProgress(
-          progress,
-          correct,
-          v.type,
-          selfAssessed,
-          new Date(),
-          input.rating,
-        );
+      if (attempt.correct !== null)
         await db.query(
           "INSERT INTO progress(deck_id,question_id,data) VALUES($1,$2,$3) ON CONFLICT(deck_id,question_id) DO UPDATE SET data=$3",
           [s.deckId, item.question.id, progress],
         );
-      }
-      if (s.mode === "learn" || s.mode === "cram") {
-        // Follow up successful recognition with recall. Bound retries to keep sessions finite.
-        if (entry.retry < 3 && (!correct || !progress.mastered))
-          s.queue = enqueueRetry(s.queue, s.cursor, entry, {
-            ...item,
-            progress,
-          });
-      }
-      s.answers.push(attempt);
-      s.cursor++;
-      delete s.revealed;
-      s.finished = s.cursor >= s.queue.length;
       await this.saveSession(s, db);
       return {
         session: await this.view(s, db),
         feedback:
           s.mode === "test"
             ? null
-            : { ...attempt, rubric: v.rubric ?? item.question.rubric ?? [] },
+            : { ...attempt, rubric: attempt.rubric ?? [] },
       };
     });
   }

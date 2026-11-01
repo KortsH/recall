@@ -1,4 +1,4 @@
-import { variants, resolveVariant } from "./bank.ts";
+import { variants, resolveVariant } from "./questions.ts";
 import type {
   Item,
   Progress,
@@ -68,6 +68,7 @@ export function updateProgress(
   selfAssessed: boolean,
   now = new Date(),
   rating?: string,
+  skill: "recall" | "application" = "recall",
 ): Progress {
   const active = format === "written" || format === "flashcard";
   const streak = correct ? p.streak + 1 : 0;
@@ -85,6 +86,13 @@ export function updateProgress(
           : 10
     : 2;
   return {
+    skills: {
+      ...p.skills,
+      [skill]: {
+        attempts: (p.skills?.[skill]?.attempts ?? 0) + 1,
+        correct: (p.skills?.[skill]?.correct ?? 0) + Number(correct),
+      },
+    },
     attempts: p.attempts + 1,
     correct: p.correct + Number(correct),
     wrong: p.wrong + Number(!correct),
@@ -158,10 +166,24 @@ export function buildQueue(
         const i = group.shift();
         if (i) mixed.push(i);
       }
+  // Separate related concepts without discarding useful recall/application pairs.
+  if (mode !== "test")
+    for (let n = 1; n < mixed.length; n++) {
+      const recent = new Set(
+        mixed.slice(Math.max(0, n - 2), n).map((i) => i.question.concept),
+      );
+      if (recent.has(mixed[n].question.concept)) {
+        const at = mixed.findIndex(
+          (i, j) => j > n && !recent.has(i.question.concept),
+        );
+        if (at >= 0) [mixed[n], mixed[at]] = [mixed[at], mixed[n]];
+      }
+    }
   return mixed.slice(0, count).map((i, n) => {
     const v = chooseVariant(i, mode, mode === "test" ? n : 0);
     return {
       questionId: i.question.id,
+      concept: i.question.concept,
       variantId: v.id,
       format: v.type,
       retry: 0,

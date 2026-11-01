@@ -38,25 +38,19 @@ import "@fontsource/manrope/latin-500.css";
 import "@fontsource/manrope/latin-600.css";
 import "@fontsource/manrope/latin-700.css";
 import "./readability.css";
+import {
+  api,
+  downloadedMode,
+  setDownloadedMode,
+  refreshDownloads,
+  syncDownloads,
+  downloadStatus,
+} from "./cache.ts";
 
 type Deck = Awaited<ReturnType<Store["decks"]>>[number];
 type SessionView = Awaited<ReturnType<Store["getSession"]>>;
 type Feedback = Attempt & { rubric?: string[] };
 type Reveal = Awaited<ReturnType<Store["reveal"]>>;
-const api = async <T,>(
-  path: string,
-  body?: unknown,
-  method?: string,
-): Promise<T> => {
-  const r = await fetch("/api" + path, {
-    method: method ?? (body ? "POST" : "GET"),
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const value = await r.json();
-  if (!r.ok) throw new Error(value.error ?? "Something went wrong");
-  return value;
-};
 const fmt = (s: string) => s.replaceAll("_", " ");
 const modes = [
   {
@@ -85,6 +79,12 @@ const modes = [
   },
 ];
 function App() {
+  const [cache, setCache] = useState(downloadStatus());
+  useEffect(() => {
+    const update = () => setCache(downloadStatus());
+    window.addEventListener("recall-cache", update);
+    return () => window.removeEventListener("recall-cache", update);
+  }, []);
   const [decks, setDecks] = useState<Deck[]>([]),
     [deckId, setDeckId] = useState(""),
     [section, setSection] = useState("overview");
@@ -197,6 +197,7 @@ function App() {
       localStorage.setItem("recall-session", s.id);
     });
   const leave = () => {
+    if (downloadedMode()) void syncDownloads().catch(() => {});
     setSession(null);
     resetAnswer();
     void refresh();
@@ -484,9 +485,38 @@ function App() {
           </div>
           <div className="local-badge">
             <span className="status-dot" />
-            Stored on your machine
+            {cache.enabled
+              ? `Downloaded on device${cache.pending ? ` · ${cache.pending} to sync` : ""}`
+              : "Live server"}
+            {cache.enabled && (
+              <button
+                className="icon-button"
+                aria-label="Refresh downloaded quizzes"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    await refreshDownloads();
+                    await refresh();
+                    if (deckId) {
+                      setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+                      setRecent(await api<any[]>(`/decks/${deckId}/sessions`));
+                    }
+                    setNotice(
+                      "Progress synced and downloaded quizzes refreshed.",
+                    );
+                  })
+                }
+              >
+                <RotateCcw size={14} />
+              </button>
+            )}
           </div>
         </header>
+        {cache.error && (
+          <div className="cache-status" role="status">
+            {cache.error}
+          </div>
+        )}
         {error && (
           <div className="error-banner" role="alert">
             <span>{error}</span>
@@ -1004,6 +1034,63 @@ function App() {
                   </p>
                 </div>
                 <div className="settings-card">
+                  <h2>Keep quizzes on this device</h2>
+                  <p>
+                    Download the full quiz and study without contacting the
+                    server for each answer. Progress saves here immediately,
+                    then syncs when you finish, leave, or refresh. New questions
+                    arrive only when you refresh.
+                  </p>
+                  <label className="storage-choice">
+                    <input
+                      type="checkbox"
+                      checked={cache.enabled}
+                      onChange={(e) =>
+                        void run(async () => {
+                          const enabled = e.target.checked;
+                          if (!enabled) await syncDownloads();
+                          else await refreshDownloads();
+                          setDownloadedMode(enabled);
+                          await refresh();
+                          setNotice(
+                            enabled
+                              ? "Downloaded study mode enabled."
+                              : "Live-server mode enabled.",
+                          );
+                        })
+                      }
+                    />
+                    Use downloaded study mode
+                  </label>
+                  <p className="small">
+                    {cache.downloadedAt
+                      ? `Last downloaded: ${new Date(cache.downloadedAt).toLocaleString()}`
+                      : "No quiz download yet."}{" "}
+                    {cache.pending
+                      ? `${cache.pending} session(s) waiting to sync.`
+                      : "Progress is synced."}
+                  </p>
+                  <button
+                    className="button secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await refreshDownloads();
+                        await refresh();
+                        setNotice("Downloaded quizzes are up to date.");
+                      })
+                    }
+                  >
+                    <RotateCcw size={16} />
+                    Sync progress & refresh quizzes
+                  </button>
+                  <p className="small">
+                    Phone and computer keep their own downloads. Refresh either
+                    device to pick up progress from the other. Clearing browser
+                    storage removes unsynced local attempts.
+                  </p>
+                </div>
+                <div className="settings-card">
                   <h2>Bring your own questions</h2>
                   <p>
                     Use any assistant to prepare a structured bank, then import
@@ -1356,7 +1443,9 @@ function App() {
                   <div className="study-under">
                     <p>
                       <span className="status-dot" />
-                      Your progress saves after every answer.
+                      {cache.enabled
+                        ? "Saved on this device. Syncs when you finish or leave."
+                        : "Your progress saves after every answer."}
                     </p>
                     {session.mode === "test" && (
                       <button
@@ -1394,19 +1483,20 @@ function App() {
         <ImportDialog
           busy={busy}
           onClose={() => setImportOpen(false)}
-          onImport={(bank) =>
+          onImport={(bank, replace) =>
             void run(async () => {
               const r = await api<{
                 deckId: string;
                 created: number;
                 updated: number;
                 unchanged: number;
-              }>("/import", bank);
+                archived: number;
+              }>(`/import${replace ? "?replace=1" : ""}`, bank);
               setImportOpen(false);
               await refresh();
               setDeckId(r.deckId);
               setNotice(
-                `${r.created} added · ${r.updated} updated · ${r.unchanged} unchanged`,
+                `${r.created} added · ${r.updated} updated · ${r.unchanged} unchanged · ${r.archived} archived`,
               );
             })
           }
@@ -1818,8 +1908,9 @@ function ImportDialog({
 }: {
   busy: boolean;
   onClose: () => void;
-  onImport: (bank: unknown) => void;
+  onImport: (bank: unknown, replace: boolean) => void;
 }) {
+  const [replace, setReplace] = useState(false);
   const [raw, setRaw] = useState(""),
     [error, setError] = useState("");
   const ref = useDialog(onClose);
@@ -1839,7 +1930,7 @@ function ImportDialog({
   const submit = () => {
     try {
       setError("");
-      onImport(JSON.parse(raw));
+      onImport(JSON.parse(raw), replace);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1892,6 +1983,14 @@ function ImportDialog({
             }
           />
         </label>
+        <label className="storage-choice">
+          <input
+            type="checkbox"
+            checked={replace}
+            onChange={(e) => setReplace(e.target.checked)}
+          />
+          Replace this deck: archive questions absent from the file
+        </label>
         {error && (
           <p className="field-error" role="alert">
             {error}
@@ -1915,3 +2014,5 @@ function ImportDialog({
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);
+if ("serviceWorker" in navigator && import.meta.env.PROD)
+  void navigator.serviceWorker.register("/sw.js").catch(() => {});

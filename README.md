@@ -1,6 +1,8 @@
 # Recall
 
-A focused, local exam learning tool. Bring a question bank, learn through varied questions, and progress from recognition to active recall. React + TypeScript + Vite, a plain Node HTTP server, and PostgreSQL. No AI integration, account, or subscription.
+A focused exam learning tool. Bring a question bank, download it to your device, and progress from recognition to active recall. React + TypeScript + Vite, a plain Node HTTP server, and PostgreSQL. Local or private home-server deployment; no AI integration, account, or subscription.
+
+Downloaded mode studies on the device and syncs progress in batches. Live-server mode is optional. Install the PWA on your phone to share quizzes and progress through the server. See [hosting and mobile use](docs/HOSTING.md) and [future work](docs/FUTURE.md).
 
 ![Recall deck overview](docs/overview.jpg)
 
@@ -16,7 +18,7 @@ npm run seed
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. `npm run dev` starts both the browser dev server and Node API. The schema is created automatically. `npm run seed` imports 29 original DAC/MAC practice objectives; it is an explicit command so startup cannot overwrite your corrections. Repeating it updates matching IDs.
+Open http://127.0.0.1:5173. `npm run dev` starts both the browser dev server and Node API. The schema is created automatically. `npm run seed` imports the compact 22-question DAC/MAC foundation bank; it is an explicit command so startup cannot overwrite your corrections. Repeating it updates matching IDs.
 
 For the built app:
 
@@ -58,6 +60,10 @@ Keyboard: 1–9 select choices, Enter checks/continues, Ctrl/⌘+Enter submits t
 ```sh
 npm run recall -- validate examples/data-protection.json
 npm run recall -- import questions.json --deck "Data Protection" --json
+npm run recall -- import replacement.json --replace --dry-run --json
+npm run recall -- import replacement.json --replace --json
+npm run recall -- questions "Data Protection" --topic MAC --json
+npm run recall -- audit "Data Protection"
 npm run recall -- decks
 npm run recall -- learn "Data Protection" --cram --topic MAC
 npm run recall -- flashcards "Data Protection"
@@ -72,6 +78,8 @@ Optionally run `npm link` to make `recall` available directly. Run commands from
 JSON is canonical. CSV/TSV imports need `--deck`; headers are `id,question,answer,topic,explanation,difficulty,tags` (only the first three are required; tags use `|`). CSV/TSV produces written/self-rated objectives and flashcards. Use JSON for choices, structured grading, matching, and scenarios. Validation reports malformed fields before any changes are made. Stable question IDs are required and unique within a deck; repeat imports update those IDs without duplicating questions.
 
 See [the bank format](docs/QUESTION_BANK.md), [the JSON Schema](docs/question-bank.schema.json), and [agent instructions](AGENTS.md).
+
+Use `--server URL` or `RECALL_SERVER_URL` for CLI operations against a shared server. `import --replace` archives missing IDs; `--topic` scopes replacement. Dry runs report IDs first. `archive`, `restore`, question editing, deck updates, sessions, self-assessment, statistics and exports are available through the CLI. Audit highlights potential concept/wording overlap without deleting useful recall/application pairs.
 
 ## Verify
 

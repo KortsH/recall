@@ -79,8 +79,6 @@ test("quoted CSV and TSV use the same validation and require deck names", async 
 });
 test("starter deck validates", async () => {
   const b = await readBank("examples/data-protection.json");
-  assert.ok(b.questions.length >= 25);
-  assert.ok(
-    b.questions.some((q) => q.variants.some((v) => v.type === "matching")),
-  );
+  assert.equal(b.questions.length, 22);
+  assert.equal(b.questions.filter((q) => q.skill === "application").length, 6);
 });

@@ -39,6 +39,14 @@
             "minLength": 1,
             "maxLength": 20000
           },
+          "skill": {
+            "default": "recall",
+            "type": "string",
+            "enum": [
+              "recall",
+              "application"
+            ]
+          },
           "question": {
             "type": "string",
             "minLength": 1,
@@ -137,6 +145,13 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 20000
+                },
+                "skill": {
+                  "type": "string",
+                  "enum": [
+                    "recall",
+                    "application"
+                  ]
                 },
                 "type": {
                   "type": "string",
@@ -250,6 +265,7 @@
         "required": [
           "id",
           "topic",
+          "skill",
           "question",
           "answer",
           "explanation",

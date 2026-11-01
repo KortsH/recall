@@ -1,6 +1,7 @@
 export type Format =
   "multiple_choice" | "multiple_select" | "written" | "flashcard" | "matching";
 export interface Variant {
+  skill?: "recall" | "application";
   id: string;
   type: Format;
   question: string;
@@ -14,6 +15,7 @@ export interface Variant {
   rubric?: string[];
 }
 export interface Question {
+  skill?: "recall" | "application";
   id: string;
   topic: string;
   concept: string;
@@ -36,6 +38,9 @@ export interface Bank {
   questions: Question[];
 }
 export interface Progress {
+  skills?: Partial<
+    Record<"recall" | "application", { attempts: number; correct: number }>
+  >;
   attempts: number;
   correct: number;
   wrong: number;
@@ -48,11 +53,13 @@ export interface Progress {
   nextReview: string | null;
 }
 export interface Item {
+  archived?: boolean;
   question: Question;
   revision: number;
   progress: Progress;
 }
 export interface QueueEntry {
+  concept?: string;
   questionId: string;
   variantId: string;
   format: Format;
@@ -73,6 +80,8 @@ export interface Session {
   revealed?: { cursor: number; response: unknown };
 }
 export interface Attempt {
+  invalidated?: boolean;
+  skill?: "recall" | "application";
   questionId: string;
   variantId: string;
   format: Format;

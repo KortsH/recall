@@ -44,6 +44,8 @@ export async function migrate(pool: pg.Pool) {
       CREATE INDEX IF NOT EXISTS sessions_deck_idx ON sessions(deck_id,updated_at DESC);
       CREATE TABLE IF NOT EXISTS attempts (id bigserial PRIMARY KEY, session_id text NOT NULL REFERENCES sessions(id), ordinal integer NOT NULL, deck_id text NOT NULL, question_id text NOT NULL, revision integer NOT NULL, data jsonb NOT NULL, invalidated boolean NOT NULL DEFAULT false, UNIQUE(session_id,ordinal));
       CREATE INDEX IF NOT EXISTS attempts_question_idx ON attempts(deck_id,question_id);
+      ALTER TABLE questions ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+      CREATE TABLE IF NOT EXISTS offline_events (id text PRIMARY KEY, data jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
     `);
   });
 }

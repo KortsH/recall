@@ -6,15 +6,26 @@ import { writeFile, readFile } from "node:fs/promises";
 import { createPool, migrate } from "./server/db.ts";
 import { Store } from "./server/store.ts";
 import { readBank } from "./core/bank.ts";
+import { remoteBackend, type Backend } from "./remote.ts";
+import { auditQuestions } from "./core/audit.ts";
 
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
   .version("0.1.0");
+program.option(
+  "--server <url>",
+  "Use a shared server instead of a direct PostgreSQL connection",
+);
 let pool: ReturnType<typeof createPool> | undefined;
-let store: Store | undefined;
+let store: Backend | undefined;
 async function connect() {
   if (!store) {
+    const url = program.opts().server ?? process.env.RECALL_SERVER_URL;
+    if (url) {
+      store = remoteBackend(url);
+      return store;
+    }
     pool = createPool();
     await migrate(pool);
     store = new Store(pool);
@@ -26,13 +37,22 @@ program
   .command("import <file>")
   .option("--deck <name>", "Override deck name")
   .option("--json", "Print machine-readable result")
+  .option("--replace", "Archive active questions absent from this bank")
+  .option("--topic <topic>", "Scope replacement to one topic")
+  .option("--dry-run", "Preview changes without writing")
   .action(async (file, o) => {
     const bank = await readBank(file, o.deck);
-    const result = await (await connect()).importBank(bank);
+    const result = await (
+      await connect()
+    ).importBank(bank, {
+      replace: o.replace,
+      topic: o.topic,
+      dryRun: o.dryRun,
+    });
     if (o.json) print(result);
     else
       console.log(
-        `${bank.deck}: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged; ${result.reviewReset} progress resets.\nDeck: ${result.deckId}`,
+        `${o.dryRun ? "PREVIEW — " : ""}${bank.deck}: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.archived} archived; ${result.reviewReset} progress resets.\nDeck: ${result.deckId}`,
       );
   });
 program
@@ -125,6 +145,70 @@ program
     } else print(await s.question(d.id, id));
   });
 
+program
+  .command("questions <deck>")
+  .option("--topic <topic>")
+  .option("--concept <concept>")
+  .option("--skill <skill>", "recall or application")
+  .option("--search <text>")
+  .option("--archived", "Include archived questions")
+  .option("--json")
+  .action(async (deck, o) => {
+    const s = await connect();
+    const d = await s.deck(deck);
+    const rows = await s.listQuestions(d.id, {
+      topic: o.topic,
+      concept: o.concept,
+      skill: o.skill,
+      search: o.search,
+      archived: o.archived,
+    });
+    if (o.json) print(rows);
+    else
+      console.table(
+        rows.map((i) => ({
+          id: i.question.id,
+          topic: i.question.topic,
+          concept: i.question.concept,
+          skill: i.question.skill ?? "recall",
+          question: i.question.question,
+          archived: i.archived,
+        })),
+      );
+  });
+program
+  .command("audit <deck>")
+  .option("--file <file>", "Compare an incoming bank with the existing deck")
+  .action(async (deck, o) => {
+    const s = await connect();
+    const d = await s.deck(deck);
+    if (o.file) {
+      const bank = await readBank(o.file);
+      print(
+        auditQuestions(
+          bank.questions,
+          (await s.items(d.id)).map((i) => i.question),
+        ),
+      );
+    } else print(await s.audit(d.id));
+  });
+for (const restore of [false, true])
+  program
+    .command(`${restore ? "restore" : "archive"} <deck> <id>`)
+    .action(async (deck, id) => {
+      const s = await connect();
+      const d = await s.deck(deck);
+      print(await s.archiveQuestion(d.id, id, restore));
+    });
+program
+  .command("deck-update <deck>")
+  .option("--name <name>")
+  .option("--description <text>")
+  .action(async (deck, o) => {
+    const s = await connect();
+    const d = await s.deck(deck);
+    print(await s.updateDeck(d.id, o));
+  });
 async function study(
   deck: string,
   mode: string,

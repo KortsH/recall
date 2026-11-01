@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { parseBank } from "../core/bank.ts";
 import { Store, AppError } from "./store.ts";
+import { syncOfflineSession } from "./offline.ts";
 
 async function body(req: IncomingMessage) {
   let size = 0;
@@ -42,6 +43,9 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
         const origin = req.headers.origin;
         if (
           origin &&
+          !(process.env.RECALL_ALLOWED_ORIGINS ?? "")
+            .split(",")
+            .includes(origin) &&
           new URL(origin).host !== req.headers.host &&
           !(
             new URL(origin).hostname === "127.0.0.1" &&
@@ -58,11 +62,45 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
       }
       if (path === "/api/decks" && method === "GET")
         return json(res, 200, await store.decks());
+      if (path === "/api/sync" && method === "POST")
+        return json(res, 200, await syncOfflineSession(store, await body(req)));
+      if (path === "/api/snapshot" && method === "GET") {
+        const decks = await store.decks();
+        const recent: Record<
+          string,
+          Awaited<ReturnType<Store["recentSessions"]>>
+        > = Object.fromEntries(
+          await Promise.all(
+            decks.map(async (d) => [d.id, await store.recentSessions(d.id)]),
+          ),
+        );
+        return json(res, 200, {
+          downloadedAt: new Date().toISOString(),
+          decks,
+          items: Object.fromEntries(
+            await Promise.all(
+              decks.map(async (d) => [d.id, await store.items(d.id)]),
+            ),
+          ),
+          recent,
+          sessions: Object.fromEntries(
+            await Promise.all(
+              Object.values(recent)
+                .flat()
+                .map(async (s) => [s.id, await store.loadSession(s.id)]),
+            ),
+          ),
+        });
+      }
       if (path === "/api/import" && method === "POST")
         return json(
           res,
           200,
-          await store.importBank(parseBank(await body(req))),
+          await store.importBank(parseBank(await body(req)), {
+            replace: url.searchParams.get("replace") === "1",
+            dryRun: url.searchParams.get("dryRun") === "1",
+            topic: url.searchParams.get("topic") ?? undefined,
+          }),
         );
       let match = path.match(/^\/api\/decks\/([^/]+)(?:\/(.*))?$/);
       if (match) {
@@ -70,8 +108,22 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
         const rest = match[2] ?? "";
         if (!rest && method === "GET")
           return json(res, 200, await store.deck(id));
+        if (!rest && method === "PATCH")
+          return json(res, 200, await store.updateDeck(id, await body(req)));
+        if (rest === "audit" && method === "GET")
+          return json(res, 200, await store.audit(id));
         if (rest === "questions" && method === "GET")
-          return json(res, 200, await store.items(id));
+          return json(
+            res,
+            200,
+            await store.listQuestions(id, {
+              topic: url.searchParams.get("topic") ?? undefined,
+              concept: url.searchParams.get("concept") ?? undefined,
+              skill: url.searchParams.get("skill") ?? undefined,
+              search: url.searchParams.get("search") ?? undefined,
+              archived: url.searchParams.get("archived") === "1",
+            }),
+          );
         if (rest === "export" && method === "GET")
           return json(res, 200, await store.exportBank(id));
         if (rest === "sessions" && method === "GET")
@@ -91,6 +143,10 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
               await store.editQuestion(id, qid, b.question, b.revision),
             );
           }
+          if (method === "DELETE")
+            return json(res, 200, await store.archiveQuestion(id, qid));
+          if (method === "POST")
+            return json(res, 200, await store.archiveQuestion(id, qid, true));
         }
       }
       match = path.match(/^\/api\/sessions\/([^/]+)(?:\/(.*))?$/);
@@ -141,11 +197,17 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
         ".svg": "image/svg+xml",
         ".png": "image/png",
         ".woff2": "font/woff2",
+        ".woff": "font/woff",
+        ".webmanifest": "application/manifest+json",
       };
       res.writeHead(200, {
         "Content-Type": mime[extname(file)] ?? "application/octet-stream",
         "Cache-Control":
-          extname(file) === ".html" ? "no-cache" : "public, max-age=3600",
+          extname(file) === ".html" ||
+          path === "/sw.js" ||
+          path === "/manifest.webmanifest"
+            ? "no-cache"
+            : "public, max-age=3600",
       });
       res.end(method === "HEAD" ? undefined : data);
     } catch (e) {
