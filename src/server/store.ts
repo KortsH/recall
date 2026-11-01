@@ -63,6 +63,10 @@ export interface DeckSummary {
 }
 export class Store {
   constructor(public pool: pg.Pool) {}
+  async recoverSession(input: Session) {
+    const { syncOfflineSession } = await import("./offline.ts");
+    return syncOfflineSession(this, input);
+  }
   async items(
     deckId: string,
     db: DB = this.pool,

@@ -63,3 +63,21 @@ npm run recall -- import quiz.recall.json --json
 ```
 
 For agent authoring, read `QUESTION_BANK.md` and inspect the existing bank first. Preserve IDs and `depends_on`. Share self-contained banks so all prerequisites exist in the recipient's file. Partial server imports may refer to existing records, but a friend cannot learn a missing prerequisite.
+
+## Recover pending server answers
+
+In a downloaded server workspace, open **Settings → Export unsynced progress** if a prolonged outage prevents sync. Export works offline, leaves the outbox intact and produces a private `*.recovery.json` file containing pending sessions, typed answers and the downloaded questions. Keep it as a personal backup; use the normal quiz export for sharing.
+
+```sh
+# Validate and inspect without any connection.
+npm run recall -- recovery-inspect Recall-pending-progress.recovery.json
+
+# Preview against the intended original server (or configured DATABASE_URL).
+npm run recall -- --server https://your-server.example recover Recall-pending-progress.recovery.json
+# Replay only after reviewing the destination and preview.
+npm run recall -- --server https://your-server.example recover Recall-pending-progress.recovery.json --apply
+```
+
+Recovery never imports questions or changes connection settings. The destination must already contain the original deck IDs. Each answer is regraded against the server's current revision; evidence for corrected/archived questions is retained but excluded from mastery. Replaying the same evidence cannot add duplicate credit. Conflicting or newer server evidence stops recovery, reporting completed sessions; the original file remains unchanged. Ordinary sync is also safe after successful recovery. Keep the file and outbox until the destination has been verified.
+
+Device-only workspaces use **Export with my progress** instead. Recovery files are a separate format and are intentionally rejected by ordinary quiz import.

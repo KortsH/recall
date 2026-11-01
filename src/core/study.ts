@@ -192,10 +192,15 @@ export function advanceSession(
 }
 export function pruneLocked(s: Session, items: Item[]) {
   if (s.finished) return;
-  if (s.ignorePrerequisites && ["cram", "test"].includes(s.mode)) return;
+  const override = s.ignorePrerequisites && ["cram", "test"].includes(s.mode);
+  const active = new Set(
+    items.filter((i) => !i.archived).map((i) => i.question.id),
+  );
   const unlocked = new Set(
     prerequisiteStatus(items)
-      .filter((s) => s.unlocked)
+      .filter(
+        (status) => active.has(status.id) && (override || status.unlocked),
+      )
       .map((s) => s.id),
   );
   const queue = [

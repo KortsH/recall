@@ -50,3 +50,5 @@ Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --f
 - Regenerate the schema using `npm run schema` after bank-schema changes.
 
 Use the existing Git author configured by the user. Do not append an assistant co-author. Do not create or push repositories unless the user has authorised it.
+
+Pending server evidence can be exported from Settings without a network request. Read the recovery section of `docs/PORTABLE.md`: `recovery-inspect` is file-only; `recover` previews matching destination IDs, and `recover --apply` replays through the same revision checks and idempotent server grading as normal sync. Never treat these private typed-answer files as shareable quiz banks or clear an outbox merely because export succeeded.

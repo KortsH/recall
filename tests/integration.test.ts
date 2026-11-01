@@ -1,8 +1,8 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { spawnSync, spawn } from "node:child_process";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPool, migrate, databaseUrl } from "../src/server/db.ts";
@@ -12,6 +12,7 @@ import { createApp } from "../src/server/http.ts";
 import { newSession, advanceSession } from "../src/core/study.ts";
 import { syncOfflineSession } from "../src/server/offline.ts";
 import { remoteBackend } from "../src/remote.ts";
+import { createRecovery } from "../src/core/recovery.ts";
 import { request } from "node:http";
 
 // Isolated real PostgreSQL database. Never clear or reuse a user's development database.
@@ -542,4 +543,89 @@ test("remote CLI adapter offers the same listing, audit and replacement operatio
   await remote.archiveQuestion(id, bank.questions[0].id);
   await remote.archiveQuestion(id, bank.questions[0].id, true);
   assert.equal((await remote.items(id)).length, 2);
+});
+test("private recovery CLI previews without writes and replays pending evidence exactly once", async () => {
+  const id = await fresh();
+  const items = await store.items(id),
+    session = newSession(id, items, { mode: "learn", count: 1 });
+  const item = items.find(
+    (i) => i.question.id === session.queue[0].questionId,
+  )!;
+  advanceSession(session, item, {
+    version: 0,
+    revision: item.revision,
+    response: ["A"],
+  });
+  session.version++;
+  const recovery = createRecovery(
+    [{ id, bank: await store.exportBank(id) }],
+    [session],
+  );
+  const directory = await mkdtemp(join(tmpdir(), "recall-recovery-"));
+  const file = join(directory, "pending.json");
+  await writeFile(file, JSON.stringify(recovery));
+  const run = (apply = false) => {
+    const args = [
+      "--import",
+      "tsx",
+      "src/cli.ts",
+      "--server",
+      base,
+      "recover",
+      file,
+      ...(apply ? ["--apply"] : []),
+    ];
+    // The parent HTTP server must keep running while the child performs requests.
+    return new Promise<string>((resolve, reject) => {
+      const child = spawn(process.execPath, args, {
+        env: {
+          ...process.env,
+          RECALL_SERVER_URL: "",
+          DATABASE_URL: testUrl.toString(),
+        },
+        windowsHide: true,
+      });
+      let output = "",
+        error = "";
+      child.stdout.on("data", (c) => (output += c));
+      child.stderr.on("data", (c) => (error += c));
+      child.on("error", reject);
+      child.on("close", (code) =>
+        code === 0 ? resolve(output) : reject(new Error(error || output)),
+      );
+    });
+  };
+  try {
+    assert.equal(JSON.parse(await run()).dryRun, true);
+    assert.equal(
+      (await store.question(id, item.question.id)).progress.attempts,
+      0,
+    );
+    await run(true);
+    await run(true);
+    assert.equal(
+      (await store.question(id, item.question.id)).progress.attempts,
+      1,
+    );
+    const current = await store.question(id, item.question.id);
+    await store.editQuestion(
+      id,
+      item.question.id,
+      {
+        ...current.question,
+        question: current.question.question + " corrected",
+      },
+      current.revision,
+    );
+    const stale = JSON.parse(await run(true));
+    assert.equal(stale.completed[0].obsolete, 1);
+    assert.equal(
+      (await store.question(id, item.question.id)).progress.attempts,
+      0,
+    );
+    const before = await readFile(file, "utf8");
+    assert.deepEqual(JSON.parse(before), JSON.parse(JSON.stringify(recovery)));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

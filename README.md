@@ -2,7 +2,7 @@
 
 A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.2.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.2.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.2.0-preview.1)
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.2.1-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.2.1-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.2.1-preview.1)
 
 ## Install and use
 
@@ -129,3 +129,5 @@ npm run test:installer      # Windows only; build installer first
 Integration tests need a dedicated test PostgreSQL server with CREATEDB access. They create/drop uniquely named databases and never truncate the user's database. CI also builds and exercises the Windows installer. Physical phone testing, release signing and other remaining work are in [the roadmap](docs/FUTURE.md).
 
 MIT licensed.
+
+If a server outage leaves answers unsynced, Settings can export a private recovery file. The [recovery CLI instructions](docs/PORTABLE.md#recover-pending-server-answers) explain preview and safe replay.

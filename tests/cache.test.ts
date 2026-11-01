@@ -49,11 +49,13 @@ test("downloaded study makes no per-answer requests and survives a module restar
     requests.push(String(url));
     if (String(url) === "/api/snapshot") return Response.json(snapshot);
     if (String(url) === "/api/sync") {
+      if (unavailable) throw new Error("Deliberate server outage");
       const session = JSON.parse(options.body);
       return Response.json({ session, rejected: [], progress: {} });
     }
     throw new Error("Unexpected network request " + url);
   });
+  let unavailable = false;
   const cache = await import("../src/web/cache.ts");
   await cache.api("/decks");
   const session: any = await cache.api("/decks/cached/sessions", {
@@ -67,6 +69,24 @@ test("downloaded study makes no per-answer requests and survives a module restar
   });
   assert.equal(result.feedback.correct, true);
   assert.deepEqual(requests, ["/api/snapshot"]);
+  unavailable = true;
+  await assert.rejects(cache.syncDownloads(), /Deliberate server outage/);
+  const beforeExport = [...requests];
+  const recovery = await cache.exportPendingRecovery();
+  assert.equal(recovery.sessions.length, 1);
+  assert.equal(recovery.sessions[0].answers[0].response, "A");
+  assert.deepEqual(
+    requests,
+    beforeExport,
+    "Recovery export must not contact the unavailable server",
+  );
+  assert.equal(
+    cache.downloadStatus().pending,
+    1,
+    "Export must preserve the outbox",
+  );
+  unavailable = false;
+  requests.pop(); // Ignore the single deliberate failed sync for the existing no-per-answer assertions.
   const restarted = await import(
     new URL("../src/web/cache.ts?restart=1", import.meta.url).href
   );

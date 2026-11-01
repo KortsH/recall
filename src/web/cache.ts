@@ -20,6 +20,7 @@ import {
 import { prerequisiteStatus } from "../core/prerequisites.ts";
 import { resolveVariant } from "../core/questions.ts";
 import { updateProgress } from "../core/engine.ts";
+import { createRecovery } from "../core/recovery.ts";
 import { auditQuestions } from "../core/audit.ts";
 
 interface Snapshot {
@@ -288,6 +289,30 @@ export const refreshDownloads = () =>
     };
     lastError = "";
     await persist();
+  });
+export const exportPendingRecovery = (deckId?: string) =>
+  serial(async () => {
+    if (personalMode())
+      throw new Error(
+        "Use a quiz export with progress for a device-only workspace",
+      );
+    const s = await load();
+    const sessions = Object.keys(s.dirty)
+      .map((id) => s.sessions[id])
+      .filter((session) => session && (!deckId || session.deckId === deckId));
+    if (!sessions.length) throw new Error("No pending sessions to export");
+    return createRecovery(
+      s.decks.map((d) => ({
+        id: d.id,
+        bank: {
+          schemaVersion: 1,
+          deck: d.name,
+          description: d.description,
+          questions: (s.items[d.id] ?? []).map((i) => i.question),
+        },
+      })),
+      sessions,
+    );
   });
 export async function api<T>(
   path: string,

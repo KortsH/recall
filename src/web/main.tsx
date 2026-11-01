@@ -51,6 +51,7 @@ import {
   refreshDownloads,
   syncDownloads,
   downloadStatus,
+  exportPendingRecovery,
 } from "./cache.ts";
 
 type Deck = Awaited<ReturnType<Store["decks"]>>[number];
@@ -1219,6 +1220,31 @@ function App() {
                       <RotateCcw size={16} />
                       Sync progress & refresh quizzes
                     </button>
+                    <button
+                      className="button secondary"
+                      disabled={busy || !cache.pending}
+                      onClick={() =>
+                        void run(async () => {
+                          const recovery = await exportPendingRecovery();
+                          saveJson(
+                            "Recall-pending-progress.recovery.json",
+                            recovery,
+                          );
+                          setNotice(
+                            "Private recovery export prepared. It includes pending answers; keep it safe and use the recovery CLI to replay it.",
+                          );
+                        })
+                      }
+                    >
+                      <Download size={16} />
+                      Export unsynced progress
+                    </button>
+                    <p className="small">
+                      If the server stays unavailable, export pending evidence
+                      before clearing storage or changing devices. This private
+                      recovery file includes typed answers. It is separate from
+                      a quiz-sharing file; export does not clear the outbox.
+                    </p>
                     <p className="small">
                       Phone and computer keep their own downloads. Refresh
                       either device to pick up progress from the other. Clearing

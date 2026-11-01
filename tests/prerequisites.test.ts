@@ -5,7 +5,12 @@ import {
   validatePrerequisites,
   prerequisiteStatus,
 } from "../src/core/prerequisites.ts";
-import { newSession, advanceSession } from "../src/core/study.ts";
+import {
+  newSession,
+  advanceSession,
+  pruneLocked,
+  sessionView,
+} from "../src/core/study.ts";
 import { updateProgress } from "../src/core/engine.ts";
 import { emptyProgress } from "../src/core/types.ts";
 import { allowedHost } from "../src/server/access.ts";
@@ -184,4 +189,28 @@ test("local API hosts reject rebinding and accept only explicitly configured rem
     false,
   );
   assert.equal(allowedHost("127.0.0.1@attacker.example"), false);
+});
+test("Cram/Test overrides still remove archived cards instead of leaving a blank current card", () => {
+  for (const mode of ["cram", "test"]) {
+    const items = bank().questions.map((question) => ({
+      question,
+      revision: 1,
+      progress: emptyProgress(),
+    }));
+    const session = newSession("d", items, {
+      mode,
+      count: 3,
+      ignorePrerequisites: true,
+    });
+    const removed = items.find(
+      (i) => i.question.id === session.queue[0].questionId,
+    )!;
+    Object.assign(removed, { archived: true });
+    pruneLocked(session, items);
+    assert.ok(session.queue.every((e) => e.questionId !== removed.question.id));
+    assert.ok(
+      session.finished || sessionView(session, items).card,
+      "An active session must have a visible card",
+    );
+  }
 });

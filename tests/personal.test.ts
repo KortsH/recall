@@ -90,4 +90,29 @@ test("a fresh device imports, studies, edits, exports and resumes with zero serv
     1,
   );
   assert.equal(requests, 0);
+  for (const mode of ["cram", "test"]) {
+    const imported: any = await api("/import", {
+      ...bank,
+      deck: `Archive override ${mode}`,
+    });
+    const open: any = await api(`/decks/${imported.deckId}/sessions`, {
+      mode,
+      count: 2,
+      ignorePrerequisites: true,
+    });
+    await api("/import?replace=1", {
+      deck: `Archive override ${mode}`,
+      questions: [
+        { id: "replacement", question: "Replacement definition", answer: "C" },
+      ],
+    });
+    const resumed: any = await api(`/sessions/${open.id}`);
+    assert.equal(
+      resumed.finished,
+      true,
+      "An override session must finish safely if every queued question was archived",
+    );
+    assert.equal(resumed.card, null);
+  }
+  assert.equal(requests, 0);
 });

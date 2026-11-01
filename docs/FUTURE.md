@@ -24,6 +24,7 @@ Requested for **1 November 2026**. The preview implementation is complete; relea
   Tracked with operations follow-up in [issue #3](https://github.com/KortsH/recall/issues/3).
 - More complete automatic API description and generated native clients.
 - Multi-user accounts and authentication for public hosting. Current home deployment is single-user and private to the tailnet.
+- [x] Offline export and CLI replay of pending server answers, with idempotent regrading and obsolete-revision handling. See `PORTABLE.md`.
 - Configurable backup retention, alerts, and a separate off-site copy.
 - Additional past-paper exercises: Chinese Wall write rule and multi-step HRU reasoning. Aim for roughly 40% recall / 60% application in later banks. The compact foundation bank intentionally remains recall-heavy.
 

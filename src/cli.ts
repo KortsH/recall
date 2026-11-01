@@ -8,6 +8,7 @@ import { Store } from "./server/store.ts";
 import { readBank } from "./core/bank.ts";
 import { remoteBackend, type Backend } from "./remote.ts";
 import { auditQuestions } from "./core/audit.ts";
+import { parseRecovery } from "./core/recovery.ts";
 import {
   parsePortable,
   exportPortable,
@@ -21,7 +22,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.2.0-preview.1");
+  .version("0.2.1-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",
@@ -42,6 +43,69 @@ async function connect() {
   return store;
 }
 const print = (value: unknown) => console.log(JSON.stringify(value, null, 2));
+program
+  .command("recovery-inspect <file>")
+  .description(
+    "Validate a private pending-evidence backup without connecting to a server",
+  )
+  .action(async (file) => {
+    const recovery = parseRecovery(JSON.parse(await readFile(file, "utf8")));
+    print({
+      decks: recovery.decks.map((d) => ({ id: d.id, name: d.bank.deck })),
+      sessions: recovery.sessions.length,
+      answers: recovery.sessions.reduce((n, s) => n + s.answers.length, 0),
+    });
+  });
+program
+  .command("recover <file>")
+  .description(
+    "Preview or replay pending evidence against the configured server/database",
+  )
+  .option(
+    "--apply",
+    "Replay evidence; otherwise only preview matching target decks",
+  )
+  .action(async (file, o) => {
+    const recovery = parseRecovery(JSON.parse(await readFile(file, "utf8")));
+    const target = await connect();
+    for (const deck of recovery.decks) {
+      const actual = await target.deck(deck.id);
+      if (actual.id !== deck.id)
+        throw new Error("Recovery target deck does not match");
+    }
+    if (!o.apply) {
+      print({
+        dryRun: true,
+        sessions: recovery.sessions.length,
+        answers: recovery.sessions.reduce((n, s) => n + s.answers.length, 0),
+        message:
+          "No writes. Use --apply to replay; the server regrades each answer and rejects obsolete revisions.",
+      });
+      return;
+    }
+    const completed = [];
+    for (const session of recovery.sessions) {
+      try {
+        const result = await target.recoverSession(session);
+        completed.push({
+          sessionId: session.id,
+          answers: result.session.answers.length,
+          obsolete: result.session.answers.filter((a) => a.invalidated).length,
+          rejected: result.rejected,
+        });
+      } catch (error) {
+        print({
+          completed,
+          failedSession: session.id,
+          error: (error as Error).message,
+        });
+        throw new Error(
+          "Recovery stopped. The original file is unchanged; repeating successful evidence cannot add duplicate credit.",
+        );
+      }
+    }
+    print({ dryRun: false, completed });
+  });
 program
   .command("import <file>")
   .option("--deck <name>", "Override deck name")
