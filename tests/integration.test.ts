@@ -329,7 +329,11 @@ test("CLI import, export and stats operate on the same real database", async () 
         ["--import", "tsx", "src/cli.ts", ...args],
         {
           encoding: "utf8",
-          env: { ...process.env, DATABASE_URL: testUrl.toString() },
+          env: {
+            ...process.env,
+            DATABASE_URL: testUrl.toString(),
+            RECALL_SERVER_URL: "",
+          },
         },
       );
       assert.equal(r.status, 0, r.stderr);
@@ -357,7 +361,11 @@ test("CLI import, export and stats operate on the same real database", async () 
       ["--import", "tsx", "src/cli.ts", "export", title, "-o", exported],
       {
         encoding: "utf8",
-        env: { ...process.env, DATABASE_URL: testUrl.toString() },
+        env: {
+          ...process.env,
+          DATABASE_URL: testUrl.toString(),
+          RECALL_SERVER_URL: "",
+        },
       },
     );
     assert.equal(r.status, 0, r.stderr);
@@ -437,6 +445,31 @@ test("offline answers against corrected questions are retained but excluded from
     (await store.question(id, item.question.id)).progress.attempts,
     0,
   );
+});
+test("a whole downloaded learning session merges every repeated attempt exactly once", async () => {
+  const id = await fresh(),
+    items = await store.items(id);
+  const s = newSession(id, items, { mode: "learn", count: 3 });
+  for (let n = 0; !s.finished && n < 30; n++) {
+    const entry = s.queue[s.cursor],
+      item = items.find((i) => i.question.id === entry.questionId)!;
+    const response = entry.format === "multiple_choice" ? ["A"] : "A";
+    const { progress } = advanceSession(s, item, {
+      version: s.version,
+      revision: item.revision,
+      response,
+    });
+    item.progress = progress;
+    s.version++;
+  }
+  assert.equal(s.finished, true);
+  await syncOfflineSession(store, s);
+  await syncOfflineSession(store, s);
+  for (const item of items)
+    assert.equal(
+      (await store.question(id, item.question.id)).progress.attempts,
+      item.progress.attempts,
+    );
 });
 test("remote CLI adapter offers the same listing, audit and replacement operations", async () => {
   const id = await fresh();

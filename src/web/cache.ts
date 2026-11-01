@@ -228,7 +228,11 @@ export const refreshDownloads = () =>
     const snapshot = await serverApi<Snapshot>("/snapshot");
     state = {
       ...snapshot,
-      sessions: { ...snapshot.sessions, ...s.sessions },
+      sessions: Object.fromEntries(
+        Object.entries({ ...s.sessions, ...snapshot.sessions }).filter(
+          ([, session]) => snapshot.decks.some((d) => d.id === session.deckId),
+        ),
+      ),
       dirty: {},
     };
     lastError = "";
@@ -310,7 +314,12 @@ export async function api<T>(
       const rest = m[2] ?? "";
       const items = s.items[session.deckId] ?? [];
       if (!rest && verb === "GET") {
+        const wasFinished = session.finished;
         result = view(s, session);
+        if (!wasFinished && session.finished) {
+          s.dirty[session.id] = true;
+          setTimeout(() => void syncDownloads().catch(() => {}), 0);
+        }
         await persist();
         return result;
       }
@@ -399,7 +408,11 @@ export async function api<T>(
     const snapshot = await serverApi<Snapshot>("/snapshot");
     state = {
       ...snapshot,
-      sessions: { ...snapshot.sessions, ...s.sessions },
+      sessions: Object.fromEntries(
+        Object.entries({ ...s.sessions, ...snapshot.sessions }).filter(
+          ([, session]) => snapshot.decks.some((d) => d.id === session.deckId),
+        ),
+      ),
       dirty: {},
     };
     await persist();
