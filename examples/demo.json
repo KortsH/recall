@@ -1,0 +1,10 @@
+{
+  "deck": "Recall Demo",
+  "description": "Synthetic format and prerequisite examples. Replace with your private bank.",
+  "questions": [
+    {"id":"queue-definition","topic":"Foundations","concept":"Queues","skill":"recall","question":"In this demo, which item leaves a FIFO queue first?","answer":"The earliest item added.","acceptedAnswers":["The earliest item added","First in first out","FIFO"],"options":["The earliest item added.","The latest item added.","A random item."]},
+    {"id":"queue-apply","topic":"Practice","concept":"Queues","skill":"application","depends_on":["queue-definition"],"question":"A demo FIFO queue receives A, then B. Which leaves first?","answer":"A","acceptedAnswers":["A"]},
+    {"id":"stack-definition","topic":"Foundations","concept":"Stacks","skill":"recall","question":"In this demo, which item leaves a LIFO stack first?","answer":"The latest item added.","acceptedAnswers":["The latest item added","Last in first out","LIFO"]},
+    {"id":"stack-apply","topic":"Practice","concept":"Stacks","skill":"application","depends_on":["stack-definition"],"question":"A demo LIFO stack receives A, then B. Which leaves first?","answer":"B","acceptedAnswers":["B"]}
+  ]
+}

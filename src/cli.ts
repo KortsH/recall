@@ -8,6 +8,10 @@ import { Store } from "./server/store.ts";
 import { readBank } from "./core/bank.ts";
 import { remoteBackend, type Backend } from "./remote.ts";
 import { auditQuestions } from "./core/audit.ts";
+import {
+  prerequisiteStatus,
+  validatePrerequisites,
+} from "./core/prerequisites.ts";
 
 const program = new Command()
   .name("recall")
@@ -58,8 +62,13 @@ program
 program
   .command("validate <file>")
   .option("--deck <name>")
+  .option(
+    "--partial",
+    "Allow references to existing questions outside this import file",
+  )
   .action(async (file, o) => {
     const bank = await readBank(file, o.deck);
+    validatePrerequisites(bank.questions, !!o.partial);
     print({ valid: true, deck: bank.deck, questions: bank.questions.length });
   });
 program
@@ -177,6 +186,53 @@ program
       );
   });
 program
+  .command("prerequisites <deck> [id]")
+  .description(
+    "Inspect unlock status, or change prerequisite IDs on one question",
+  )
+  .option("--set <ids>", "Replace prerequisite IDs (comma-separated)")
+  .option("--add <ids>", "Add prerequisite IDs (comma-separated)")
+  .option("--remove <ids>", "Remove prerequisite IDs (comma-separated)")
+  .option("--clear", "Remove all prerequisites")
+  .action(async (deck, id, o) => {
+    const s = await connect();
+    const d = await s.deck(deck);
+    const edits = [
+      o.set !== undefined,
+      o.add !== undefined,
+      o.remove !== undefined,
+      !!o.clear,
+    ].filter(Boolean).length;
+    if (edits > 1)
+      throw new Error("Choose one of --set, --add, --remove or --clear");
+    if (edits) {
+      if (!id) throw new Error("Supply the question ID to change");
+      const item = await s.question(d.id, id);
+      const list = (v: string) =>
+        v
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
+      let parents = item.question.depends_on ?? [];
+      if (o.set !== undefined) parents = list(o.set);
+      if (o.add !== undefined)
+        parents = [...new Set([...parents, ...list(o.add)])];
+      if (o.remove !== undefined)
+        parents = parents.filter((p) => !list(o.remove).includes(p));
+      if (o.clear) parents = [];
+      await s.editQuestion(
+        d.id,
+        id,
+        { ...item.question, depends_on: parents },
+        item.revision,
+      );
+    }
+    const statuses = prerequisiteStatus(await s.items(d.id));
+    if (id && !statuses.some((x) => x.id === id))
+      throw new Error("Question not found");
+    print(id ? statuses.find((x) => x.id === id) : statuses);
+  });
+program
   .command("audit <deck>")
   .option("--file <file>", "Compare an incoming bank with the existing deck")
   .action(async (deck, o) => {
@@ -223,6 +279,7 @@ async function study(
         topic: o.topic ? String(o.topic) : undefined,
         count: Number(o.questions ?? 20),
         minutes: Number(o.minutes ?? 0),
+        ignorePrerequisites: !!o.ignorePrerequisites,
       });
   const rl = createInterface({ input: stdin, output: stdout });
   console.log(
@@ -328,6 +385,10 @@ for (const mode of ["learn", "flashcards", "test"])
     .option("--questions <number>", "Session size", "20")
     .option("--minutes <number>", "Optional test time limit", "0")
     .option("--cram", "Ignore review dates")
+    .option(
+      "--ignore-prerequisites",
+      "Include locked objectives (Cram/Test only)",
+    )
     .option("--resume <session-id>")
     .action((deck, o) => study(deck, mode, o));
 program.command("sessions <deck>").action(async (deck) => {
@@ -337,6 +398,10 @@ program.command("sessions <deck>").action(async (deck) => {
 });
 program
   .command("session-start <deck>")
+  .option(
+    "--ignore-prerequisites",
+    "Include locked objectives (Cram/Test only)",
+  )
   .option("--mode <mode>", "learn, cram, flashcards, test", "learn")
   .option("--topic <topic>")
   .option("--questions <number>", "Session size", "20")
@@ -348,6 +413,7 @@ program
         mode: o.mode,
         topic: o.topic,
         count: Number(o.questions),
+        ignorePrerequisites: !!o.ignorePrerequisites,
       }),
     );
   });

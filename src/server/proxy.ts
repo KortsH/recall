@@ -1,11 +1,22 @@
 import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import "dotenv/config";
+import { allowedHost } from "./access.ts";
 const origin = new URL(process.env.RECALL_SERVER_URL!);
 if (!["http:", "https:"].includes(origin.protocol))
   throw new Error("RECALL_SERVER_URL must be HTTP(S)");
 const app = createServer((req, res) => {
+  if (!allowedHost(req.headers.host, "")) {
+    res.writeHead(403);
+    res.end("Host not allowed");
+    return;
+  }
   const target = new URL(req.url ?? "/", origin);
+  if (target.origin !== origin.origin) {
+    res.writeHead(400);
+    res.end("Invalid request target");
+    return;
+  }
   const request = target.protocol === "https:" ? httpsRequest : httpRequest;
   const upstream = request(
     target,

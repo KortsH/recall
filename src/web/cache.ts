@@ -1,7 +1,13 @@
 import type { DeckSummary } from "../server/store.ts";
 import type { Item, Session } from "../core/types.ts";
 import { emptyProgress } from "../core/types.ts";
-import { newSession, advanceSession, sessionView } from "../core/study.ts";
+import {
+  newSession,
+  advanceSession,
+  sessionView,
+  pruneLocked,
+} from "../core/study.ts";
+import { prerequisiteStatus } from "../core/prerequisites.ts";
 import { resolveVariant } from "../core/questions.ts";
 import { updateProgress } from "../core/engine.ts";
 import { auditQuestions } from "../core/audit.ts";
@@ -97,6 +103,11 @@ async function load() {
   return state;
 }
 function stats(items: Item[]): DeckSummary["stats"] {
+  const locked = new Set(
+    prerequisiteStatus(items)
+      .filter((s) => !s.unlocked)
+      .map((s) => s.id),
+  );
   const total = items.length,
     mastered = items.filter((i) => i.progress.mastered).length,
     unseen = items.filter((i) => !i.progress.attempts).length;
@@ -108,6 +119,7 @@ function stats(items: Item[]): DeckSummary["stats"] {
       return {
         topic,
         total: qs.length,
+        locked: qs.filter((i) => locked.has(i.question.id)).length,
         mastered: qs.filter((i) => i.progress.mastered).length,
         attempts,
         accuracy: attempts ? Math.round((correct / attempts) * 100) : null,
@@ -116,6 +128,7 @@ function stats(items: Item[]): DeckSummary["stats"] {
   );
   return {
     total,
+    locked: locked.size,
     mastered,
     unseen,
     learning: total - mastered - unseen,
@@ -160,6 +173,7 @@ function decks(s: State) {
 }
 function view(s: State, session: Session) {
   const items = s.items[session.deckId] ?? [];
+  pruneLocked(session, items);
   if (!session.finished) {
     session.queue = [
       ...session.queue.slice(0, session.cursor),
@@ -351,7 +365,23 @@ export async function api<T>(
             item = items.find((i) => i.question.id === entry.questionId);
           if (!item)
             throw new Error("Question was removed. Refresh this session.");
-          const { attempt, progress } = advanceSession(session, item, body);
+          if (
+            !(
+              session.ignorePrerequisites &&
+              ["cram", "test"].includes(session.mode)
+            ) &&
+            !prerequisiteStatus(items).find((s) => s.id === item.question.id)
+              ?.unlocked
+          )
+            throw new Error(
+              "Master the prerequisite questions first. Start a new session.",
+            );
+          const { attempt, progress } = advanceSession(
+            session,
+            item,
+            body,
+            items,
+          );
           item.progress = progress;
           session.version++;
           result = {

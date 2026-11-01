@@ -15,6 +15,7 @@ export interface Variant {
   rubric?: string[];
 }
 export interface Question {
+  depends_on?: string[];
   skill?: "recall" | "application";
   id: string;
   topic: string;
@@ -66,6 +67,8 @@ export interface QueueEntry {
   retry: number;
 }
 export interface Session {
+  targetCount?: number;
+  ignorePrerequisites?: boolean;
   id: string;
   deckId: string;
   mode: "learn" | "cram" | "flashcards" | "test";

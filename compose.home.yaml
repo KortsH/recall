@@ -21,4 +21,4 @@ services:
 networks:
   postgres:
     external: true
-    name: ${RECALL_POSTGRES_NETWORK:-postgres_private}
+    name: ${RECALL_POSTGRES_NETWORK:?Set RECALL_POSTGRES_NETWORK in your private env file}

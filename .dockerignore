@@ -9,3 +9,7 @@ work
 *.pdf
 *.pptx
 *.zip
+
+mobile
+*.dump
+*.sql

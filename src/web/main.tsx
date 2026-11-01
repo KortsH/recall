@@ -1,3 +1,4 @@
+import { QuestionLibrary } from "./library.tsx";
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -173,6 +174,7 @@ function App() {
       setBusy(false);
     }
   };
+  const [ignorePrerequisites, setIgnorePrerequisites] = useState(false);
   const start = (chosen = mode) =>
     void run(async () => {
       const s = await api<SessionView>(`/decks/${deckId}/sessions`, {
@@ -180,6 +182,8 @@ function App() {
         topic: topic || undefined,
         count,
         minutes,
+        ignorePrerequisites:
+          ["cram", "test"].includes(chosen) && ignorePrerequisites,
       });
       setNow(Date.now());
       setSession(s);
@@ -343,6 +347,37 @@ function App() {
         });
       void refresh();
     });
+  const updateOrganization = async (question: Question, message: string) => {
+    if (busy) return false;
+    setBusy(true);
+    setError("");
+    try {
+      const current = await api<Item>(
+        `/decks/${deckId}/questions/${encodeURIComponent(question.id)}`,
+      );
+      await api(
+        `/decks/${deckId}/questions/${encodeURIComponent(question.id)}`,
+        {
+          question: {
+            ...current.question,
+            topic: question.topic,
+            depends_on: question.depends_on ?? [],
+          },
+          revision: current.revision,
+        },
+        "PUT",
+      );
+      setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+      await refresh();
+      setNotice(message);
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
   const exportDeck = () =>
     void run(async () => {
       const bank = await api(`/decks/${deckId}/export`);
@@ -357,13 +392,6 @@ function App() {
     });
   const due = decks.reduce((n, d) => n + d.stats.due, 0),
     total = decks.reduce((n, d) => n + d.stats.total, 0);
-  const visible = items.filter(
-    (i) =>
-      (!topic || i.question.topic === topic) &&
-      `${i.question.question} ${i.question.concept} ${i.question.topic}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
   const inStudy = !!session;
   return (
     <div className={`app ${inStudy ? "studying" : ""}`}>
@@ -727,7 +755,10 @@ function App() {
                         >
                           <option value="">All topics</option>
                           {deck.stats.topics.map((t) => (
-                            <option key={t.topic}>{t.topic}</option>
+                            <option key={t.topic} value={t.topic}>
+                              {t.topic}
+                              {t.locked ? ` · ${t.locked} locked` : ""}
+                            </option>
                           ))}
                         </select>
                       </label>
@@ -758,6 +789,18 @@ function App() {
                               </option>
                             ))}
                           </select>
+                        </label>
+                      )}
+                      {["cram", "test"].includes(mode) && (
+                        <label className="prerequisite-override">
+                          <input
+                            type="checkbox"
+                            checked={ignorePrerequisites}
+                            onChange={(e) =>
+                              setIgnorePrerequisites(e.target.checked)
+                            }
+                          />{" "}
+                          Include locked questions
                         </label>
                       )}
                       <button
@@ -844,16 +887,7 @@ function App() {
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </label>
-                  <select
-                    aria-label="Filter topic"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                  >
-                    <option value="">All topics</option>
-                    {deck?.stats.topics.map((t) => (
-                      <option key={t.topic}>{t.topic}</option>
-                    ))}
-                  </select>
+
                   <button
                     className="button secondary"
                     disabled={!deck}
@@ -870,35 +904,16 @@ function App() {
                     Import
                   </button>
                 </div>
-                <div className="question-list">
-                  {visible.map((i) => (
-                    <button
-                      className="question-row"
-                      key={i.question.id}
-                      onClick={() => setEditor(i)}
-                    >
-                      <span
-                        className={`question-state ${i.progress.mastered ? "mastered" : i.progress.attempts ? "learning" : ""}`}
-                      >
-                        {i.progress.mastered ? <Check size={16} /> : <span />}
-                      </span>
-                      <div>
-                        <span className="row-topic">
-                          {i.question.topic} <span>·</span> {i.question.id}
-                        </span>
-                        <h3>{i.question.question}</h3>
-                        <p>{i.question.answer}</p>
-                      </div>
-                      <Pencil size={16} />
-                    </button>
-                  ))}
-                  {!visible.length && (
-                    <div className="empty-state">
-                      <h2>No questions here yet.</h2>
-                      <p>Try another filter or import a deck.</p>
-                    </div>
-                  )}
-                </div>
+                <QuestionLibrary
+                  key={deckId}
+                  items={items}
+                  topic={topic}
+                  search={search}
+                  busy={busy}
+                  onTopic={setTopic}
+                  onEdit={setEditor}
+                  onUpdate={updateOrganization}
+                />
               </>
             )}
             {section === "progress" && (
@@ -1474,6 +1489,7 @@ function App() {
       {editor && (
         <Editor
           item={editor}
+          items={items}
           busy={busy}
           onClose={() => setEditor(null)}
           onSave={saveEdit}
@@ -1690,16 +1706,22 @@ function useDialog(onClose: () => void) {
 }
 function Editor({
   item,
+  items,
   busy,
   onClose,
   onSave,
 }: {
   item: Item;
+  items: Item[];
   busy: boolean;
   onClose: () => void;
   onSave: (q: Question) => void;
 }) {
   const [q, setQ] = useState(item.question),
+    [parentSearch, setParentSearch] = useState(""),
+    [parents, setParents] = useState(
+      (item.question.depends_on ?? []).join(", "),
+    ),
     [advanced, setAdvanced] = useState(false),
     [raw, setRaw] = useState(JSON.stringify(item.question, null, 2)),
     [error, setError] = useState("");
@@ -1708,7 +1730,9 @@ function Editor({
     setQ({ ...q, [key]: value });
   const save = () => {
     try {
-      const value = advanced ? JSON.parse(raw) : q;
+      const value = advanced
+        ? JSON.parse(raw)
+        : { ...q, depends_on: parents.split(/[,\s]+/).filter(Boolean) };
       setError("");
       onSave(value);
     } catch (e) {
@@ -1748,6 +1772,7 @@ function Editor({
               if (advanced) {
                 try {
                   setQ(JSON.parse(raw));
+                  setParents((JSON.parse(raw).depends_on ?? []).join(", "));
                   setAdvanced(false);
                   setError("");
                 } catch {
@@ -1761,7 +1786,13 @@ function Editor({
           <button
             className={advanced ? "active" : ""}
             onClick={() => {
-              setRaw(JSON.stringify(q, null, 2));
+              setRaw(
+                JSON.stringify(
+                  { ...q, depends_on: parents.split(/[,\s]+/).filter(Boolean) },
+                  null,
+                  2,
+                ),
+              );
               setAdvanced(true);
             }}
           >
@@ -1785,6 +1816,78 @@ function Editor({
           </label>
         ) : (
           <div className="editor-fields">
+            <fieldset className="prerequisite-picker">
+              <legend>Prerequisite questions</legend>
+              <p>
+                Learn these first. Every selected question must be mastered
+                before this one unlocks. Topics are just groups.
+              </p>
+              <input
+                aria-label="Find prerequisite questions"
+                value={parentSearch}
+                onChange={(e) => setParentSearch(e.target.value)}
+                placeholder="Search questions, topics or IDs…"
+              />
+              <div className="prerequisite-options">
+                {items
+                  .filter(
+                    (i) =>
+                      i.question.id !== q.id &&
+                      `${i.question.question} ${i.question.topic} ${i.question.id}`
+                        .toLowerCase()
+                        .includes(parentSearch.toLowerCase()),
+                  )
+                  .map((i) => {
+                    const selected = parents.split(/[,\s]+/).filter(Boolean);
+                    const reaches = (
+                      id: string,
+                      seen = new Set<string>(),
+                    ): boolean =>
+                      id === q.id ||
+                      (!seen.has(id) &&
+                        (
+                          items.find((x) => x.question.id === id)?.question
+                            .depends_on ?? []
+                        ).some((parent) =>
+                          reaches(parent, new Set(seen).add(id)),
+                        ));
+                    const cycle = reaches(i.question.id);
+                    return (
+                      <label
+                        key={i.question.id}
+                        className={cycle ? "unavailable" : ""}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(i.question.id)}
+                          disabled={cycle}
+                          onChange={(e) =>
+                            setParents(
+                              (e.target.checked
+                                ? [...new Set([...selected, i.question.id])]
+                                : selected.filter((id) => id !== i.question.id)
+                              ).join(", "),
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>{i.question.question}</strong>
+                          <small>
+                            {i.question.topic} · {i.question.id}
+                            {cycle
+                              ? " · Would create a circular dependency"
+                              : ""}
+                          </small>
+                        </span>
+                      </label>
+                    );
+                  })}
+              </div>
+              <small>
+                {parents.split(/[,\s]+/).filter(Boolean).length} selected ·
+                Empty selection means available immediately.
+              </small>
+            </fieldset>
             <div className="field-row">
               <label className="field">
                 Topic

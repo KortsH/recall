@@ -1,5 +1,26 @@
 # Question banks
 
+## Prerequisite learning
+
+Use `depends_on: ["foundation-id", "another-id"]` on a question. This is an AND relationship: every listed objective must meet the existing mastery threshold. Empty or omitted arrays are immediately eligible. References use stable IDs in the same deck and may cross topics. Put prerequisites on objectives, not format variants.
+
+Model a useful progression: definition → distinctions/variant definitions → application. Do not invent extra model variants or create cycles. Inspect the existing bank and its prerequisite status before generating additions. A single application can require several foundations. Dependencies do not establish mastery or change due dates.
+
+Learn always respects dependencies. Newly unlocked objectives can join the current Learn/Cram session up to its selected objective count. Review becoming due does not remove mastery or relock children; an incorrect answer can. Test/Cram respect prerequisites by default, with an explicit **Include locked questions** / `--ignore-prerequisites` override. Learn and Flashcards reject that override. A session with only one available objective ends instead of repeating its answer immediately; another session provides the next recall opportunity.
+
+```sh
+recall prerequisites "My Deck"
+recall prerequisites "My Deck" application-id --set definition-id,variant-id
+recall prerequisites "My Deck" application-id --add another-id
+recall prerequisites "My Deck" application-id --remove another-id
+recall prerequisites "My Deck" application-id --clear
+recall session-start "My Deck" --mode cram --ignore-prerequisites
+```
+
+The inspection command prints `unlocked`, `depends_on`, and `blockedBy`. Topic statistics include locked counts. The library explains missing prerequisites, and the editor supports the IDs directly. Import, edit, restore and archive validate the prospective active graph atomically: unknown/archived parents, self-links, duplicate edges and cycles are rejected. Remove or redirect dependents before archiving their foundation. A replacement cannot leave dangling links.
+
+`validate file.json` checks a complete bank. Use `--partial` only for a partial update whose referenced parents already exist; import still validates the entire resulting deck. CSV/TSV can supply `depends_on` separated by `|`. Optional top-level `dependency_semantics` is accepted as descriptive metadata. Dependency-only edits preserve question revisions, attempts and progress. Export includes the dependency graph.
+
 The versioned JSON bank is independent of the UI. An externally generated file can be imported by the CLI or the browser. A question record is a learning objective; its formats share progress. Different prompts testing the same objective belong in `variants` rather than as unrelated duplicate records.
 
 ```json

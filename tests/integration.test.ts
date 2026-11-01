@@ -12,6 +12,7 @@ import { createApp } from "../src/server/http.ts";
 import { newSession, advanceSession } from "../src/core/study.ts";
 import { syncOfflineSession } from "../src/server/offline.ts";
 import { remoteBackend } from "../src/remote.ts";
+import { request } from "node:http";
 
 // Isolated real PostgreSQL database. Never clear or reuse a user's development database.
 const name = "recall_test_" + randomUUID().replaceAll("-", "");
@@ -56,6 +57,63 @@ async function fresh() {
   });
   return result.deckId;
 }
+test("prerequisite graph updates are atomic, protect archives and preserve revisions", async () => {
+  const id = await fresh();
+  const original = await store.question(id, "q1");
+  await store.editQuestion(
+    id,
+    "q1",
+    { ...original.question, depends_on: ["q0"] },
+    original.revision,
+  );
+  assert.equal((await store.question(id, "q1")).revision, original.revision);
+  const s = await store.createSession(id, { mode: "cram", count: 20 });
+  assert.ok(
+    !(await store.loadSession(s.id)).queue.some((e) => e.questionId === "q1"),
+  );
+  await assert.rejects(store.archiveQuestion(id, "q0"), /missing or archived/);
+  const root = await store.question(id, "q0");
+  await assert.rejects(
+    store.editQuestion(
+      id,
+      "q0",
+      { ...root.question, depends_on: ["q1"] },
+      root.revision,
+    ),
+    /cycle/,
+  );
+  assert.deepEqual(
+    (await store.question(id, "q0")).question.depends_on,
+    undefined,
+  );
+  const b = await store.exportBank(id);
+  const incomplete = {
+    ...b,
+    questions: b.questions.filter((q) => q.id !== "q0"),
+  };
+  await assert.rejects(
+    store.importBank(incomplete, { replace: true, dryRun: true }),
+    /missing or archived/,
+  );
+  await assert.rejects(
+    store.importBank(incomplete, { replace: true }),
+    /missing or archived/,
+  );
+  assert.equal((await store.items(id)).length, 5);
+  const status = await new Promise<number>((resolve, reject) => {
+    const req = request(
+      base + "/api/decks",
+      { headers: { host: "attacker.example" } },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode!);
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+  assert.equal(status, 403);
+});
 async function answer(id: string, correct = true) {
   const s = await store.getSession(id);
   assert.ok(s.card);

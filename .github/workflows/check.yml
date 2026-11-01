@@ -1,5 +1,7 @@
 name: Check
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -20,6 +22,8 @@ jobs:
       DATABASE_URL: postgres://recall:recall@127.0.0.1:5432/recall
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -33,7 +37,7 @@ jobs:
           curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:4310/api/health
           curl --fail --silent http://127.0.0.1:4310/ > /dev/null
           docker compose exec -T app npm run seed
-          docker compose exec -T app npm run recall -- stats "Principles of Data Protection" --json
+          docker compose exec -T app npm run recall -- stats "Recall Demo" --json
       - name: Stop test stack
         if: always()
         run: docker compose down -v

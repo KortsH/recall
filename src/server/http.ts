@@ -8,6 +8,7 @@ import { resolve, extname, sep } from "node:path";
 import { parseBank } from "../core/bank.ts";
 import { Store, AppError } from "./store.ts";
 import { syncOfflineSession } from "./offline.ts";
+import { allowedHost } from "./access.ts";
 
 async function body(req: IncomingMessage) {
   let size = 0;
@@ -35,6 +36,13 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
     try {
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Referrer-Policy", "no-referrer");
+      res.setHeader("X-Frame-Options", "DENY");
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+      );
+      if (!allowedHost(req.headers.host))
+        throw new AppError("Host not allowed", 403);
       const url = new URL(req.url ?? "/", "http://localhost");
       const path = url.pathname;
       const method = req.method ?? "GET";

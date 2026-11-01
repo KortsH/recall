@@ -1,4 +1,9 @@
-import { advanceSession, sessionView } from "../core/study.ts";
+import { advanceSession, sessionView, newSession } from "../core/study.ts";
+import {
+  prerequisiteStatus,
+  prospectiveQuestions,
+  validatePrerequisites,
+} from "../core/prerequisites.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type pg from "pg";
 import { contentHash, parseBank, resolveVariant } from "../core/bank.ts";
@@ -89,6 +94,11 @@ export class Store {
     );
   }
   statsFor(items: Item[]) {
+    const locked = new Set(
+      prerequisiteStatus(items)
+        .filter((s) => !s.unlocked)
+        .map((s) => s.id),
+    );
     const topics = [...new Set(items.map((i) => i.question.topic))].map(
       (topic) => {
         const group = items.filter((i) => i.question.topic === topic);
@@ -97,6 +107,7 @@ export class Store {
         return {
           topic,
           total: group.length,
+          locked: group.filter((i) => locked.has(i.question.id)).length,
           mastered: group.filter((i) => i.progress.mastered).length,
           attempts,
           accuracy: attempts ? Math.round((correct / attempts) * 100) : null,
@@ -107,6 +118,7 @@ export class Store {
     const unseen = items.filter((i) => !i.progress.attempts).length;
     return {
       total: items.length,
+      locked: locked.size,
       mastered,
       unseen,
       learning: items.length - mastered - unseen,
@@ -168,6 +180,9 @@ export class Store {
       await this.pool.query("SELECT id FROM decks WHERE name=$1", [bank.deck])
     ).rows[0];
     const existing = row ? await this.items(row.id, this.pool, true) : [];
+    validatePrerequisites(
+      prospectiveQuestions(existing, bank.questions, options),
+    );
     if (options.topic && bank.questions.some((q) => q.topic !== options.topic))
       throw new AppError(
         "All imported questions must match --topic for a scoped replacement",
@@ -246,6 +261,16 @@ export class Store {
         dryRun: false,
         deckId: deck.id as string,
       };
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-deck:" + deck.id,
+      ]);
+      validatePrerequisites(
+        prospectiveQuestions(
+          await this.items(deck.id, db),
+          bank.questions,
+          options,
+        ),
+      );
       for (const q of bank.questions) {
         const result = await this.saveQuestion(db, deck.id, q);
         counts[result.kind]++;
@@ -333,12 +358,27 @@ export class Store {
     return auditQuestions((await this.items(deckId)).map((i) => i.question));
   }
   async archiveQuestion(deckId: string, id: string, restore = false) {
-    const result = await this.pool.query(
-      `UPDATE questions SET archived_at=${restore ? "NULL" : "now()"} WHERE deck_id=$1 AND id=$2 RETURNING id`,
-      [deckId, id],
-    );
-    requireValue(result.rows[0], "Question not found");
-    return { id, archived: !restore };
+    return transaction(this.pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-deck:" + deckId,
+      ]);
+      const items = await this.items(deckId, db, true);
+      requireValue(
+        items.find((i) => i.question.id === id),
+        "Question not found",
+      );
+      validatePrerequisites(
+        items
+          .filter((i) => (i.question.id === id ? restore : !i.archived))
+          .map((i) => i.question),
+      );
+      const result = await db.query(
+        `UPDATE questions SET archived_at=${restore ? "NULL" : "now()"} WHERE deck_id=$1 AND id=$2 RETURNING id`,
+        [deckId, id],
+      );
+      requireValue(result.rows[0], "Question not found");
+      return { id, archived: !restore };
+    });
   }
   async updateDeck(
     deckId: string,
@@ -364,6 +404,12 @@ export class Store {
     const q = parseBank({ deck: "edit", questions: [input] }).questions[0];
     if (q.id !== id) throw new AppError("Question IDs cannot be changed");
     return transaction(this.pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-deck:" + deckId,
+      ]);
+      validatePrerequisites(
+        prospectiveQuestions(await this.items(deckId, db), [q]),
+      );
       const { rows } = await db.query(
         "SELECT revision FROM questions WHERE deck_id=$1 AND id=$2 FOR UPDATE",
         [deckId, id],
@@ -393,44 +439,11 @@ export class Store {
       topic?: string;
       count?: number;
       minutes?: number;
+      ignorePrerequisites?: boolean;
     },
   ) {
     await this.deck(deckId);
-    const mode = options.mode ?? "learn";
-    if (!["learn", "cram", "flashcards", "test"].includes(mode))
-      throw new AppError("Unknown study mode");
-    const count = options.count ?? 20;
-    const minutes = options.minutes ?? 0;
-    if (!Number.isInteger(count) || count < 1 || count > 200)
-      throw new AppError("Choose 1–200 questions");
-    if (!Number.isFinite(minutes) || minutes < 0 || minutes > 240)
-      throw new AppError("Time limit must be 0–240 minutes");
-    const items = (await this.items(deckId)).filter(
-      (i) => !options.topic || i.question.topic === options.topic,
-    );
-    const queue = buildQueue(items, mode, count);
-    if (!queue.length)
-      throw new AppError(
-        mode === "learn"
-          ? "Everything in this selection is up to date. Try Cram to keep practising."
-          : "No questions in this selection",
-      );
-    const session: Session = {
-      id: randomUUID(),
-      deckId,
-      mode: mode as Session["mode"],
-      topic: options.topic ?? null,
-      queue,
-      cursor: 0,
-      answers: [],
-      createdAt: new Date().toISOString(),
-      deadline:
-        mode === "test" && minutes
-          ? new Date(Date.now() + minutes * 60000).toISOString()
-          : null,
-      finished: false,
-      version: 0,
-    };
+    const session = newSession(deckId, await this.items(deckId), options);
     await this.pool.query(
       "INSERT INTO sessions(id,deck_id,data) VALUES($1,$2,$3)",
       [session.id, deckId, session],
@@ -463,7 +476,13 @@ export class Store {
       const s = await this.loadSession(id, db, true);
       if (!s.finished) {
         const active = new Set(
-          (await this.items(s.deckId, db)).map((i) => i.question.id),
+          prerequisiteStatus(await this.items(s.deckId, db))
+            .filter(
+              (x) =>
+                x.unlocked ||
+                (s.ignorePrerequisites && ["cram", "test"].includes(s.mode)),
+            )
+            .map((x) => x.id),
         );
         const queue = [
           ...s.queue.slice(0, s.cursor),
@@ -572,8 +591,23 @@ export class Store {
         ),
         "Question not found",
       );
+      if (
+        !(s.ignorePrerequisites && ["cram", "test"].includes(s.mode)) &&
+        !prerequisiteStatus(await this.items(s.deckId, db)).find(
+          (x) => x.id === item.question.id,
+        )?.unlocked
+      )
+        throw new AppError(
+          "Prerequisites changed. Reload the session and master the required questions first.",
+          409,
+        );
       const ordinal = s.cursor;
-      const { attempt, progress } = advanceSession(s, item, input);
+      const { attempt, progress } = advanceSession(
+        s,
+        item,
+        input,
+        await this.items(s.deckId, db),
+      );
       await db.query(
         "INSERT INTO attempts(session_id,ordinal,deck_id,question_id,revision,data) VALUES($1,$2,$3,$4,$5,$6)",
         [s.id, ordinal, s.deckId, item.question.id, item.revision, attempt],

@@ -1,45 +1,45 @@
-# Local, home-server, and mobile use
+# Local, shared-server, and mobile use
 
-The owner's deployment uses the existing PostgreSQL instance on the home server, with a dedicated `recall` database and `recall_app` role. It is privately served through Tailscale at **https://recall.example.test:8445**. Both computer and phone use that database. Phone access requires Tailscale connectivity.
-
-The live database stays on the server's current application disk. The separately tested 80 GB drive is a Recall backup destination, not live PostgreSQL storage. This avoids moving the fitness database. Machine-specific drive reports and credentials stay outside Git.
+One PostgreSQL database serves quizzes and progress to computers and phones. The owner's installation uses a private home server; its addresses, credentials, disk identifiers and operational handoff stay outside this public repository. Any Node + PostgreSQL host can run the app.
 
 ## Downloaded study mode
 
-Settings → **Use downloaded study mode** downloads the complete bank and current progress into IndexedDB. Questions, answer checking, repetitions, timers and results run on the device using the shared engine. Answering does not fetch from the server. Progress syncs in a batch at session finish, Save & leave, or explicit refresh; failed syncs stay pending on the device.
+Settings → **Use downloaded study mode** downloads the complete bank and progress into IndexedDB. Questions, prerequisites, grading, repetition and timers run on the device. No per-answer server requests are made. Progress syncs in a batch at session finish, Save & leave, or explicit refresh; failures remain pending on the device.
 
-**Sync progress & refresh quizzes** uploads pending evidence before downloading current questions/progress. New questions are deliberately not polled. Refresh each device to see work done on the other. Live-server mode remains available in Settings.
+**Sync progress & refresh quizzes** uploads pending evidence before downloading current questions and progress. New questions are deliberately not polled. Refresh each device to see changes from the other. Live-server mode remains available in Settings.
 
-Initial download and question editing/importing need a connection. The app shell is cached by a service worker; do one successful online visit before relying on offline startup. Clearing site storage can remove unsynced attempts. Concurrent offline devices merge evidence on receipt; they do not overwrite each other's progress rows. Corrected question revisions do not receive credit from obsolete offline answers.
+Initial download and editing/importing need a connection. Visit successfully online before relying on offline startup. Clearing site storage can remove unsynced attempts. Concurrent devices merge evidence rather than replacing progress. Corrected revisions exclude obsolete answers from mastery.
 
 ## Phone app
 
-Open the private HTTPS URL in Chrome (Android) or Safari (iPhone), then choose **Install app / Add to Home Screen**. This installable PWA is the initial mobile version. Native Android/iOS clients and file-picker transfer bundles are future work.
+Open your HTTPS URL in Chrome (Android) or Safari (iPhone) and choose **Install app / Add to Home Screen**. Android also has a [native app starter](../mobile/README.md). Enter your server address on first launch; no deployment address is embedded in the app. Both options use the same quizzes and progress. Native iOS and portable transfer bundles remain future work.
 
 ## CLI against the same server
 
+Set `RECALL_SERVER_URL` in your ignored `.env`, or pass an explicit URL:
+
 ```sh
-recall --server https://recall.example.test:8445 decks --json
-recall --server https://recall.example.test:8445 questions "Principles of Data Protection" --json
-recall --server https://recall.example.test:8445 audit "Principles of Data Protection"
-recall --server https://recall.example.test:8445 import bank.json --replace --dry-run --json
-recall --server https://recall.example.test:8445 import bank.json --replace --json
+recall --server https://recall.example.test decks --json
+recall questions "My Deck" --json
+recall prerequisites "My Deck"
+recall import bank.json --replace --dry-run --json
+recall import bank.json --replace --json
 ```
 
-Set `RECALL_SERVER_URL` in `.env` to avoid repeating the flag. `npm run local` then acts as a loopback proxy to that server, keeping the existing computer URL working. It leaves the old local PostgreSQL copy untouched. For a separate local installation, omit `RECALL_SERVER_URL` and configure `DATABASE_URL` instead.
+`npm run local` uses a loopback proxy when `RECALL_SERVER_URL` is set. For an independent local installation, omit it and configure `DATABASE_URL`. Never commit private settings or study banks.
 
 ## Hosting elsewhere
 
-Use standard Docker Compose for independent PostgreSQL, or `compose.home.yaml` to connect to an existing private Docker PostgreSQL network. Set `RECALL_ENV_FILE` to an untracked env file containing `DATABASE_URL` and `RECALL_ALLOWED_ORIGINS`. Set `RECALL_POSTGRES_NETWORK` for the external network name.
+Standard Docker Compose includes PostgreSQL. `compose.home.yaml` connects to an existing private Docker network. Create a private env file with `DATABASE_URL`, `RECALL_ALLOWED_ORIGINS` (your exact HTTPS origin), and `RECALL_POSTGRES_NETWORK`. Supply it for Compose interpolation as well as container configuration:
 
 ```sh
-RECALL_ENV_FILE=/srv/appdata/recall/.env docker compose -f compose.home.yaml up -d --build --wait
+RECALL_ENV_FILE=/path/to/private.env docker compose --env-file /path/to/private.env -f compose.home.yaml up -d --build --wait
 ```
 
-Bind the app to loopback behind HTTPS. Current hosting relies on private tailnet access and is single-user. Add authentication before public or multi-user hosting. The learning engine has no Tailscale dependency.
+Publish the app only to loopback, behind HTTPS and private network access. Add authentication before public or multi-user hosting. Do not publish PostgreSQL. Host-header and Origin checks supplement private network access; they are not authentication.
 
 ## Data migration and backup
 
-Deck JSON export includes questions. A full PostgreSQL `pg_dump -Fc` includes progress, sessions, attempts and archived records too. Restore to an empty dedicated database with `pg_restore --no-owner --no-acl`, using a PostgreSQL client compatible with the dump. Keep a backup before migration or bulk replacement.
+Deck JSON export includes questions and prerequisites. A PostgreSQL `pg_dump -Fc` also includes progress, sessions, attempts and archived records. Restore to an empty dedicated database with `pg_restore --no-owner --no-acl` and a compatible PostgreSQL client. Back up before migration or bulk replacement.
 
-`deploy/backup-home.sh` dumps Recall, checks its archive, copies it to the backup drive and verifies SHA-256 after flushing. It refuses to write if the expected mount UUID is absent. `recall-backup.timer` runs daily. Deployment performs an actual restore into a disposable database before treating the first backup as verified. Backups of other home-server services and off-site copies are separate work.
+Keep live PostgreSQL on reliable application storage. A tested secondary drive can hold backup copies. `deploy/backup-home.sh` checks the archive and verifies a SHA-256 copy; its private configuration supplies the expected mount UUID. Perform a disposable restore before treating a backup as verified. Off-site backups remain separate work.

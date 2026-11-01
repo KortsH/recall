@@ -4,6 +4,7 @@ import { extname } from "node:path";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
 import type { Bank, Question, Variant } from "./types.ts";
+import { validatePrerequisites } from "./prerequisites.ts";
 export { variants, resolveVariant } from "./questions.ts";
 
 const text = z.string().trim().min(1).max(20000);
@@ -41,6 +42,10 @@ const questionSchema = z
     id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/),
     topic: text.default("General"),
     concept: text.optional(),
+    depends_on: z
+      .array(z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/))
+      .max(100)
+      .optional(),
     skill: z.enum(["recall", "application"]).default("recall"),
     question: text,
     answer: text,
@@ -58,6 +63,7 @@ export const bankSchema = z
   .object({
     schemaVersion: z.literal(1).default(1),
     deck: text,
+    dependency_semantics: text.optional(),
     description: z.string().max(20000).default(""),
     questions: z.array(questionSchema).min(1).max(10000),
   })
@@ -123,6 +129,7 @@ export function parseBank(input: unknown, deckOverride?: string): Bank {
     const { type, ...rest } = q;
     return { ...rest, concept: q.concept ?? q.question };
   });
+  validatePrerequisites(questions, true);
   return { ...result.data, questions };
 }
 export async function readBank(path: string, deck?: string): Promise<Bank> {
@@ -144,11 +151,20 @@ export async function readBank(path: string, deck?: string): Promise<Bank> {
       ...r,
       difficulty: r.difficulty ? Number(r.difficulty) : undefined,
       tags: r.tags ? r.tags.split("|") : undefined,
+      depends_on: r.depends_on ? r.depends_on.split("|") : undefined,
     })),
   });
 }
 export function contentHash(q: Question): string {
-  const { explanation, tags, topic, concept, difficulty, ...content } = q;
+  const {
+    explanation,
+    tags,
+    topic,
+    concept,
+    difficulty,
+    depends_on,
+    ...content
+  } = q;
   const canonical = (value: unknown): unknown =>
     Array.isArray(value)
       ? value.map(canonical)

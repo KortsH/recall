@@ -14,7 +14,7 @@ Recall is a small, single-user study tool, usable locally or through a private h
 - `src/server/http.ts`: plain Node HTTP adapter and built frontend serving.
 - `src/cli.ts`: interactive and scriptable CLI using the same services.
 - `src/web/`: React UI. Keep grading and mastery logic out of it.
-- `examples/data-protection.json`: original starter bank, no course documents.
+- `examples/demo.json`: synthetic format and prerequisite examples.
 
 ## Generate/import questions
 
@@ -31,6 +31,9 @@ Recall is a small, single-user study tool, usable locally or through a private h
 Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --file`, `rate`, `finish`, `question`, and `export`. Session answer files include `version`, `revision`, `response` and optional `rating`; versions/revisions come from the current session view. Never guess them or retry a rejected write blindly. `question <deck> <id>` returns the current question and revision; update with `--file question.json --revision N`.
 
 ## Change rules
+
+- Author and preserve `depends_on` prerequisite IDs. Read the prerequisite section in `docs/QUESTION_BANK.md` before generating questions. Run `recall prerequisites <deck>` alongside the coverage audit. Definitions precede variant definitions and applications; every listed parent is required. Keep dependency-only updates separate from wording corrections so mastery is preserved. Validate the complete prospective graph, including cross-topic links, before replacing or archiving records.
+- Normal Learn must never bypass locks. Only an explicit Cram/Test override may do so. Unlocking is independent of review dates. Keep live and downloaded session transitions in `src/core/study.ts`; newly eligible objectives can enter a running learning session.
 
 - The browser and CLI must use the same engine and database. No SQLite fallback.
 - `--server URL` or `RECALL_SERVER_URL` selects HTTP; otherwise the CLI uses PostgreSQL directly. Do not expose PostgreSQL to the internet for agents or mobile clients.

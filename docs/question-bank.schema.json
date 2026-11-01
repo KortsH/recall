@@ -12,6 +12,11 @@
       "minLength": 1,
       "maxLength": 20000
     },
+    "dependency_semantics": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
     "description": {
       "default": "",
       "type": "string",
@@ -38,6 +43,14 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 20000
+          },
+          "depends_on": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$"
+            }
           },
           "skill": {
             "default": "recall",

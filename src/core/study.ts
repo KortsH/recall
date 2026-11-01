@@ -6,6 +6,7 @@ import {
   updateProgress,
 } from "./engine.ts";
 import { resolveVariant } from "./questions.ts";
+import { prerequisiteStatus } from "./prerequisites.ts";
 import type { Item, Session, Attempt } from "./types.ts";
 
 export interface AnswerInput {
@@ -17,7 +18,13 @@ export interface AnswerInput {
 export function newSession(
   deckId: string,
   items: Item[],
-  options: { mode?: string; topic?: string; count?: number; minutes?: number },
+  options: {
+    mode?: string;
+    topic?: string;
+    count?: number;
+    minutes?: number;
+    ignorePrerequisites?: boolean;
+  },
   id = crypto.randomUUID(),
 ): Session {
   const mode = options.mode ?? "learn",
@@ -25,6 +32,13 @@ export function newSession(
     minutes = options.minutes ?? 0;
   if (!["learn", "cram", "flashcards", "test"].includes(mode))
     throw new Error("Unknown study mode");
+  if (
+    options.ignorePrerequisites !== undefined &&
+    typeof options.ignorePrerequisites !== "boolean"
+  )
+    throw new Error("ignorePrerequisites must be a boolean");
+  if (options.ignorePrerequisites && !["cram", "test"].includes(mode))
+    throw new Error("Prerequisite override is available only in Cram or Test");
   if (!Number.isInteger(count) || count < 1 || count > 200)
     throw new Error("Choose 1–200 questions");
   if (!Number.isFinite(minutes) || minutes < 0 || minutes > 240)
@@ -36,15 +50,23 @@ export function newSession(
     ),
     mode,
     count,
+    Date.now(),
+    Math.random,
+    items,
+    !!options.ignorePrerequisites,
   );
   if (!queue.length)
     throw new Error(
-      "Nothing is due in this selection. Try Cram to keep practising.",
+      prerequisiteStatus(items).some((s) => !s.unlocked)
+        ? "No unlocked questions are due in this selection. Master the prerequisites first; see the question library for the required IDs. Try another topic or Cram to practise foundations."
+        : "Nothing is due in this selection. Try Cram to keep practising.",
     );
   return {
     id,
     deckId,
     mode: mode as Session["mode"],
+    targetCount: count,
+    ignorePrerequisites: !!options.ignorePrerequisites,
     topic: options.topic ?? null,
     queue,
     cursor: 0,
@@ -93,7 +115,12 @@ export function evaluateAttempt(
   };
 }
 /** Shared session transition; adapters handle durability and optimistic concurrency. */
-export function advanceSession(s: Session, item: Item, input: AnswerInput) {
+export function advanceSession(
+  s: Session,
+  item: Item,
+  input: AnswerInput,
+  context?: Item[],
+) {
   if (s.finished || s.version !== input.version)
     throw new Error("Session changed. Reload to continue.");
   if (item.archived || item.revision !== input.revision)
@@ -135,8 +162,51 @@ export function advanceSession(s: Session, item: Item, input: AnswerInput) {
   s.answers.push(attempt);
   s.cursor++;
   delete s.revealed;
+  if (context) {
+    const updated = context.map((i) =>
+      i.question.id === item.question.id ? { ...i, progress } : i,
+    );
+    pruneLocked(s, updated);
+    if (["learn", "cram"].includes(s.mode) && s.targetCount) {
+      const seen = new Set(s.queue.map((e) => e.questionId));
+      const remaining = updated.filter(
+        (i) =>
+          !seen.has(i.question.id) &&
+          (!s.topic || i.question.topic === s.topic),
+      );
+      s.queue.push(
+        ...buildQueue(
+          remaining,
+          s.mode,
+          Math.max(0, s.targetCount - seen.size),
+          Date.now(),
+          Math.random,
+          updated,
+          !!s.ignorePrerequisites,
+        ),
+      );
+    }
+  }
   s.finished = s.cursor >= s.queue.length;
   return { attempt, progress };
+}
+export function pruneLocked(s: Session, items: Item[]) {
+  if (s.finished) return;
+  if (s.ignorePrerequisites && ["cram", "test"].includes(s.mode)) return;
+  const unlocked = new Set(
+    prerequisiteStatus(items)
+      .filter((s) => s.unlocked)
+      .map((s) => s.id),
+  );
+  const queue = [
+    ...s.queue.slice(0, s.cursor),
+    ...s.queue.slice(s.cursor).filter((e) => unlocked.has(e.questionId)),
+  ];
+  if (queue.length !== s.queue.length) {
+    s.queue = queue;
+    delete s.revealed;
+  }
+  s.finished = s.cursor >= s.queue.length;
 }
 export function sessionView(s: Session, items: Item[]) {
   const current = s.queue[s.cursor];
@@ -176,6 +246,7 @@ export function sessionView(s: Session, items: Item[]) {
     id: s.id,
     deckId: s.deckId,
     mode: s.mode,
+    ignorePrerequisites: !!s.ignorePrerequisites,
     topic: s.topic,
     cursor: s.cursor,
     total: s.queue.length,

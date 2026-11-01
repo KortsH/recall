@@ -11,3 +11,12 @@ course_files*/
 *.pdf
 *.pptx
 *.zip
+**/build/
+**/.gradle/
+**/local.properties
+*.apk
+*.aab
+*.keystore
+*.jks
+*.dump
+*.sql

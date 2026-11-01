@@ -1,4 +1,5 @@
 import { variants, resolveVariant } from "./questions.ts";
+import { prerequisiteStatus } from "./prerequisites.ts";
 import type {
   Item,
   Progress,
@@ -130,13 +131,23 @@ export function buildQueue(
   count: number,
   now = Date.now(),
   rng = Math.random,
+  context = items,
+  ignorePrerequisites = false,
 ): QueueEntry[] {
+  const unlocked = new Set(
+    prerequisiteStatus(context)
+      .filter((s) => s.unlocked)
+      .map((s) => s.id),
+  );
   const eligible = items.filter(
     (i) =>
-      mode !== "learn" ||
-      !i.progress.mastered ||
-      !i.progress.nextReview ||
-      Date.parse(i.progress.nextReview) <= now,
+      !i.archived &&
+      ((ignorePrerequisites && ["test", "cram"].includes(mode)) ||
+        unlocked.has(i.question.id)) &&
+      (mode !== "learn" ||
+        !i.progress.mastered ||
+        !i.progress.nextReview ||
+        Date.parse(i.progress.nextReview) <= now),
   );
   const score = (i: Item) =>
     !i.progress.attempts
