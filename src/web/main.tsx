@@ -52,6 +52,7 @@ import {
   syncDownloads,
   downloadStatus,
   exportPendingRecovery,
+  discardResetEvidence,
 } from "./cache.ts";
 
 type Deck = Awaited<ReturnType<Store["decks"]>>[number];
@@ -113,6 +114,10 @@ function App() {
     [importOpen, setImportOpen] = useState(false),
     [importRaw, setImportRaw] = useState(""),
     [shareOpen, setShareOpen] = useState(false);
+  const [resetRequest, setResetRequest] = useState<Awaited<
+    ReturnType<Store["resetLearning"]>
+  > | null>(null);
+  const [discardResetOpen, setDiscardResetOpen] = useState(false);
   const [response, setResponse] = useState<any>(""),
     [selected, setSelected] = useState<string[]>([]),
     [pairs, setPairs] = useState<Record<string, string>>({}),
@@ -229,6 +234,50 @@ function App() {
     void refresh();
     setSection("overview");
   };
+  const openReset = () =>
+    void run(async () => {
+      if (deckId)
+        setResetRequest(
+          await api<Awaited<ReturnType<Store["resetLearning"]>>>(
+            `/decks/${deckId}/reset-learning`,
+            {},
+          ),
+        );
+    });
+  const backupBeforeReset = () =>
+    void run(async () => {
+      if (!resetRequest) return;
+      const bank = await api<any>(`/decks/${resetRequest.deckId}/export`);
+      const current = await api<Item[]>(
+        `/decks/${resetRequest.deckId}/questions`,
+      );
+      saveJson(
+        "Recall-before-reset.recall.json",
+        await exportPortable(bank, current, true),
+      );
+      setNotice(
+        "Progress backup prepared. Keep the file if you may want to restore this learning on a device.",
+      );
+    });
+  const applyReset = () =>
+    void run(async () => {
+      if (!resetRequest) return;
+      await api(`/decks/${resetRequest.deckId}/reset-learning`, {
+        confirm: true,
+        expectedEpoch: resetRequest.expectedEpoch,
+      });
+      setResetRequest(null);
+      setSession(null);
+      resetAnswer();
+      localStorage.removeItem(sessionKey());
+      await refresh();
+      setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+      setRecent(await api<any[]>(`/decks/${deckId}/sessions`));
+      setSection("overview");
+      setNotice(
+        "Learning reset to zero. Start Learn to begin with multiple choice.",
+      );
+    });
   const card = session?.card;
   const actualResponse = card?.options
     ? selected
@@ -278,7 +327,9 @@ function App() {
       busy ||
       editor ||
       importOpen ||
-      shareOpen
+      shareOpen ||
+      resetRequest ||
+      discardResetOpen
     )
       return;
     const frame = requestAnimationFrame(() => {
@@ -302,6 +353,8 @@ function App() {
     editor,
     importOpen,
     shareOpen,
+    resetRequest,
+    discardResetOpen,
   ]);
   useEffect(() => {
     if (!session?.deadline || session.finished) return;
@@ -327,6 +380,8 @@ function App() {
         e.isComposing ||
         editor ||
         importOpen ||
+        resetRequest ||
+        discardResetOpen ||
         !session
       )
         return;
@@ -939,6 +994,14 @@ function App() {
                         <ArrowRight size={18} />
                       </button>
                     </div>
+                    <button
+                      className="text-button quiet"
+                      disabled={busy}
+                      onClick={openReset}
+                    >
+                      <RotateCcw size={14} />
+                      Reset learning
+                    </button>
                     <div className="learning-note">
                       <span>✦</span>
                       <p>
@@ -1294,6 +1357,15 @@ function App() {
                       <Download size={16} />
                       Export unsynced progress
                     </button>
+                    {cache.resetConflicts.length > 0 && (
+                      <button
+                        className="button secondary"
+                        disabled={busy}
+                        onClick={() => setDiscardResetOpen(true)}
+                      >
+                        Discard outdated answers & reload decks
+                      </button>
+                    )}
                     <p className="small">
                       If the server stays unavailable, export pending evidence
                       before clearing storage or changing devices. This private
@@ -1376,6 +1448,13 @@ function App() {
               <button className="text-button" onClick={leave}>
                 <ArrowLeft size={16} />
                 Save & leave
+              </button>
+              <button
+                className="text-button quiet"
+                disabled={busy}
+                onClick={openReset}
+              >
+                Reset learning
               </button>
               <span>{deck?.name}</span>
               <span className="study-mode">{fmt(session.mode)}</span>
@@ -1740,6 +1819,77 @@ function App() {
           onSave={saveEdit}
         />
       )}
+      {resetRequest && (
+        <ResetDialog
+          title="Reset learning to zero?"
+          busy={busy}
+          onClose={() => setResetRequest(null)}
+          onBackup={backupBeforeReset}
+          onConfirm={applyReset}
+          confirmLabel="Reset to zero"
+        >
+          <p>
+            <strong>{resetRequest.name}</strong> · {resetRequest.questions}{" "}
+            questions
+          </p>
+          <p>
+            This clears this deck’s mastery, answer counters and review dates,
+            ends its saved sessions, and discards its pending answers. Questions
+            and prerequisite links stay in your library. New learning begins
+            with multiple choice.
+          </p>
+          <p>
+            {cache.personal
+              ? "This affects only this device’s personal workspace."
+              : "This resets the shared deck across connected devices. Other devices must reload it; their older pending answers will no longer count."}
+          </p>
+          <p className="small">
+            Download a progress backup first if you may want to restore your
+            learning later. Progress files can be restored in a device-only
+            workspace.
+          </p>
+        </ResetDialog>
+      )}
+      {discardResetOpen && (
+        <ResetDialog
+          title="Discard answers from before the reset?"
+          busy={busy}
+          onClose={() => setDiscardResetOpen(false)}
+          confirmLabel="Discard outdated answers"
+          onBackup={() =>
+            void run(async () =>
+              saveJson(
+                "Recall-outdated-progress.recovery.json",
+                await exportPendingRecovery(),
+              ),
+            )
+          }
+          onConfirm={() =>
+            void run(async () => {
+              await discardResetEvidence();
+              setDiscardResetOpen(false);
+              setSession(null);
+              resetAnswer();
+              localStorage.removeItem(sessionKey());
+              await refresh();
+              setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+              setNotice(
+                "Reset decks reloaded. Other pending answers were kept.",
+              );
+            })
+          }
+        >
+          <p>
+            The server has a newer learning reset. These older pending answers
+            cannot count toward that new run.
+          </p>
+          <p>
+            Export a private evidence backup if you want to keep them, then
+            discard only the outdated answers and download those decks again.
+            Pending answers for other decks stay on this device.
+          </p>
+        </ResetDialog>
+      )}
       {shareOpen && (
         <ShareDialog
           busy={busy}
@@ -1944,6 +2094,69 @@ function useDialog(onClose: () => void) {
     };
   }, []);
   return ref;
+}
+function ResetDialog({
+  title,
+  busy,
+  onClose,
+  onBackup,
+  onConfirm,
+  confirmLabel,
+  children,
+}: {
+  title: string;
+  busy: boolean;
+  onClose: () => void;
+  onBackup: () => void;
+  onConfirm: () => void;
+  confirmLabel: string;
+  children: React.ReactNode;
+}) {
+  const ref = useDialog(onClose);
+  return (
+    <div className="modal-backdrop">
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reset-title"
+        ref={ref}
+      >
+        <div className="modal-head">
+          <h2 id="reset-title">{title}</h2>
+          <button
+            className="icon-button"
+            aria-label="Close reset"
+            disabled={busy}
+            onClick={onClose}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        {children}
+        <button className="button secondary" disabled={busy} onClick={onBackup}>
+          <Download size={16} />
+          Download progress backup
+        </button>
+        <div className="modal-foot">
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="button primary"
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 function Editor({
   item,

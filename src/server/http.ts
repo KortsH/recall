@@ -118,6 +118,8 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
           return json(res, 200, await store.deck(id));
         if (!rest && method === "PATCH")
           return json(res, 200, await store.updateDeck(id, await body(req)));
+        if (rest === "reset-learning" && method === "POST")
+          return json(res, 200, await store.resetLearning(id, await body(req)));
         if (rest === "audit" && method === "GET")
           return json(res, 200, await store.audit(id));
         if (rest === "questions" && method === "GET")
@@ -223,6 +225,7 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
       const status = e instanceof AppError ? e.status : 400;
       json(res, status, {
         error: status >= 500 ? "Server error" : error.message,
+        code: e instanceof AppError ? e.code : undefined,
       });
     }
   });

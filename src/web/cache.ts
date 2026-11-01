@@ -22,6 +22,7 @@ import { resolveVariant } from "../core/questions.ts";
 import { updateProgress } from "../core/engine.ts";
 import { createRecovery } from "../core/recovery.ts";
 import { auditQuestions } from "../core/audit.ts";
+import { resetPreview, resetItems, closeResetSession } from "../core/reset.ts";
 
 interface Snapshot {
   downloadedAt: string;
@@ -32,6 +33,7 @@ interface Snapshot {
 }
 interface State extends Snapshot {
   dirty: Record<string, boolean>;
+  resetConflicts?: string[];
 }
 let state: State | undefined;
 let chain: Promise<unknown> = Promise.resolve();
@@ -62,6 +64,7 @@ export const downloadStatus = () => ({
   downloadedAt: state?.downloadedAt,
   pending: !personalMode() && state ? Object.keys(state.dirty).length : 0,
   error: lastError,
+  resetConflicts: state?.resetConflicts ?? [],
 });
 export async function serverApi<T>(
   path: string,
@@ -74,7 +77,10 @@ export async function serverApi<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error ?? "Server request failed");
+  if (!r.ok)
+    throw Object.assign(new Error(data.error ?? "Server request failed"), {
+      code: data.code,
+    });
   return data;
 }
 async function database() {
@@ -224,14 +230,26 @@ async function syncInternal(s: State) {
   if (personalMode()) return;
   for (const id of Object.keys(s.dirty)) {
     const current = s.sessions[id];
-    const result = await serverApi<{
-      session: Session;
-      rejected: string[];
-      progress: Record<
-        string,
-        { revision: number; progress: Item["progress"] }
-      >;
-    }>("/sync", current);
+    let result;
+    try {
+      result = await serverApi<{
+        session: Session;
+        rejected: string[];
+        progress: Record<
+          string,
+          { revision: number; progress: Item["progress"] }
+        >;
+      }>("/sync", current);
+    } catch (error) {
+      if ((error as Error & { code?: string }).code === "LEARNING_RESET") {
+        s.resetConflicts = [
+          ...new Set([...(s.resetConflicts ?? []), current.deckId]),
+        ];
+        lastError = (error as Error).message;
+        await persist();
+      }
+      throw error;
+    }
     s.sessions[id] = result.session;
     delete s.dirty[id];
     // The server merges evidence from all devices. Replay still-pending local evidence below.
@@ -287,6 +305,44 @@ export const refreshDownloads = () =>
       ),
       dirty: {},
     };
+    lastError = "";
+    await persist();
+  });
+/** Explicitly discard only evidence invalidated by a newer server learning reset. */
+export const discardResetEvidence = () =>
+  serial(async () => {
+    if (personalMode())
+      throw new Error("This recovery action is for server downloads");
+    const s = await load();
+    const snapshot = await serverApi<Snapshot>("/snapshot");
+    for (const id of s.resetConflicts ?? []) {
+      const latest = snapshot.decks.find((d) => d.id === id);
+      const local = s.decks.find((d) => d.id === id);
+      if (
+        !latest ||
+        !local ||
+        (latest.learning_epoch ?? 0) <= (local.learning_epoch ?? 0)
+      )
+        throw new Error(
+          "The server reset could not be verified; pending answers were kept",
+        );
+    }
+    for (const id of s.resetConflicts ?? []) {
+      s.items[id] = snapshot.items[id];
+      Object.assign(
+        s.decks.find((d) => d.id === id)!,
+        snapshot.decks.find((d) => d.id === id)!,
+      );
+      for (const [key, session] of Object.entries(s.sessions))
+        if (session.deckId === id) {
+          delete s.sessions[key];
+          delete s.dirty[key];
+        }
+      for (const [key, session] of Object.entries(snapshot.sessions))
+        if (session.deckId === id) s.sessions[key] = session;
+      s.recent[id] = snapshot.recent[id];
+    }
+    s.resetConflicts = [];
     lastError = "";
     await persist();
   });
@@ -364,6 +420,45 @@ export async function api<T>(
       const deck = decks(s).find((d) => d.id === id);
       if (!deck) throw new Error("Deck not downloaded. Refresh quizzes.");
       if (!rest && verb === "GET") return deck as T;
+      if (rest === "reset-learning" && verb === "POST") {
+        const sessions = Object.values(s.sessions).filter(
+          (x) => x.deckId === id,
+        );
+        const preview = resetPreview(
+          id,
+          deck.name,
+          deck.learning_epoch ?? 0,
+          s.items[id],
+          sessions,
+        );
+        if (!personalMode()) result = await serverApi(path, body, verb);
+        else {
+          if (
+            body?.confirm === true &&
+            body.expectedEpoch !== preview.expectedEpoch
+          )
+            throw new Error("Learning changed. Preview the reset again.");
+          result =
+            body?.confirm === true
+              ? {
+                  ...preview,
+                  dryRun: false,
+                  learningEpoch: preview.expectedEpoch + 1,
+                }
+              : preview;
+        }
+        if (body?.confirm !== true) return result as T;
+        s.items[id] = resetItems(s.items[id]);
+        s.decks.find((d) => d.id === id)!.learning_epoch = result.learningEpoch;
+        for (const session of sessions) {
+          s.sessions[session.id] = closeResetSession(session);
+          delete s.dirty[session.id];
+        }
+        s.resetConflicts = s.resetConflicts?.filter((x) => x !== id);
+        lastError = "";
+        await persist();
+        return result as T;
+      }
       if (personalMode() && !rest && verb === "PATCH") {
         const target = s.decks.find((d) => d.id === id)!;
         if (body.name !== undefined) {
@@ -418,6 +513,7 @@ export async function api<T>(
           })) as T;
       if (rest === "sessions" && verb === "POST") {
         const session = newSession(id, s.items[id], body);
+        session.learningEpoch = deck.learning_epoch ?? 0;
         s.sessions[session.id] = session;
         if (!personalMode()) s.dirty[session.id] = true;
         await persist();
@@ -466,6 +562,13 @@ export async function api<T>(
         throw new Error("Session is not downloaded. Refresh quizzes first.");
       const rest = m[2] ?? "";
       const items = s.items[session.deckId] ?? [];
+      if (
+        verb !== "GET" &&
+        (session.learningReset ||
+          (session.learningEpoch ?? 0) !==
+            (s.decks.find((d) => d.id === session.deckId)?.learning_epoch ?? 0))
+      )
+        throw new Error("Learning was reset. Start a new session.");
       if (!rest && verb === "GET") {
         const wasFinished = session.finished;
         result = view(s, session);

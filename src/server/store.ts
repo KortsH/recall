@@ -29,11 +29,13 @@ import {
 } from "../core/types.ts";
 import { transaction, type DB } from "./db.ts";
 import { auditQuestions } from "../core/audit.ts";
+import { resetPreview, closeResetSession } from "../core/reset.ts";
 
 export class AppError extends Error {
   constructor(
     message: string,
     public status = 400,
+    public code?: string,
   ) {
     super(message);
   }
@@ -60,6 +62,7 @@ const sortKeys = (v: unknown): unknown =>
         )
       : v;
 export interface DeckSummary {
+  learning_epoch?: number;
   id: string;
   name: string;
   description: string;
@@ -98,6 +101,7 @@ export class Store {
         name: d.name as string,
         description: d.description as string,
         created_at: d.created_at as string,
+        learning_epoch: d.learning_epoch as number,
         stats: this.statsFor(await this.items(d.id)),
       })),
     );
@@ -178,6 +182,7 @@ export class Store {
       name: deck.name,
       description: deck.description,
       created_at: deck.created_at,
+      learning_epoch: deck.learning_epoch,
       stats: this.statsFor(await this.items(deck.id)),
     };
   }
@@ -451,19 +456,86 @@ export class Store {
       ignorePrerequisites?: boolean;
     },
   ) {
-    await this.deck(deckId);
-    const session = newSession(deckId, await this.items(deckId), options);
-    await this.pool.query(
-      "INSERT INTO sessions(id,deck_id,data) VALUES($1,$2,$3)",
-      [session.id, deckId, session],
-    );
-    return this.view(session);
+    return transaction(this.pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-sync:" + deckId,
+      ]);
+      const deck = await db.query(
+        "SELECT learning_epoch FROM decks WHERE id=$1",
+        [deckId],
+      );
+      requireValue(deck.rows[0], "Deck not found");
+      const session = newSession(deckId, await this.items(deckId, db), options);
+      session.learningEpoch = deck.rows[0].learning_epoch;
+      await db.query("INSERT INTO sessions(id,deck_id,data) VALUES($1,$2,$3)", [
+        session.id,
+        deckId,
+        session,
+      ]);
+      return this.view(session, db);
+    });
+  }
+  async resetLearning(
+    deckId: string,
+    input: { confirm?: boolean; expectedEpoch?: number } = {},
+  ) {
+    return transaction(this.pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-sync:" + deckId,
+      ]);
+      const deck = requireValue(
+        (await db.query("SELECT * FROM decks WHERE id=$1", [deckId])).rows[0],
+        "Deck not found",
+      );
+      const items = await this.items(deckId, db, true);
+      const sessions = (
+        await db.query("SELECT data FROM sessions WHERE deck_id=$1", [deckId])
+      ).rows.map((r) => r.data as Session);
+      const preview = resetPreview(
+        deckId,
+        deck.name,
+        deck.learning_epoch,
+        items,
+        sessions,
+      );
+      if (input.confirm !== true) return preview;
+      if (input.expectedEpoch !== deck.learning_epoch)
+        throw new AppError("Learning changed. Preview the reset again.", 409);
+      await db.query("DELETE FROM progress WHERE deck_id=$1", [deckId]);
+      await db.query("UPDATE attempts SET invalidated=true WHERE deck_id=$1", [
+        deckId,
+      ]);
+      for (const session of sessions)
+        await db.query(
+          "UPDATE sessions SET data=$2,updated_at=now() WHERE id=$1",
+          [session.id, closeResetSession(session)],
+        );
+      await db.query(
+        "UPDATE decks SET learning_epoch=learning_epoch+1 WHERE id=$1",
+        [deckId],
+      );
+      return {
+        ...preview,
+        dryRun: false,
+        learningEpoch: deck.learning_epoch + 1,
+      };
+    });
   }
   async loadSession(
     id: string,
     db: DB = this.pool,
     lock = false,
   ): Promise<Session> {
+    if (lock) {
+      const row = requireValue(
+        (await db.query("SELECT deck_id FROM sessions WHERE id=$1", [id]))
+          .rows[0],
+        "Session not found",
+      );
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-sync:" + row.deck_id,
+      ]);
+    }
     const { rows } = await db.query(
       `SELECT data FROM sessions WHERE id=$1 ${lock ? "FOR UPDATE" : ""}`,
       [id],
@@ -508,6 +580,12 @@ export class Store {
     }));
   }
   private checkVersion(s: Session, version: number) {
+    if (s.learningReset)
+      throw new AppError(
+        "Learning was reset. Start a new session.",
+        409,
+        "LEARNING_RESET",
+      );
     if (s.finished) throw new AppError("Session is finished", 409);
     if (s.version !== version)
       throw new AppError("Session changed. Reload to continue.", 409);
@@ -631,6 +709,12 @@ export class Store {
   async rateTest(id: string, index: number, rating: string) {
     return transaction(this.pool, async (db) => {
       const s = await this.loadSession(id, db, true);
+      if (s.learningReset)
+        throw new AppError(
+          "Learning was reset. Old answers cannot be graded.",
+          409,
+          "LEARNING_RESET",
+        );
       if (!s.finished || s.mode !== "test")
         throw new AppError("Finish the test before reviewing answers");
       const a = s.answers[index];

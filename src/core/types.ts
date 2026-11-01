@@ -68,6 +68,8 @@ export interface QueueEntry {
   retry: number;
 }
 export interface Session {
+  learningEpoch?: number;
+  learningReset?: boolean;
   learning?: { version: 1; size: number; round: number; ids: string[] };
   targetCount?: number;
   ignorePrerequisites?: boolean;

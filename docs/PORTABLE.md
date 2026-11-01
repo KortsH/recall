@@ -81,3 +81,18 @@ npm run recall -- --server https://your-server.example recover Recall-pending-pr
 Recovery never imports questions or changes connection settings. The destination must already contain the original deck IDs. Each answer is regraded against the server's current revision; evidence for corrected/archived questions is retained but excluded from mastery. Replaying the same evidence cannot add duplicate credit. Conflicting or newer server evidence stops recovery, reporting completed sessions; the original file remains unchanged. Ordinary sync is also safe after successful recovery. Keep the file and outbox until the destination has been verified.
 
 Device-only workspaces use **Export with my progress** instead. Recovery files are a separate format and are intentionally rejected by ordinary quiz import.
+
+## Start a deck again
+
+Choose **Reset learning** below the study controls or in the study session. The confirmation names the selected deck and offers a progress-file backup. **Reset to zero** clears that deck's mastery, counters and review dates and ends its saved sessions. Questions, IDs, revisions and prerequisites remain unchanged; Learn starts at recognition again. Other decks are unaffected. Reset is available offline in a device-only workspace; a shared-server reset requires a connection and applies to that shared deck on every device.
+
+```sh
+# Preview only; no learning data changes.
+npm run recall -- reset-learning "My quiz"
+# Apply explicitly against the intended configured server/database.
+npm run recall -- reset-learning "My quiz" --apply
+```
+
+Historical server attempt evidence is retained and marked invalid. A per-deck learning generation prevents pre-reset sessions and offline recovery files from restoring progress. Other downloaded clients must reload the reset deck using the current app. If old pending answers block sync, Settings offers **Export unsynced progress**, then **Discard outdated answers & reload decks**. The discard action verifies a newer server generation and affects only those outdated decks; pending work for other decks stays local.
+
+A portable progress backup can be restored explicitly in a device-only workspace. Full server rollback uses the owner's PostgreSQL backup. Downloading a backup or previewing a reset does not perform the reset.

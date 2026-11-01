@@ -25,6 +25,17 @@ export async function syncOfflineSession(store: Store, input: Session) {
     await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
       "recall-sync:" + input.deckId,
     ]);
+    const epoch = (
+      await db.query("SELECT learning_epoch FROM decks WHERE id=$1", [
+        input.deckId,
+      ])
+    ).rows[0].learning_epoch;
+    if ((input.learningEpoch ?? 0) !== epoch)
+      throw new AppError(
+        "Learning was reset for this deck. Export any pending evidence, then discard outdated answers and reload the deck in Settings.",
+        409,
+        "LEARNING_RESET",
+      );
     const row = (
       await db.query("SELECT data FROM sessions WHERE id=$1 FOR UPDATE", [
         input.id,

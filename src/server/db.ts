@@ -38,6 +38,7 @@ export async function migrate(pool: pg.Pool) {
     await db.query("SELECT pg_advisory_xact_lock(73104310)");
     await db.query(`
       CREATE TABLE IF NOT EXISTS decks (id text PRIMARY KEY, name text UNIQUE NOT NULL, description text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now());
+      ALTER TABLE decks ADD COLUMN IF NOT EXISTS learning_epoch integer NOT NULL DEFAULT 0;
       CREATE TABLE IF NOT EXISTS questions (deck_id text NOT NULL REFERENCES decks(id) ON DELETE CASCADE, id text NOT NULL, data jsonb NOT NULL, revision integer NOT NULL DEFAULT 1, content_hash text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(deck_id,id));
       CREATE TABLE IF NOT EXISTS progress (deck_id text NOT NULL, question_id text NOT NULL, data jsonb NOT NULL, PRIMARY KEY(deck_id,question_id), FOREIGN KEY(deck_id,question_id) REFERENCES questions(deck_id,id) ON DELETE CASCADE);
       CREATE TABLE IF NOT EXISTS sessions (id text PRIMARY KEY, deck_id text NOT NULL REFERENCES decks(id) ON DELETE CASCADE, data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());

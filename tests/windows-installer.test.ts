@@ -45,7 +45,7 @@ test(
     assert.ok(
       (
         await stat(
-          join(destination, "versions", "0.3.0-preview.1", "Recall.exe"),
+          join(destination, "versions", "0.3.1-preview.1", "Recall.exe"),
         )
       ).size > 0,
     );
@@ -69,7 +69,7 @@ test(
   async () => {
     const folder = await mkdtemp(join(tmpdir(), "recall-installer-test-"));
     const setup = resolve("build/windows/Recall-Setup.exe"),
-      exe = join(folder, "versions", "0.3.0-preview.1", "Recall.exe");
+      exe = join(folder, "versions", "0.3.1-preview.1", "Recall.exe");
     const install = () =>
       execFileSync(
         setup,

@@ -319,6 +319,7 @@ export function sessionView(s: Session, items: Item[]) {
     ...a,
     index,
     outdated:
+      !!s.learningReset ||
       !!a.invalidated ||
       items.find((i) => !i.archived && i.question.id === a.questionId)
         ?.revision !== a.revision,

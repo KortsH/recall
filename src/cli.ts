@@ -22,7 +22,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.3.0-preview.1");
+  .version("0.3.1-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",
@@ -105,6 +105,28 @@ program
       }
     }
     print({ dryRun: false, completed });
+  });
+program
+  .command("reset-learning <deck>")
+  .description(
+    "Preview resetting this deck's progress and saved sessions to zero; questions are preserved",
+  )
+  .option(
+    "--apply",
+    "Apply the reset to the configured workspace; invalidates older offline evidence",
+  )
+  .action(async (deck, o) => {
+    const target = await connect(),
+      d = await target.deck(deck);
+    const preview = await target.resetLearning(d.id);
+    print(
+      o.apply
+        ? await target.resetLearning(d.id, {
+            confirm: true,
+            expectedEpoch: preview.expectedEpoch,
+          })
+        : preview,
+    );
   });
 program
   .command("import <file>")

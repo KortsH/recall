@@ -701,3 +701,158 @@ test("generated recognition and round state survive live HTTP, legacy resume and
     assert.equal(stored.progress.mastered, true);
   }
 });
+
+test("deck reset is explicit and atomic, preserves content/history, and blocks old clients and recovery replay", async () => {
+  const bank = parseBank({
+    deck: "Reset " + randomUUID(),
+    questions: [
+      { id: "base", question: "Foundation", answer: "A" },
+      { id: "child", question: "Details", answer: "B", depends_on: ["base"] },
+    ],
+  });
+  const { deckId } = await store.importBank(bank),
+    other = await fresh();
+  let view = await store.createSession(deckId, { mode: "learn" });
+  for (let n = 0; n < 3; n++) {
+    let version = view.version;
+    if (view.card!.selfGrade)
+      version = (
+        await store.reveal(view.id, { version, revision: 1, response: "A" })
+      ).version;
+    view = (
+      await store.answer(view.id, {
+        version,
+        revision: 1,
+        response: "A",
+        rating: view.card!.selfGrade ? "good" : undefined,
+      })
+    ).session;
+  }
+  const exam = await store.createSession(deckId, { mode: "test", count: 1 });
+  await store.answer(exam.id, {
+    version: exam.version,
+    revision: 1,
+    response: "A",
+  });
+  const otherSession = await store.createSession(other, { mode: "learn" });
+  await store.answer(otherSession.id, {
+    version: otherSession.version,
+    revision: 1,
+    response: ["A"],
+  });
+  const items = await store.items(deckId),
+    offline = newSession(deckId, items, { mode: "learn" });
+  const offlineItem = items.find(
+    (i) => i.question.id === offline.queue[0].questionId,
+  )!;
+  if (offline.queue[0].format === "written")
+    offline.revealed = { cursor: 0, response: offlineItem.question.answer };
+  advanceSession(
+    offline,
+    offlineItem,
+    {
+      version: 0,
+      revision: 1,
+      response: offlineItem.question.answer,
+      rating: "good",
+    },
+    items,
+  );
+  offline.version++;
+  const before = await store.items(deckId),
+    remote = remoteBackend(base),
+    preview = await remote.resetLearning(deckId);
+  assert.equal(preview.dryRun, true);
+  assert.equal(preview.mastered, 1);
+  assert.deepEqual(await store.items(deckId), before);
+  await assert.rejects(
+    remote.resetLearning(deckId, { confirm: true, expectedEpoch: 99 }),
+    /Preview/iu,
+  );
+  const resets = await Promise.allSettled([
+    remote.resetLearning(deckId, { confirm: true, expectedEpoch: 0 }),
+    remote.resetLearning(deckId, { confirm: true, expectedEpoch: 0 }),
+  ]);
+  assert.equal(resets.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal((await store.deck(deckId)).learning_epoch, 1);
+  const after = await store.items(deckId);
+  assert.deepEqual(
+    after.map(({ progress, ...q }) => q),
+    before.map(({ progress, ...q }) => q),
+  );
+  assert.ok(
+    after.every(
+      (i) =>
+        i.progress.attempts === 0 &&
+        !i.progress.mastered &&
+        !i.progress.nextReview,
+    ),
+  );
+  assert.equal((await store.deck(deckId)).stats.locked, 1);
+  assert.equal((await store.deck(other)).stats.attempts, 1);
+  const old = await store.getSession(view.id);
+  assert.equal(old.finished, true);
+  assert.ok(old.result!.answers.every((a) => a.outdated));
+  await assert.rejects(
+    store.answer(view.id, { version: old.version, revision: 1, response: "B" }),
+    /reset/,
+  );
+  await assert.rejects(store.rateTest(exam.id, 0, "good"), /reset/);
+  await assert.rejects(syncOfflineSession(store, offline), /reset/);
+  assert.equal(
+    (
+      await pool.query("SELECT count(*) FROM sessions WHERE id=$1", [
+        offline.id,
+      ])
+    ).rows[0].count,
+    "0",
+  );
+  const historical = await pool.query(
+    "SELECT invalidated FROM attempts WHERE deck_id=$1",
+    [deckId],
+  );
+  assert.ok(
+    historical.rows.length > 0 && historical.rows.every((r) => r.invalidated),
+  );
+  const next = await store.createSession(deckId, { mode: "learn" });
+  assert.equal(next.card!.format, "multiple_choice");
+  assert.equal(next.card!.questionId, "base");
+  assert.equal((await store.loadSession(next.id)).learningEpoch, 1);
+  await Promise.allSettled([
+    store.answer(next.id, {
+      version: next.version,
+      revision: 1,
+      response: "A",
+    }),
+    store.resetLearning(deckId, { confirm: true, expectedEpoch: 1 }),
+  ]);
+  assert.equal((await store.deck(deckId)).stats.attempts, 0);
+  const run = (apply = false) => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "src/cli.ts",
+        "reset-learning",
+        deckId,
+        ...(apply ? ["--apply"] : []),
+      ],
+      {
+        env: {
+          ...process.env,
+          DATABASE_URL: testUrl.toString(),
+          RECALL_SERVER_URL: "",
+        },
+        encoding: "utf8",
+        windowsHide: true,
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  assert.equal(run().dryRun, true);
+  assert.equal((await store.deck(deckId)).learning_epoch, 2);
+  assert.equal(run(true).dryRun, false);
+  assert.equal((await store.deck(deckId)).learning_epoch, 3);
+});

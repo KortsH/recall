@@ -20,6 +20,7 @@ export type Backend = Pick<
   | "archiveQuestion"
   | "updateDeck"
   | "recoverSession"
+  | "resetLearning"
 >;
 export function remoteBackend(base: string): Backend {
   const root = new URL(base);
@@ -39,6 +40,8 @@ export function remoteBackend(base: string): Backend {
   };
   const enc = encodeURIComponent;
   return {
+    resetLearning: (id, input) =>
+      call(`/decks/${enc(id)}/reset-learning`, input ?? {}),
     recoverSession: (session) => call("/sync", session),
     decks: () => call("/decks"),
     deck: (id) => call("/decks/" + enc(id)),
