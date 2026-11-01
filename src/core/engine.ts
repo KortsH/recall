@@ -125,6 +125,66 @@ export function chooseVariant(item: Item, mode: string, offset = 0): Variant {
   );
   return recalls[item.progress.attempts % recalls.length] ?? candidates[0];
 }
+/** Recognition first, then recall. Distractors reuse existing answers; no facts are invented. */
+export function learningEntry(
+  item: Item,
+  context: Item[],
+  retry = 0,
+): QueueEntry {
+  const recognition =
+    !item.progress.mastered &&
+    (item.progress.recognition === 0 || item.progress.streak === 0);
+  const authored = variants(item.question).find(
+    (v) => v.type === "multiple_choice",
+  );
+  const v = recognition
+    ? (authored ?? resolveVariant(item.question, "learn-choice"))
+    : chooseVariant(item, "learn", 1);
+  const entry: QueueEntry = {
+    questionId: item.question.id,
+    concept: item.question.concept,
+    variantId: v.id,
+    format: v.type,
+    retry,
+  };
+  if (v.id === "learn-choice") {
+    const equivalent = new Set(
+      [item.question.answer, ...(item.question.acceptedAnswers ?? [])].map(
+        normalise,
+      ),
+    );
+    const pool = context
+      .filter((i) => !i.archived && i.question.id !== item.question.id)
+      .sort(
+        (a, b) =>
+          Number(b.question.topic === item.question.topic) -
+          Number(a.question.topic === item.question.topic),
+      );
+    const choices = [item.question.answer];
+    for (const candidate of pool) {
+      const answer = candidate.question.answer;
+      if (
+        equivalent.has(normalise(answer)) ||
+        choices.some((c) => normalise(c) === normalise(answer)) ||
+        candidate.question.acceptedAnswers?.some(
+          (a) => normalise(a) === normalise(item.question.answer),
+        )
+      )
+        continue;
+      choices.push(answer);
+      if (choices.length === 4) break;
+    }
+    // A one-answer bank still starts gently rather than demanding unknown text.
+    if (choices.length === 1)
+      choices.push(
+        item.question.answer === "I don’t know yet"
+          ? "Show me again"
+          : "I don’t know yet",
+      );
+    entry.choiceOptions = choices;
+  }
+  return entry;
+}
 export function buildQueue(
   items: Item[],
   mode: string,
@@ -151,8 +211,8 @@ export function buildQueue(
   );
   const score = (i: Item) =>
     !i.progress.attempts
-      ? 200
-      : (!i.progress.mastered ? 100 : 0) +
+      ? 100
+      : (!i.progress.mastered ? 200 : 0) +
         Math.min(50, i.progress.wrong * 5) +
         (i.progress.nextReview && Date.parse(i.progress.nextReview) <= now
           ? 30
@@ -191,6 +251,7 @@ export function buildQueue(
       }
     }
   return mixed.slice(0, count).map((i, n) => {
+    if (mode === "learn") return learningEntry(i, context);
     const v = chooseVariant(i, mode, mode === "test" ? n : 0);
     return {
       questionId: i.question.id,
@@ -262,7 +323,14 @@ export function publicCard(
     topic: item.question.topic,
     concept: item.question.concept,
     question: v.question,
-    options: v.options ? shuffle(v.options) : undefined,
+    options:
+      entry.variantId === "learn-choice"
+        ? shuffle(
+            entry.choiceOptions ?? [item.question.answer, "I don’t know yet"],
+          )
+        : v.options
+          ? shuffle(v.options)
+          : undefined,
     left: v.pairs?.map((p) => p.left),
     right: v.pairs ? shuffle(v.pairs.map((p) => p.right)) : undefined,
     selfGrade:

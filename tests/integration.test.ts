@@ -629,3 +629,74 @@ test("private recovery CLI previews without writes and replays pending evidence 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("generated recognition and round state survive live HTTP, legacy resume and idempotent offline sync", async () => {
+  const bank = parseBank({
+    deck: "Recognition " + randomUUID(),
+    questions: [0, 1, 2].map((n) => ({
+      id: "def" + n,
+      question: "Definition " + n,
+      answer: "Answer " + n,
+      acceptedAnswers: ["Answer " + n],
+    })),
+  });
+  const { deckId } = await store.importBank(bank);
+  let view = await store.createSession(deckId, { mode: "learn", count: 1 });
+  assert.equal(view.card!.format, "multiple_choice");
+  assert.equal(view.card!.options!.length, 3);
+  const raw = await store.loadSession(view.id);
+  delete raw.learning;
+  raw.queue[0].variantId = "written";
+  raw.queue[0].format = "written";
+  await pool.query("UPDATE sessions SET data=$2 WHERE id=$1", [raw.id, raw]);
+  view = await store.getSession(raw.id);
+  assert.equal(view.card!.format, "multiple_choice");
+  assert.equal(view.version, 1);
+  assert.ok(
+    (await store.items(deckId)).every((i) => i.progress.attempts === 0),
+  );
+  for (let n = 0; n < 3; n++) {
+    const item = await store.question(deckId, view.card!.questionId);
+    assert.equal(view.card!.format, n === 0 ? "multiple_choice" : "written");
+    const result = await store.answer(view.id, {
+      version: view.version,
+      revision: view.card!.revision,
+      response: item.question.answer,
+    });
+    view = result.session;
+  }
+  assert.equal(view.learning!.round, 2);
+  assert.equal(view.card!.format, "multiple_choice");
+  const other = await store.importBank({
+    ...bank,
+    deck: "Offline recognition " + randomUUID(),
+  });
+  const items = await store.items(other.deckId),
+    s = newSession(other.deckId, items, { mode: "learn", count: 2 });
+  while (!s.finished) {
+    const item = items.find(
+      (i) => i.question.id === s.queue[s.cursor].questionId,
+    )!;
+    const r = advanceSession(
+      s,
+      item,
+      {
+        version: s.version,
+        revision: item.revision,
+        response: item.question.answer,
+      },
+      items,
+    );
+    item.progress = r.progress;
+    s.version++;
+  }
+  await syncOfflineSession(store, s);
+  await syncOfflineSession(store, s);
+  for (const item of items) {
+    const stored = await store.question(other.deckId, item.question.id);
+    assert.equal(stored.progress.attempts, 3);
+    assert.equal(stored.progress.recognition, 1);
+    assert.equal(stored.progress.recalls, 2);
+    assert.equal(stored.progress.mastered, true);
+  }
+});

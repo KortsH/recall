@@ -101,6 +101,7 @@ function App() {
     [recent, setRecent] = useState<any[]>([]);
   const [topic, setTopic] = useState(""),
     [count, setCount] = useState(20),
+    [learnSize, setLearnSize] = useState(12),
     [minutes, setMinutes] = useState(0),
     [mode, setMode] = useState("learn");
   const [items, setItems] = useState<Item[]>([]),
@@ -120,7 +121,9 @@ function App() {
   const [now, setNow] = useState(Date.now()),
     [mobileNav, setMobileNav] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null),
-    mainRef = useRef<HTMLElement>(null);
+    mainRef = useRef<HTMLElement>(null),
+    studyRef = useRef<HTMLElement>(null),
+    continueRef = useRef<HTMLButtonElement>(null);
   const deck = decks.find((d) => d.id === deckId);
   useEffect(() => {
     const receive = (event: Event) => {
@@ -199,7 +202,7 @@ function App() {
       const s = await api<SessionView>(`/decks/${deckId}/sessions`, {
         mode: chosen,
         topic: topic || undefined,
-        count,
+        count: chosen === "learn" ? learnSize : count,
         minutes,
         ignorePrerequisites:
           ["cram", "test"].includes(chosen) && ignorePrerequisites,
@@ -266,9 +269,40 @@ function App() {
     });
   const next = () => {
     resetAnswer();
-    requestAnimationFrame(() => inputRef.current?.focus());
     mainRef.current?.scrollTo({ top: 0 });
   };
+  useEffect(() => {
+    if (
+      !session ||
+      (session.finished && !feedback) ||
+      busy ||
+      editor ||
+      importOpen ||
+      shareOpen
+    )
+      return;
+    const frame = requestAnimationFrame(() => {
+      const control = feedback
+        ? continueRef.current
+        : reveal
+          ? studyRef.current?.querySelector<HTMLButtonElement>(".rating.good")
+          : (inputRef.current ??
+            studyRef.current?.querySelector<HTMLElement>(
+              ".option, select, .card-bottom button",
+            ));
+      control?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    session?.id,
+    session?.cursor,
+    !!feedback,
+    !!reveal,
+    busy,
+    editor,
+    importOpen,
+    shareOpen,
+  ]);
   useEffect(() => {
     if (!session?.deadline || session.finished) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -816,6 +850,13 @@ function App() {
                         </button>
                       ))}
                     </div>
+                    {mode === "learn" && (
+                      <p className="small">
+                        Start with choices, then recall without hints. Learn up
+                        to {learnSize} unlocked questions at a time; the next
+                        set arrives after these are mastered.
+                      </p>
+                    )}
                     <div className="session-controls">
                       <label>
                         Topic
@@ -833,12 +874,19 @@ function App() {
                         </select>
                       </label>
                       <label>
-                        Session size
+                        {mode === "learn" ? "Working set" : "Session size"}
                         <select
-                          value={count}
-                          onChange={(e) => setCount(Number(e.target.value))}
+                          value={mode === "learn" ? learnSize : count}
+                          onChange={(e) =>
+                            (mode === "learn" ? setLearnSize : setCount)(
+                              Number(e.target.value),
+                            )
+                          }
                         >
-                          {[5, 10, 20, 50, 100, 200].map((n) => (
+                          {(mode === "learn"
+                            ? [8, 12, 16]
+                            : [5, 10, 20, 50, 100, 200]
+                          ).map((n) => (
                             <option value={n} key={n}>
                               {n} objectives
                             </option>
@@ -1329,18 +1377,18 @@ function App() {
               <>
                 <div className="study-progress-label">
                   <span>
-                    {feedback
-                      ? "A little stronger already"
-                      : session.mode === "test"
-                        ? "Take your time. Trust what you know."
-                        : "One question. A little deeper."}
+                    {session.learning
+                      ? `Set ${session.learning.round} · ${session.learning.mastered} of ${session.learning.total} mastered`
+                      : feedback
+                        ? "A little stronger already"
+                        : session.mode === "test"
+                          ? "Take your time. Trust what you know."
+                          : "One question. A little deeper."}
                   </span>
                   <span>
-                    {Math.min(
-                      session.cursor + (feedback ? 0 : 1),
-                      session.total,
-                    )}{" "}
-                    / {session.total}
+                    {session.learning
+                      ? `${session.learning.deckMastered} / ${session.learning.deckTotal} learned`
+                      : `${Math.min(session.cursor + (feedback ? 0 : 1), session.total)} / ${session.total}`}
                     {session.deadline && (
                       <>
                         {" "}
@@ -1367,7 +1415,7 @@ function App() {
                 <div className="study-progress">
                   <span
                     style={{
-                      width: `${(session.cursor / session.total) * 100}%`,
+                      width: `${session.learning ? (session.learning.deckMastered / session.learning.deckTotal) * 100 : (session.cursor / session.total) * 100}%`,
                     }}
                   />
                 </div>
@@ -1411,6 +1459,7 @@ function App() {
                     className="button primary"
                     disabled={busy}
                     onClick={next}
+                    ref={continueRef}
                   >
                     {session.finished ? "See session results" : "Continue"}
                     <ArrowRight size={17} />
@@ -1439,7 +1488,7 @@ function App() {
             ) : (
               card && (
                 <>
-                  <section className="study-card">
+                  <section className="study-card" ref={studyRef}>
                     <div className="card-topline">
                       <span className="topic-tag">{card.topic}</span>
                       <span className="format-label">
@@ -1453,6 +1502,13 @@ function App() {
                       </span>
                     </div>
                     <h2>{card.question}</h2>
+                    {session.learning && (
+                      <p className="answer-hint">
+                        {card.options
+                          ? "Start by recognising the answer. You’ll recall it without options next."
+                          : "Now recall it without the choices. Two successful recalls build mastery."}
+                      </p>
+                    )}
                     {!reveal && (
                       <>
                         {card.options ? (

@@ -22,7 +22,7 @@ const entry = z
       "multiple_choice",
       "multiple_select",
     ]),
-    retry: z.number().int().min(0).max(10),
+    retry: z.number().int().min(0).max(2000),
   })
   .passthrough();
 const session = z

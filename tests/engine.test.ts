@@ -139,7 +139,7 @@ test("topic interleaving and new-question recognition", () => {
     ),
     ["A", "B", "A", "B", "A", "B"],
   );
-  assert.ok(queue.every((e) => e.format === "multiple_select"));
+  assert.ok(queue.every((e) => e.format === "multiple_choice"));
 });
 test("retry is interleaved, and a one-objective deck never repeats immediately", () => {
   const queue = Array.from({ length: 4 }, (_, n) => ({

@@ -60,6 +60,7 @@ export interface Item {
   progress: Progress;
 }
 export interface QueueEntry {
+  choiceOptions?: string[];
   concept?: string;
   questionId: string;
   variantId: string;
@@ -67,6 +68,7 @@ export interface QueueEntry {
   retry: number;
 }
 export interface Session {
+  learning?: { version: 1; size: number; round: number; ids: string[] };
   targetCount?: number;
   ignorePrerequisites?: boolean;
   id: string;

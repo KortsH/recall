@@ -40,6 +40,17 @@ export function variants(q: Question): Variant[] {
   ];
 }
 export function resolveVariant(q: Question, id: string): Variant {
+  // A presentation generated from existing deck answers, never bank content.
+  // Grading always takes the correct answer from the current question.
+  if (id === "learn-choice")
+    return {
+      id,
+      type: "multiple_choice",
+      question: q.question,
+      answer: q.answer,
+      correct: [q.answer],
+      skill: q.skill,
+    };
   const all = variants(q);
   return all.find((v) => v.id === id) ?? all.find((v) => v.id === "written")!;
 }

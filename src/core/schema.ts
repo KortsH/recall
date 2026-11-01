@@ -104,7 +104,12 @@ export function parseBank(input: unknown, deckOverride?: string): Bank {
       q.id,
       (q.correct?.length ?? 0) > 1 || q.type === "multiple_select",
     );
-    const variantIds = new Set(["choice", "written", "flashcard"]);
+    const variantIds = new Set([
+      "choice",
+      "written",
+      "flashcard",
+      "learn-choice",
+    ]);
     for (const v of q.variants) {
       if (variantIds.has(v.id))
         throw new Error(`${q.id}: duplicate or reserved variant ID ${v.id}`);

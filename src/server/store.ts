@@ -1,4 +1,9 @@
-import { advanceSession, sessionView, newSession } from "../core/study.ts";
+import {
+  advanceSession,
+  sessionView,
+  newSession,
+  prepareSession,
+} from "../core/study.ts";
 import {
   prerequisiteStatus,
   prospectiveQuestions,
@@ -478,27 +483,9 @@ export class Store {
   async getSession(id: string) {
     return transaction(this.pool, async (db) => {
       const s = await this.loadSession(id, db, true);
-      if (!s.finished) {
-        const active = new Set(
-          prerequisiteStatus(await this.items(s.deckId, db))
-            .filter(
-              (x) =>
-                x.unlocked ||
-                (s.ignorePrerequisites && ["cram", "test"].includes(s.mode)),
-            )
-            .map((x) => x.id),
-        );
-        const queue = [
-          ...s.queue.slice(0, s.cursor),
-          ...s.queue.slice(s.cursor).filter((e) => active.has(e.questionId)),
-        ];
-        if (queue.length !== s.queue.length) {
-          s.queue = queue;
-          s.finished = s.cursor >= queue.length;
-          delete s.revealed;
-          await this.saveSession(s, db);
-        }
-      }
+      const before = JSON.stringify(s);
+      prepareSession(s, await this.items(s.deckId, db));
+      if (JSON.stringify(s) !== before) await this.saveSession(s, db);
       if (!s.finished && s.deadline && Date.parse(s.deadline) <= Date.now()) {
         s.finished = true;
         await this.saveSession(s, db);

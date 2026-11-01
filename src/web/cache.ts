@@ -15,7 +15,7 @@ import {
   newSession,
   advanceSession,
   sessionView,
-  pruneLocked,
+  prepareSession,
 } from "../core/study.ts";
 import { prerequisiteStatus } from "../core/prerequisites.ts";
 import { resolveVariant } from "../core/questions.ts";
@@ -206,7 +206,7 @@ function decks(s: State) {
 }
 function view(s: State, session: Session) {
   const items = s.items[session.deckId] ?? [];
-  pruneLocked(session, items);
+  prepareSession(session, items);
   if (!session.finished) {
     session.queue = [
       ...session.queue.slice(0, session.cursor),

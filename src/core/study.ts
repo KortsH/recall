@@ -4,6 +4,7 @@ import {
   grade,
   publicCard,
   updateProgress,
+  learningEntry,
 } from "./engine.ts";
 import { resolveVariant } from "./questions.ts";
 import { prerequisiteStatus } from "./prerequisites.ts";
@@ -28,7 +29,7 @@ export function newSession(
   id = crypto.randomUUID(),
 ): Session {
   const mode = options.mode ?? "learn",
-    count = options.count ?? 20,
+    count = options.count ?? (mode === "learn" ? 12 : 20),
     minutes = options.minutes ?? 0;
   if (!["learn", "cram", "flashcards", "test"].includes(mode))
     throw new Error("Unknown study mode");
@@ -49,7 +50,7 @@ export function newSession(
         !i.archived && (!options.topic || i.question.topic === options.topic),
     ),
     mode,
-    count,
+    mode === "learn" ? Math.min(count, 16) : count,
     Date.now(),
     Math.random,
     items,
@@ -65,7 +66,23 @@ export function newSession(
     id,
     deckId,
     mode: mode as Session["mode"],
-    targetCount: count,
+    targetCount:
+      mode === "learn"
+        ? items.filter(
+            (i) =>
+              !i.archived &&
+              (!options.topic || i.question.topic === options.topic),
+          ).length
+        : count,
+    learning:
+      mode === "learn"
+        ? {
+            version: 1,
+            size: Math.min(count, 16),
+            round: 1,
+            ids: queue.map((e) => e.questionId),
+          }
+        : undefined,
     ignorePrerequisites: !!options.ignorePrerequisites,
     topic: options.topic ?? null,
     queue,
@@ -79,6 +96,55 @@ export function newSession(
     finished: false,
     version: 0,
   };
+}
+/** Keep the same small cohort until it is learned. Introduce the next cohort only at a boundary. */
+function nextLearningSet(s: Session, items: Item[]) {
+  if (!s.learning || s.cursor < s.queue.length) return;
+  const answered = new Set(s.answers.map((a) => a.questionId));
+  const candidates = items.filter(
+    (i) =>
+      (!s.topic || i.question.topic === s.topic) &&
+      !(i.progress.mastered && answered.has(i.question.id)),
+  );
+  const queue = buildQueue(
+    candidates,
+    "learn",
+    s.learning.size,
+    Date.now(),
+    Math.random,
+    items,
+  );
+  if (queue.length) {
+    s.learning.round++;
+    s.learning.ids = queue.map((e) => e.questionId);
+    s.queue.push(...queue);
+  }
+  s.finished = s.cursor >= s.queue.length;
+}
+/** Upgrade only unanswered legacy Learn cards; saved evidence and learner progress stay intact. */
+export function prepareSession(s: Session, items: Item[]) {
+  if (s.finished) return;
+  if (s.mode === "learn" && !s.learning) {
+    const size = Math.min(s.targetCount ?? 12, 16);
+    const queue = buildQueue(
+      items.filter((i) => !s.topic || i.question.topic === s.topic),
+      "learn",
+      size,
+      Date.now(),
+      Math.random,
+      items,
+    );
+    s.queue = [...s.queue.slice(0, s.cursor), ...queue];
+    s.learning = {
+      version: 1,
+      size,
+      round: 1,
+      ids: queue.map((e) => e.questionId),
+    };
+    delete s.revealed;
+  }
+  pruneLocked(s, items);
+  if (s.mode === "learn") nextLearningSet(s, items);
 }
 export function evaluateAttempt(
   item: Item,
@@ -153,8 +219,12 @@ export function advanceSession(
           input.rating,
           attempt.skill,
         );
-  if (
-    (s.mode === "learn" || s.mode === "cram") &&
+  if (s.mode === "learn" && s.learning && !progress.mastered) {
+    s.queue.push(
+      learningEntry({ ...item, progress }, context ?? [item], entry.retry + 1),
+    );
+  } else if (
+    s.mode === "cram" &&
     entry.retry < 3 &&
     (!attempt.correct || !progress.mastered)
   )
@@ -167,7 +237,8 @@ export function advanceSession(
       i.question.id === item.question.id ? { ...i, progress } : i,
     );
     pruneLocked(s, updated);
-    if (["learn", "cram"].includes(s.mode) && s.targetCount) {
+    if (s.mode === "learn" && s.learning) nextLearningSet(s, updated);
+    if (s.mode === "cram" && s.targetCount) {
       const seen = new Set(s.queue.map((e) => e.questionId));
       const remaining = updated.filter(
         (i) =>
@@ -187,6 +258,8 @@ export function advanceSession(
       );
     }
   }
+  if (!context && s.mode === "learn" && s.learning)
+    nextLearningSet(s, [{ ...item, progress }]);
   s.finished = s.cursor >= s.queue.length;
   return { attempt, progress };
 }
@@ -259,6 +332,25 @@ export function sessionView(s: Session, items: Item[]) {
     version: s.version,
     deadline: s.deadline,
     card,
+    learning: s.learning
+      ? {
+          round: s.learning.round,
+          size: s.learning.size,
+          total: s.learning.ids.length,
+          mastered: s.learning.ids.filter(
+            (id) => items.find((i) => i.question.id === id)?.progress.mastered,
+          ).length,
+          deckMastered: items.filter(
+            (i) =>
+              !i.archived &&
+              (!s.topic || i.question.topic === s.topic) &&
+              i.progress.mastered,
+          ).length,
+          deckTotal: items.filter(
+            (i) => !i.archived && (!s.topic || i.question.topic === s.topic),
+          ).length,
+        }
+      : undefined,
     revealed: s.revealed?.cursor === s.cursor ? s.revealed : undefined,
     result: s.finished
       ? {
