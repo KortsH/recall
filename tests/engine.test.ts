@@ -248,3 +248,19 @@ test("related recall and application objectives are separated when other concept
   const queue = buildQueue(qs, "cram", 4, Date.now(), () => 0.5);
   assert.notEqual(queue[0].concept, queue[1].concept);
 });
+test("scheduled retries avoid sitting directly beside another objective on the same concept", () => {
+  const queue = ["A", "B", "C", "A", "D"].map((concept, i) => ({
+    questionId: String(i),
+    concept,
+    variantId: "written",
+    format: "written" as const,
+    retry: 0,
+  }));
+  const result = enqueueRetry(queue, 0, queue[0], {
+    ...item,
+    question: { ...item.question, concept: "A" },
+  });
+  const at = result.findIndex((e, i) => i > 0 && e.questionId === "0");
+  assert.notEqual(result[at - 1]?.concept, "A");
+  assert.notEqual(result[at + 1]?.concept, "A");
+});

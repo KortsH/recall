@@ -198,16 +198,31 @@ export function enqueueRetry(
 ): QueueEntry[] {
   const out = [...queue];
   const v = chooseVariant(item, "learn", entry.retry + 1);
+  const concept = entry.concept ?? item.question.concept;
+  const group = (e: QueueEntry | undefined) =>
+    e ? (e.concept ?? e.questionId) : undefined;
   if (out.length === cursor + 1) {
-    const other = out.find((e) => e.questionId !== entry.questionId);
+    const other =
+      out.find(
+        (e) => group(e) !== concept && e.questionId !== entry.questionId,
+      ) ?? out.find((e) => e.questionId !== entry.questionId);
     // A single-objective deck ends rather than immediately revealing the same question again.
     if (!other) return out;
     out.push({ ...other, retry: 3 });
   }
   // At least two intervening cards whenever available. A tiny deck may have fewer.
-  const at = Math.min(out.length, cursor + 3);
+  let at = Math.min(out.length, cursor + 3);
+  for (let candidate = at; candidate <= out.length; candidate++)
+    if (
+      group(out[candidate - 1]) !== concept &&
+      group(out[candidate]) !== concept
+    ) {
+      at = candidate;
+      break;
+    }
   out.splice(at, 0, {
     questionId: entry.questionId,
+    concept,
     variantId: v.id,
     format: v.type,
     retry: entry.retry + 1,
