@@ -5,7 +5,13 @@ A focused exam learning tool. Bring a question bank, download it to your device,
 Downloaded mode studies on the device and syncs progress in batches. Live-server mode is optional. Install the PWA on your phone to share quizzes and progress through the server. See [hosting and mobile use](docs/HOSTING.md) and [future work](docs/FUTURE.md).
 
 
-## Run locally
+## Installation
+
+A downloadable installer and one-command setup are planned; they are not available yet. The goal is to install and start Recall without manually assembling its dependencies, with a separate option to connect to an existing server. See the [installation to-do](docs/FUTURE.md#next-priority-simple-installation).
+
+The instructions below are the current manual setup. When the installer is ready, its download link and exact install/start commands will appear here, separately from contributor setup.
+
+## Manual setup and development
 
 Node 22.12+ (24 recommended), npm, and PostgreSQL 17 or Docker.
 
