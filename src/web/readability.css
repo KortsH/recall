@@ -1,0 +1,180 @@
+/* Keep secondary copy readable on pale surfaces, including during long study sessions. */
+.page-heading p,
+.deck-card-content p,
+.overview-stats small,
+.section-heading > span,
+.mode-card p,
+.deck-meta,
+.progress-legend,
+.learning-note,
+.learning-note strong {
+  color: #78717f;
+}
+.eyebrow,
+.format-label,
+.answer-hint,
+.row-topic,
+.topic-card p,
+.progress-summary p,
+.quiet,
+.written-answer > p,
+.card-bottom > span,
+.study-progress-label,
+.study-under,
+.result-hero > p,
+.result-stats span {
+  color: #7b7087;
+}
+.mode-card h3,
+.question-row h3 {
+  color: #50465c;
+}
+.option {
+  color: #594b65;
+  font-size: 13px;
+}
+.option.selected {
+  color: #705086;
+}
+.explanation {
+  color: #756480;
+  font-size: 13px;
+}
+.model-answer p,
+.reveal-model {
+  color: #78518f;
+}
+.written-answer textarea {
+  color: #65516f;
+}
+.written-answer label,
+.topic-tag,
+.rating,
+.rating small,
+.result-answer,
+.result-answer summary small,
+.field,
+.field input,
+.field textarea,
+.modal-head h2,
+.modal-head .eyebrow {
+  color: #7b628e;
+}
+.rating.again {
+  color: #956a52;
+}
+.rating.hard {
+  color: #8b7846;
+}
+.rating.good {
+  color: #5d7c61;
+}
+.rating.easy {
+  color: #82609f;
+}
+.rating small {
+  color: #817388;
+}
+.feedback-status.correct {
+  color: #577b60;
+}
+.feedback-status.incorrect {
+  color: #9d774b;
+}
+.question-row p,
+.weak-row p,
+.settings-card p {
+  color: #82718e;
+}
+.result-answer-body .eyebrow,
+.reveal-answer .eyebrow,
+.model-answer > span {
+  color: #8d719e;
+}
+.result-stats strong,
+.result-hero h1 {
+  color: #816194;
+}
+.result-topics > span,
+.result-topics strong {
+  color: #826491;
+}
+.quick-start {
+  background: #7761ce;
+  color: #fff;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 10px;
+  box-shadow: 0 2px 4px #6550bb10;
+}
+.quick-start:hover {
+  background: #6550bb;
+  color: #fff;
+}
+.field-error,
+.error-banner,
+.error-banner button {
+  color: #8d4f3b;
+}
+.editor-note {
+  color: #856c42;
+}
+.file-drop strong {
+  color: #806092;
+}
+.result-rubric {
+  font-size: 12px;
+  line-height: 1.9;
+  color: #82718e;
+  padding-left: 18px;
+}
+@media (max-width: 640px) {
+  .sidebar {
+    visibility: hidden;
+  }
+  .sidebar.open {
+    visibility: visible;
+  }
+  .mobile-menu {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+@media (min-width: 641px) {
+  .page {
+    padding-top: 35px;
+  }
+  .page-heading {
+    margin-bottom: 25px;
+  }
+  .page-heading h1 {
+    font-size: 39px;
+  }
+  .overview-stats {
+    margin-bottom: 28px;
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
+  .deck-card-content {
+    margin-bottom: 19px;
+  }
+  .deck-card-content h2 {
+    font-size: 25px;
+  }
+  .deck-card-bottom {
+    padding-top: 12px;
+    padding-bottom: 13px;
+  }
+}
+@media (max-width: 640px) {
+  .deck-card-bottom .quick-start {
+    font-size: 9px;
+    padding: 8px 10px;
+  }
+  .option {
+    font-size: 12px;
+  }
+  .explanation {
+    font-size: 12px;
+  }
+}

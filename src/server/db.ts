@@ -1,0 +1,43 @@
+import "dotenv/config";
+import pg from "pg";
+export const databaseUrl = () =>
+  process.env.DATABASE_URL ?? "postgres://recall:recall@127.0.0.1:55432/recall";
+export function createPool(url = databaseUrl()) {
+  return new pg.Pool({
+    connectionString: url,
+    max: 6,
+    connectionTimeoutMillis: 5000,
+  });
+}
+export type DB = pg.Pool | pg.PoolClient;
+export async function transaction<T>(
+  pool: pg.Pool,
+  fn: (db: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  const db = await pool.connect();
+  try {
+    await db.query("BEGIN");
+    const result = await fn(db);
+    await db.query("COMMIT");
+    return result;
+  } catch (e) {
+    await db.query("ROLLBACK");
+    throw e;
+  } finally {
+    db.release();
+  }
+}
+export async function migrate(pool: pg.Pool) {
+  await transaction(pool, async (db) => {
+    await db.query("SELECT pg_advisory_xact_lock(73104310)");
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS decks (id text PRIMARY KEY, name text UNIQUE NOT NULL, description text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now());
+      CREATE TABLE IF NOT EXISTS questions (deck_id text NOT NULL REFERENCES decks(id) ON DELETE CASCADE, id text NOT NULL, data jsonb NOT NULL, revision integer NOT NULL DEFAULT 1, content_hash text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(deck_id,id));
+      CREATE TABLE IF NOT EXISTS progress (deck_id text NOT NULL, question_id text NOT NULL, data jsonb NOT NULL, PRIMARY KEY(deck_id,question_id), FOREIGN KEY(deck_id,question_id) REFERENCES questions(deck_id,id) ON DELETE CASCADE);
+      CREATE TABLE IF NOT EXISTS sessions (id text PRIMARY KEY, deck_id text NOT NULL REFERENCES decks(id) ON DELETE CASCADE, data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
+      CREATE INDEX IF NOT EXISTS sessions_deck_idx ON sessions(deck_id,updated_at DESC);
+      CREATE TABLE IF NOT EXISTS attempts (id bigserial PRIMARY KEY, session_id text NOT NULL REFERENCES sessions(id), ordinal integer NOT NULL, deck_id text NOT NULL, question_id text NOT NULL, revision integer NOT NULL, data jsonb NOT NULL, invalidated boolean NOT NULL DEFAULT false, UNIQUE(session_id,ordinal));
+      CREATE INDEX IF NOT EXISTS attempts_question_idx ON attempts(deck_id,question_id);
+    `);
+  });
+}

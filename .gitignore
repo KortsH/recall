@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.local/
+private/
+course_files*/
+*.pdf
+*.pptx
+*.zip
