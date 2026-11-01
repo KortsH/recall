@@ -6,7 +6,9 @@ Use `depends_on: ["foundation-id", "another-id"]` on a question. This is an AND 
 
 Model a useful progression: definition → distinctions/variant definitions → application. Do not invent extra model variants or create cycles. Inspect the existing bank and its prerequisite status before generating additions. A single application can require several foundations. Dependencies do not establish mastery or change due dates.
 
-Learn always respects dependencies. Newly unlocked objectives can join the current Learn/Cram session up to its selected objective count. Review becoming due does not remove mastery or relock children; an incorrect answer can. Test/Cram respect prerequisites by default, with an explicit **Include locked questions** / `--ignore-prerequisites` override. Learn and Flashcards reject that override. A session with only one available objective ends instead of repeating its answer immediately; another session provides the next recall opportunity.
+Learn always respects dependencies. It keeps a working set of up to 12 unlocked objectives by default (UI choices: 8, 12 or 16). Every new objective starts with single-answer recognition; after correct recognition it moves to recall, with at least two successful recalls needed for mastery. Mistakes keep the objective in the set and bring back recognition. No fresh objectives enter until the current set is mastered; newly unlocked objectives join a subsequent set during the same session. The session continues through the selected topic/deck, rather than ending at the working-set size. A single available foundation repeats after feedback until it is mastered, then its eligible children can enter. Save & leave preserves the set and evidence. Cram retains its bounded session/retry behavior.
+
+Review becoming due does not remove mastery or relock children; an incorrect answer can. Test/Cram respect prerequisites by default, with an explicit **Include locked questions** / `--ignore-prerequisites` override. Learn and Flashcards reject that override.
 
 ```sh
 recall prerequisites "My Deck"
@@ -53,6 +55,8 @@ The versioned JSON bank is independent of the UI. An externally generated file c
 
 ## Generated formats
 
+Learn can present an existing question as recognition without changing its bank data. It prefers an authored single-choice variant; otherwise it builds options from distinct existing answers, preferring the same topic and excluding known aliases. No new facts/questions are generated. Small banks use fewer choices; if no distractor exists, the model answer and an explicit “I don’t know yet” choice provide the introductory step. Review distractor suitability for your material; authored choices remain preferable for subtle overlapping definitions. `learn-choice` is reserved for this session-only projection and never changes content hashes or question revisions.
+
 Each record provides a written question and flashcard automatically. `options` adds a choice question. `correct` is a list of exact option strings; omit it for a single correct option matching `answer`. Multiple correct strings create a multiple-select question. Distractors must be plausible and demonstrably wrong under the stated assumptions.
 
 Written grading uses one of:
@@ -65,7 +69,7 @@ Flashcards always use self-assessment. Ratings are `again`, `hard`, `good`, `eas
 
 ## Explicit variants
 
-Each variant has unique `id`, `type`, `question`, `answer` and optional `explanation`. IDs `choice`, `written`, and `flashcard` are reserved for generated formats. Supported types:
+Each variant has unique `id`, `type`, `question`, `answer` and optional `explanation`. IDs `choice`, `written`, `flashcard`, and `learn-choice` are reserved for generated formats. Supported types:
 
 | Type | Additional fields |
 | --- | --- |

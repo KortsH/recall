@@ -144,7 +144,19 @@ export function prepareSession(s: Session, items: Item[]) {
     delete s.revealed;
   }
   pruneLocked(s, items);
-  if (s.mode === "learn") nextLearningSet(s, items);
+  if (s.mode === "learn") {
+    nextLearningSet(s, items);
+    const current = s.queue[s.cursor];
+    const item =
+      current && items.find((i) => i.question.id === current.questionId);
+    if (item && !s.finished) {
+      const expected = learningEntry(item, items, current.retry);
+      if (expected.variantId !== current.variantId) {
+        s.queue[s.cursor] = expected;
+        delete s.revealed;
+      }
+    }
+  }
 }
 export function evaluateAttempt(
   item: Item,

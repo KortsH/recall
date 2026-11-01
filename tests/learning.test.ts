@@ -189,3 +189,15 @@ test("choice projection avoids equivalent aliases, prefers authored options, and
     new Set(["Definition 0", "I don’t know yet"]),
   );
 });
+
+test("a corrected objective with reset progress returns to recognition when resuming recall", () => {
+  const items = fixture(1),
+    s = newSession("d", items, { mode: "learn" });
+  answer(s, items);
+  assert.equal(s.queue[s.cursor].format, "written");
+  items[0].progress = emptyProgress();
+  items[0].revision++;
+  prepareSession(s, items);
+  assert.equal(s.queue[s.cursor].format, "multiple_choice");
+  assert.equal(items[0].progress.attempts, 0);
+});

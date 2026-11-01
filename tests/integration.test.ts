@@ -646,6 +646,7 @@ test("generated recognition and round state survive live HTTP, legacy resume and
   assert.equal(view.card!.options!.length, 3);
   const raw = await store.loadSession(view.id);
   delete raw.learning;
+  raw.targetCount = 1; // Legacy count meant total objectives; reproduce a one-card session.
   raw.queue[0].variantId = "written";
   raw.queue[0].format = "written";
   await pool.query("UPDATE sessions SET data=$2 WHERE id=$1", [raw.id, raw]);

@@ -2,7 +2,7 @@
 
 A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.2.1-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.2.1-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.2.1-preview.1)
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.3.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.3.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.3.0-preview.1)
 
 ## Install and use
 
@@ -53,7 +53,7 @@ To move your own learning between devices, export with **Include my learning pro
 
 ## Learn
 
-- **Learn:** prioritizes weak/unseen objectives and moves from recognition to recall, with interleaved retries.
+- **Learn:** starts every new objective with multiple choice, then builds active recall in small working sets (12 by default). Master a set before the next unlocked questions enter. Saved sessions keep the same set. Enter checks written answers; Shift+Enter adds a line.
 - **Cram:** ignores review dates. **Include locked questions** is an explicit prerequisite override.
 - **Flashcards:** reveal, then self-assess Again / Hard / Good / Easy.
 - **Test:** random questions, optional timer, answers withheld until the end. It also offers the explicit prerequisite override.

@@ -263,7 +263,7 @@ function App() {
         },
       );
       setSession(r.session);
-      if (r.feedback) setFeedback(r.feedback);
+      if (r.feedback && !r.feedback.selfAssessed) setFeedback(r.feedback);
       else resetAnswer();
       void refresh();
     });
@@ -322,7 +322,14 @@ function App() {
   }, [now]);
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
-      if (editor || importOpen || !session) return;
+      if (
+        e.defaultPrevented ||
+        e.isComposing ||
+        editor ||
+        importOpen ||
+        !session
+      )
+        return;
       const target = e.target as HTMLElement;
       const typing = ["TEXTAREA", "INPUT", "SELECT"].includes(target.tagName);
       if (
@@ -1593,6 +1600,16 @@ function App() {
                               rows={4}
                               value={response}
                               onChange={(e) => setResponse(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === "Enter" &&
+                                  !e.shiftKey &&
+                                  !e.nativeEvent.isComposing
+                                ) {
+                                  e.preventDefault();
+                                  if (canAnswer && !busy) submit();
+                                }
+                              }}
                               placeholder="Recall it in your own words…"
                             />
                             <p>
@@ -1662,7 +1679,7 @@ function App() {
                           <Keyboard size={15} />
                           {card.options
                             ? "1–9 to select · Enter to check"
-                            : "Ctrl / ⌘ + Enter to continue"}
+                            : "Enter to check · Shift + Enter for a new line"}
                         </span>
                         <button
                           className="button primary"

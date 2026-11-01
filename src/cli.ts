@@ -22,7 +22,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.2.1-preview.1");
+  .version("0.3.0-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",
@@ -391,7 +391,7 @@ async function study(
     : await s.createSession(d.id, {
         mode: o.cram ? "cram" : mode,
         topic: o.topic ? String(o.topic) : undefined,
-        count: Number(o.questions ?? 20),
+        count: o.questions === undefined ? undefined : Number(o.questions),
         minutes: Number(o.minutes ?? 0),
         ignorePrerequisites: !!o.ignorePrerequisites,
       });
@@ -409,7 +409,7 @@ async function study(
     while (!view.finished && view.card) {
       const c = view.card;
       console.log(
-        `\n[${view.cursor + 1}/${view.total}] ${c.topic} · ${c.format}\n${c.question}`,
+        `\n[${view.learning ? `Set ${view.learning.round}: ${view.learning.mastered}/${view.learning.total} mastered` : `${view.cursor + 1}/${view.total}`}] ${c.topic} · ${c.format}\n${c.question}`,
       );
       let response: unknown;
       if (c.options) {
@@ -459,7 +459,7 @@ async function study(
         rating,
       });
       view = result.session;
-      if (result.feedback) {
+      if (result.feedback && !result.feedback.selfAssessed) {
         console.log(
           `\n${result.feedback.correct ? "✓ Correct" : "↻ Keep practising"}\n${result.feedback.answer}\n${result.feedback.explanation}`,
         );
@@ -496,7 +496,10 @@ for (const mode of ["learn", "flashcards", "test"])
   program
     .command(`${mode} <deck>`)
     .option("--topic <topic>")
-    .option("--questions <number>", "Session size", "20")
+    .option(
+      "--questions <number>",
+      "Learn working-set size (up to 16, default 12); other modes: session size (default 20)",
+    )
     .option("--minutes <number>", "Optional test time limit", "0")
     .option("--cram", "Ignore review dates")
     .option(
@@ -518,7 +521,10 @@ program
   )
   .option("--mode <mode>", "learn, cram, flashcards, test", "learn")
   .option("--topic <topic>")
-  .option("--questions <number>", "Session size", "20")
+  .option(
+    "--questions <number>",
+    "Learn working-set size (up to 16, default 12); other modes: session size (default 20)",
+  )
   .action(async (deck, o) => {
     const s = await connect();
     const d = await s.deck(deck);
@@ -526,7 +532,7 @@ program
       await s.createSession(d.id, {
         mode: o.mode,
         topic: o.topic,
-        count: Number(o.questions),
+        count: o.questions === undefined ? undefined : Number(o.questions),
         ignorePrerequisites: !!o.ignorePrerequisites,
       }),
     );
