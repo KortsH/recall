@@ -96,3 +96,16 @@ npm run recall -- reset-learning "My quiz" --apply
 Historical server attempt evidence is retained and marked invalid. A per-deck learning generation prevents pre-reset sessions and offline recovery files from restoring progress. Other downloaded clients must reload the reset deck using the current app. If old pending answers block sync, Settings offers **Export unsynced progress**, then **Discard outdated answers & reload decks**. The discard action verifies a newer server generation and affects only those outdated decks; pending work for other decks stays local.
 
 A portable progress backup can be restored explicitly in a device-only workspace. Full server rollback uses the owner's PostgreSQL backup. Downloading a backup or previewing a reset does not perform the reset.
+
+## Study controls and keyboard flow
+
+Open the gear beside **Save & leave**, or **Settings → Study controls**. Preferences are remembered on this device.
+
+- Single-answer questions use action buttons and submit immediately by default. Number keys choose the corresponding answer; arrow keys move focus. Turn off immediate submission to use radio selection followed by Check/Enter.
+- Multiple-answer questions use checkboxes with number-key hints. Select/toggle all intended answers, then press Enter or Check.
+- After correct or incorrect feedback, Space continues by default. Choose another continuation key, Any key, or Button only. Tab, Escape, modifier shortcuts, held-key repeats and IME composition are excluded from global continuation. Text answers still use Enter to compare/check, Shift+Enter for a newline and 1–4 to self-grade.
+- Number-key selection moves keyboard focus to the selected answer, so a separate first-answer focus ring does not remain behind.
+
+Study layout uses a compact header, a wider responsive reading area and larger question/answer typography. It has been checked at desktop, zoom-equivalent, 4K and phone sizes without changing dashboard/library layout.
+
+Initial choice focus is neutral: no answer is visually preselected. After a typed open answer is revealed, focus goes to the model-answer content, rather than pre-focusing Good. Press 1–4 or explicitly choose a self-rating; Enter alone does not choose a rating. Input focus returns automatically for the next written recall.

@@ -1,3 +1,12 @@
+import {
+  defaultStudyControls,
+  loadStudyControls,
+  saveStudyControls,
+  keyLabel,
+  validContinueKey,
+  continuesFeedback,
+  type StudyControls,
+} from "./controls.ts";
 import { parsePortable, exportPortable } from "../core/portable.ts";
 import { saveJson } from "./files.ts";
 import { emptyProgress } from "../core/types.ts";
@@ -42,6 +51,7 @@ import "@fontsource/manrope/latin-500.css";
 import "@fontsource/manrope/latin-600.css";
 import "@fontsource/manrope/latin-700.css";
 import "./readability.css";
+import "./study.css";
 import {
   api,
   personalMode,
@@ -90,6 +100,12 @@ const modes = [
 ];
 function App() {
   const [cache, setCache] = useState(downloadStatus());
+  const [controls, setControls] = useState(loadStudyControls);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const changeControls = (next: StudyControls) => {
+    saveStudyControls(next);
+    setControls(next);
+  };
   useEffect(() => {
     const update = () => setCache(downloadStatus());
     window.addEventListener("recall-cache", update);
@@ -125,6 +141,10 @@ function App() {
     [reveal, setReveal] = useState<Reveal | null>(null);
   const [now, setNow] = useState(Date.now()),
     [mobileNav, setMobileNav] = useState(false);
+  const answerPendingRef = useRef(false);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  const revealRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null),
     mainRef = useRef<HTMLElement>(null),
     studyRef = useRef<HTMLElement>(null),
@@ -289,14 +309,17 @@ function App() {
     : card?.format === "matching"
       ? card.left?.every((x) => pairs[x])
       : card?.format === "flashcard" || String(response).trim().length > 0;
-  const submit = (rating?: string) =>
+  const submit = (rating?: string, responseOverride?: unknown) => {
+    if (answerPendingRef.current || busy || !session || !card) return;
+    answerPendingRef.current = true;
+    const submittedResponse = responseOverride ?? actualResponse;
     void run(async () => {
       if (!session || !card) return;
       if (card.selfGrade && session.mode !== "test" && !reveal) {
         const r = await api<Reveal>(`/sessions/${session.id}/reveal`, {
           version: session.version,
           revision: card.revision,
-          response: actualResponse,
+          response: submittedResponse,
         });
         setReveal(r);
         setSession({ ...session, version: r.version });
@@ -307,7 +330,7 @@ function App() {
         {
           version: session.version,
           revision: card.revision,
-          response: actualResponse,
+          response: submittedResponse,
           rating,
         },
       );
@@ -315,7 +338,24 @@ function App() {
       if (r.feedback && !r.feedback.selfAssessed) setFeedback(r.feedback);
       else resetAnswer();
       void refresh();
+    }).finally(() => {
+      answerPendingRef.current = false;
     });
+  };
+  const chooseOption = (option: string) => {
+    if (busy || answerPendingRef.current || feedback || reveal || !card) return;
+    optionRefs.current[card.options?.indexOf(option) ?? -1]?.focus({
+      preventScroll: true,
+    });
+    if (card.format === "multiple_select")
+      setSelected((s) =>
+        s.includes(option) ? s.filter((x) => x !== option) : [...s, option],
+      );
+    else {
+      setSelected([option]);
+      if (controls.autoSubmitSingle) submit(undefined, [option]);
+    }
+  };
   const next = () => {
     resetAnswer();
     mainRef.current?.scrollTo({ top: 0 });
@@ -329,15 +369,18 @@ function App() {
       importOpen ||
       shareOpen ||
       resetRequest ||
-      discardResetOpen
+      discardResetOpen ||
+      controlsOpen
     )
       return;
     const frame = requestAnimationFrame(() => {
       const control = feedback
         ? continueRef.current
         : reveal
-          ? studyRef.current?.querySelector<HTMLButtonElement>(".rating.good")
+          ? revealRef.current
           : (inputRef.current ??
+            studyRef.current?.querySelector<HTMLElement>(".option.selected") ??
+            optionsRef.current ??
             studyRef.current?.querySelector<HTMLElement>(
               ".option, select, .card-bottom button",
             ));
@@ -355,6 +398,7 @@ function App() {
     shareOpen,
     resetRequest,
     discardResetOpen,
+    controlsOpen,
   ]);
   useEffect(() => {
     if (!session?.deadline || session.finished) return;
@@ -382,6 +426,7 @@ function App() {
         importOpen ||
         resetRequest ||
         discardResetOpen ||
+        controlsOpen ||
         !session
       )
         return;
@@ -391,6 +436,7 @@ function App() {
         e.key === "Enter" &&
         (e.metaKey || e.ctrlKey) &&
         !feedback &&
+        !reveal &&
         canAnswer
       ) {
         e.preventDefault();
@@ -398,10 +444,25 @@ function App() {
         return;
       }
       if (typing) return;
-      if (e.key === "Enter" && feedback) {
+      if (
+        e.repeat &&
+        (e.key === "Enter" || e.key === " " || /^[1-9]$/.test(e.key))
+      ) {
         e.preventDefault();
-        next();
-      } else if (e.key === "Enter" && !busy && canAnswer && !reveal) {
+        return;
+      }
+      if (feedback) {
+        if (continuesFeedback(e, controls)) {
+          e.preventDefault();
+          next();
+        } else if (
+          e.repeat ||
+          (controls.continueMode !== "button" && ["Enter", " "].includes(e.key))
+        )
+          e.preventDefault();
+        return;
+      }
+      if (e.key === "Enter" && !busy && canAnswer && !reveal) {
         e.preventDefault();
         submit();
       } else if (
@@ -413,13 +474,7 @@ function App() {
         const option = card.options[Number(e.key) - 1];
         if (option) {
           e.preventDefault();
-          setSelected((s) =>
-            card.format === "multiple_select"
-              ? s.includes(option)
-                ? s.filter((x) => x !== option)
-                : [...s, option]
-              : [option],
-          );
+          if (!e.repeat) chooseOption(option);
         }
       } else if (reveal && !feedback && /^[1-4]$/.test(e.key)) {
         e.preventDefault();
@@ -1263,6 +1318,13 @@ function App() {
                       : "Your server stores shared questions and progress; downloaded mode keeps a copy on this device."}
                   </p>
                 </div>
+                <section className="settings-card">
+                  <h2>Study controls</h2>
+                  <StudyControlsPanel
+                    value={controls}
+                    onChange={changeControls}
+                  />
+                </section>
                 {cache.personal && (
                   <div className="settings-card">
                     <h2>Learn here. Share anywhere.</h2>
@@ -1450,11 +1512,12 @@ function App() {
                 Save & leave
               </button>
               <button
-                className="text-button quiet"
-                disabled={busy}
-                onClick={openReset}
+                className="icon-button"
+                aria-label="Study controls"
+                title="Study controls"
+                onClick={() => setControlsOpen(true)}
               >
-                Reset learning
+                <Settings2 size={18} />
               </button>
               <span>{deck?.name}</span>
               <span className="study-mode">{fmt(session.mode)}</span>
@@ -1548,6 +1611,11 @@ function App() {
                     ref={continueRef}
                   >
                     {session.finished ? "See session results" : "Continue"}
+                    {controls.continueMode === "any"
+                      ? " · Any key"
+                      : controls.continueMode === "key"
+                        ? ` · ${keyLabel(controls.continueKey)}`
+                        : ""}
                     <ArrowRight size={17} />
                   </button>
                 </div>
@@ -1588,7 +1656,7 @@ function App() {
                       </span>
                     </div>
                     <h2>{card.question}</h2>
-                    {session.learning && (
+                    {session.learning && !card.options && (
                       <p className="answer-hint">
                         {card.options
                           ? "Start by recognising the answer. You’ll recall it without options next."
@@ -1602,33 +1670,152 @@ function App() {
                             <p className="answer-hint">
                               {card.format === "multiple_select"
                                 ? "Select all correct answers."
-                                : "Choose one answer."}
+                                : controls.autoSubmitSingle
+                                  ? "Choose one answer — it submits immediately."
+                                  : "Choose one answer, then check it."}
                             </p>
-                            <div className="options">
+                            <div
+                              ref={optionsRef}
+                              tabIndex={-1}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.target !== event.currentTarget ||
+                                  ![
+                                    "ArrowDown",
+                                    "ArrowRight",
+                                    "ArrowUp",
+                                    "ArrowLeft",
+                                  ].includes(event.key)
+                                )
+                                  return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                const index = ["ArrowUp", "ArrowLeft"].includes(
+                                  event.key,
+                                )
+                                  ? card.options!.length - 1
+                                  : 0;
+                                optionRefs.current[index]?.focus({
+                                  preventScroll: true,
+                                });
+                                if (
+                                  card.format === "multiple_choice" &&
+                                  !controls.autoSubmitSingle
+                                )
+                                  chooseOption(card.options![index]);
+                              }}
+                              className={`options ${card.format === "multiple_select" ? "multiple-answers" : "single-answer"}`}
+                              role={
+                                card.format === "multiple_select"
+                                  ? "group"
+                                  : controls.autoSubmitSingle
+                                    ? "group"
+                                    : "radiogroup"
+                              }
+                              aria-label={
+                                card.format === "multiple_select"
+                                  ? "Select all correct answers"
+                                  : "Choose one answer"
+                              }
+                            >
                               {card.options.map((option, i) => (
                                 <button
                                   key={option}
-                                  className={`option ${selected.includes(option) ? "selected" : ""}`}
-                                  aria-pressed={selected.includes(option)}
-                                  onClick={() =>
-                                    setSelected((s) =>
-                                      card.format === "multiple_select"
-                                        ? s.includes(option)
-                                          ? s.filter((x) => x !== option)
-                                          : [...s, option]
-                                        : [option],
-                                    )
+                                  ref={(element) => {
+                                    optionRefs.current[i] = element;
+                                  }}
+                                  tabIndex={
+                                    card.format === "multiple_choice" &&
+                                    !controls.autoSubmitSingle
+                                      ? selected.length
+                                        ? selected.includes(option)
+                                          ? 0
+                                          : -1
+                                        : i === 0
+                                          ? 0
+                                          : -1
+                                      : 0
                                   }
+                                  onKeyDown={(event) => {
+                                    if (
+                                      ![
+                                        "ArrowDown",
+                                        "ArrowRight",
+                                        "ArrowUp",
+                                        "ArrowLeft",
+                                      ].includes(event.key)
+                                    )
+                                      return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    const direction = [
+                                      "ArrowDown",
+                                      "ArrowRight",
+                                    ].includes(event.key)
+                                      ? 1
+                                      : -1;
+                                    const index =
+                                      (i + direction + card.options!.length) %
+                                      card.options!.length;
+                                    optionRefs.current[index]?.focus({
+                                      preventScroll: true,
+                                    });
+                                    if (
+                                      card.format === "multiple_choice" &&
+                                      !controls.autoSubmitSingle
+                                    )
+                                      chooseOption(card.options![index]);
+                                  }}
+                                  className={`option ${selected.includes(option) ? "selected" : ""}`}
+                                  role={
+                                    card.format === "multiple_select"
+                                      ? "checkbox"
+                                      : controls.autoSubmitSingle
+                                        ? undefined
+                                        : "radio"
+                                  }
+                                  aria-checked={
+                                    card.format === "multiple_select" ||
+                                    !controls.autoSubmitSingle
+                                      ? selected.includes(option)
+                                      : undefined
+                                  }
+                                  aria-pressed={
+                                    card.format === "multiple_choice" &&
+                                    controls.autoSubmitSingle
+                                      ? selected.includes(option)
+                                      : undefined
+                                  }
+                                  disabled={busy}
+                                  onClick={(event) => {
+                                    if (event.detail <= 1) chooseOption(option);
+                                  }}
                                 >
                                   <span className="option-number">{i + 1}</span>
                                   <span>{option}</span>
-                                  <span
-                                    className={`option-check ${card.format === "multiple_select" ? "square" : ""}`}
-                                  >
-                                    {selected.includes(option) && (
-                                      <Check size={14} />
-                                    )}
-                                  </span>
+                                  {card.format === "multiple_choice" &&
+                                  controls.autoSubmitSingle ? (
+                                    <ArrowRight
+                                      className="option-action"
+                                      size={18}
+                                    />
+                                  ) : (
+                                    <span
+                                      className={`option-check ${card.format === "multiple_select" ? "square" : ""}`}
+                                    >
+                                      {selected.includes(option) && (
+                                        <Check size={14} />
+                                      )}
+                                    </span>
+                                  )}
+                                  {card.format === "multiple_select" && (
+                                    <kbd
+                                      className="option-shortcut"
+                                      aria-hidden="true"
+                                    >
+                                      {i + 1}
+                                    </kbd>
+                                  )}
                                 </button>
                               ))}
                             </div>
@@ -1701,7 +1888,13 @@ function App() {
                       </>
                     )}
                     {reveal && (
-                      <div className="reveal-answer">
+                      <div
+                        className="reveal-answer"
+                        ref={revealRef}
+                        tabIndex={-1}
+                        role="group"
+                        aria-label="Compare your answer with the model"
+                      >
                         <span className="eyebrow">MODEL ANSWER</span>
                         <p className="reveal-model">{reveal.answer}</p>
                         <p className="explanation">{reveal.explanation}</p>
@@ -1756,26 +1949,32 @@ function App() {
                       <div className="card-bottom">
                         <span>
                           <Keyboard size={15} />
-                          {card.options
-                            ? "1–9 to select · Enter to check"
-                            : "Enter to check · Shift + Enter for a new line"}
+                          {card.format === "multiple_choice" &&
+                          controls.autoSubmitSingle
+                            ? "Click an answer or press 1–9 to submit"
+                            : card.options
+                              ? "1–9 to select · Enter to check"
+                              : "Enter to check · Shift + Enter for a new line"}
                         </span>
-                        <button
-                          className="button primary"
-                          disabled={busy || !canAnswer}
-                          onClick={() => submit()}
-                        >
-                          {busy
-                            ? "Saving…"
-                            : card.format === "flashcard"
-                              ? "Reveal answer"
-                              : card.selfGrade && session.mode !== "test"
-                                ? "Compare answer"
-                                : session.mode === "test"
-                                  ? "Save answer"
-                                  : "Check answer"}
-                          <ArrowRight size={17} />
-                        </button>
+                        {(card.format !== "multiple_choice" ||
+                          !controls.autoSubmitSingle) && (
+                          <button
+                            className="button primary"
+                            disabled={busy || !canAnswer}
+                            onClick={() => submit()}
+                          >
+                            {busy
+                              ? "Saving…"
+                              : card.format === "flashcard"
+                                ? "Reveal answer"
+                                : card.selfGrade && session.mode !== "test"
+                                  ? "Compare answer"
+                                  : session.mode === "test"
+                                    ? "Save answer"
+                                    : "Check answer"}
+                            <ArrowRight size={17} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </section>
@@ -1817,6 +2016,17 @@ function App() {
           busy={busy}
           onClose={() => setEditor(null)}
           onSave={saveEdit}
+        />
+      )}
+      {controlsOpen && (
+        <StudyControlsDialog
+          value={controls}
+          onChange={changeControls}
+          onClose={() => setControlsOpen(false)}
+          onReset={() => {
+            setControlsOpen(false);
+            openReset();
+          }}
         />
       )}
       {resetRequest && (
@@ -2094,6 +2304,140 @@ function useDialog(onClose: () => void) {
     };
   }, []);
   return ref;
+}
+function StudyControlsPanel({
+  value,
+  onChange,
+}: {
+  value: StudyControls;
+  onChange: (value: StudyControls) => void;
+}) {
+  const [capturing, setCapturing] = useState(false);
+  return (
+    <div className="study-controls-panel">
+      <label className="storage-choice">
+        <input
+          type="checkbox"
+          checked={value.autoSubmitSingle}
+          onChange={(e) =>
+            onChange({ ...value, autoSubmitSingle: e.target.checked })
+          }
+        />
+        Submit single-choice answers immediately
+      </label>
+      <p className="small quiet">
+        Single choice uses answer buttons. Multiple-answer questions use
+        checkboxes and a Check button so you can finish choosing.
+      </p>
+      <label className="field">
+        Continue after feedback
+        <select
+          value={value.continueMode}
+          onChange={(e) => {
+            setCapturing(false);
+            onChange({
+              ...value,
+              continueMode: e.target.value as StudyControls["continueMode"],
+            });
+          }}
+        >
+          <option value="key">Use one key</option>
+          <option value="any">Press any key</option>
+          <option value="button">Button only</option>
+        </select>
+      </label>
+      {value.continueMode === "key" && (
+        <div className="continue-key">
+          <span>Continue key</span>
+          <button
+            className="button secondary"
+            onClick={() => setCapturing(true)}
+            onKeyDown={(e) => {
+              if (!capturing) return;
+              e.preventDefault();
+              e.stopPropagation();
+              if (e.key === "Escape") {
+                setCapturing(false);
+                return;
+              }
+              if (
+                !e.nativeEvent.isComposing &&
+                !e.ctrlKey &&
+                !e.metaKey &&
+                !e.altKey &&
+                validContinueKey(e.key)
+              ) {
+                onChange({ ...value, continueKey: e.key });
+                setCapturing(false);
+              }
+            }}
+          >
+            {capturing
+              ? "Press your key…"
+              : keyLabel(value.continueKey) + " · Change"}
+          </button>
+        </div>
+      )}
+      <p className="small quiet">
+        Number keys choose answers. Enter checks typed or multiple-answer
+        responses; Shift+Enter adds a line. Tab, Escape and modifier shortcuts
+        remain available.
+      </p>
+      <button
+        className="text-button quiet"
+        onClick={() => {
+          setCapturing(false);
+          onChange({ ...defaultStudyControls });
+        }}
+      >
+        Restore default controls
+      </button>
+    </div>
+  );
+}
+function StudyControlsDialog({
+  value,
+  onChange,
+  onClose,
+  onReset,
+}: {
+  value: StudyControls;
+  onChange: (value: StudyControls) => void;
+  onClose: () => void;
+  onReset: () => void;
+}) {
+  const ref = useDialog(onClose);
+  return (
+    <div className="modal-backdrop">
+      <div
+        className="modal"
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="study-controls-title"
+      >
+        <div className="modal-head">
+          <h2 id="study-controls-title">Study controls</h2>
+          <button
+            className="icon-button"
+            aria-label="Close study controls"
+            onClick={onClose}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <StudyControlsPanel value={value} onChange={onChange} />
+        <div className="modal-foot">
+          <button className="text-button quiet" onClick={onReset}>
+            Reset learning
+          </button>
+          <button className="button primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 function ResetDialog({
   title,

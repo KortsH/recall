@@ -1,0 +1,288 @@
+/* A reading-sized study canvas at normal zoom, with compact navigation above it. */
+.studying .topbar {
+  height: 48px;
+  padding-inline: clamp(18px, 2.5vw, 40px);
+  font-size: 12px;
+}
+.studying .local-badge {
+  font-size: 12px;
+}
+.studying .study-page {
+  width: 100%;
+  max-width: clamp(960px, 72vw, 1640px);
+  margin-inline: auto;
+  padding: 18px 24px 36px;
+}
+.studying .study-top {
+  min-height: 28px;
+  margin-bottom: 16px;
+  gap: 18px;
+  font-size: 13px;
+}
+.studying .study-top .text-button {
+  font-size: 13px;
+}
+.studying .study-top > span:not(.study-mode) {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #766a80;
+}
+.studying .study-mode {
+  font-size: 10px;
+}
+.studying .study-progress-label {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.studying .study-progress {
+  margin-bottom: 16px;
+}
+.studying .study-card {
+  padding: 24px 28px 0;
+}
+.studying .card-topline {
+  margin-bottom: 14px;
+}
+.studying .topic-tag {
+  font-size: 11px;
+}
+.studying .format-label {
+  font-size: 10px;
+}
+.studying .study-card h2 {
+  font-size: clamp(26px, calc(1.2vw + 8px), 40px);
+  line-height: 1.3;
+  margin-bottom: 18px;
+  letter-spacing: -0.65px;
+  color: #352e40;
+  overflow-wrap: anywhere;
+}
+.studying .answer-hint {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  color: #73677f;
+}
+.studying .options {
+  gap: 10px;
+}
+.studying .option {
+  min-height: 62px;
+  padding: 14px 18px;
+  font-size: clamp(16px, calc(0.3vw + 12px), 22px);
+  line-height: 1.5;
+  color: #44394f;
+}
+.studying .option > span:nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studying .option-number {
+  font-size: 12px;
+  width: 28px;
+  height: 28px;
+}
+.studying .option:focus-visible {
+  outline-offset: 2px;
+}
+.studying .card-bottom {
+  margin-top: 18px;
+  padding-block: 14px;
+  min-height: 46px;
+}
+.studying .card-bottom > span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.studying .study-under {
+  font-size: 12px;
+  padding-block: 8px;
+}
+.studying .written-answer label {
+  font-size: 14px;
+}
+.studying .written-answer textarea {
+  font-size: clamp(17px, 1vw, 21px);
+  min-height: 128px;
+  line-height: 1.6;
+}
+.studying .written-answer > p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.studying .model-answer p,
+.studying .reveal-model {
+  font-size: clamp(18px, 1vw, 23px);
+  line-height: 1.6;
+}
+.studying .explanation {
+  font-size: 16px;
+  line-height: 1.65;
+}
+.studying .rating {
+  font-size: 16px;
+}
+.studying .rating small {
+  font-size: 12px;
+}
+.studying .feedback-status {
+  margin-bottom: 18px;
+}
+@media (min-width: 1001px) {
+  .studying .sidebar {
+    width: 220px;
+    padding: 24px 16px 0;
+  }
+  .studying main {
+    margin-left: 220px;
+  }
+  .studying .brand {
+    margin-bottom: 28px;
+    font-size: 28px;
+  }
+}
+@media (min-width: 641px) and (max-width: 1000px) {
+  .studying .sidebar {
+    width: 180px;
+  }
+  .studying main {
+    margin-left: 180px;
+  }
+  .studying .study-page {
+    padding-inline: 18px;
+  }
+  .studying .study-top {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .studying .study-top > span:not(.study-mode) {
+    order: 1;
+    flex-basis: 100%;
+    text-align: left;
+  }
+}
+@media (max-width: 640px) {
+  .studying .topbar {
+    height: 48px;
+    padding-inline: 12px;
+  }
+  .studying .study-page {
+    padding: 12px 12px 24px;
+  }
+  .studying .study-top {
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+  .studying .study-top > span:not(.study-mode) {
+    display: none;
+  }
+  .studying .study-top .study-mode {
+    margin-left: auto;
+  }
+  .studying .study-card {
+    padding: 20px 16px 0;
+    border-radius: 12px;
+  }
+  .studying .study-card h2 {
+    font-size: 24px;
+    line-height: 1.35;
+  }
+  .studying .option {
+    font-size: 16px;
+    padding: 12px;
+    gap: 10px;
+  }
+  .studying .option-number {
+    width: 24px;
+    height: 24px;
+  }
+  .studying .answer-hint {
+    font-size: 13px;
+  }
+  .studying .card-bottom {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .studying .study-under {
+    font-size: 11px;
+  }
+}
+@media (min-width: 2800px) {
+  .studying .study-page {
+    padding-top: 24px;
+  }
+  .studying .study-top,
+  .studying .study-top .text-button,
+  .studying .study-progress-label {
+    font-size: 15px;
+  }
+  .studying .answer-hint {
+    font-size: 17px;
+  }
+  .studying .topic-tag,
+  .studying .format-label,
+  .studying .card-bottom > span,
+  .studying .study-under {
+    font-size: 14px;
+  }
+}
+.study-controls-panel .field {
+  font-size: 14px;
+}
+.study-controls-panel select {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid #ded6e7;
+  border-radius: 8px;
+  background: #fff;
+  color: #4b4055;
+}
+.continue-key {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block: 16px;
+  color: #65516f;
+  font-size: 14px;
+}
+.studying .option-action {
+  flex-shrink: 0;
+  color: #8a72b2;
+}
+.studying .multiple-answers .option-check {
+  order: -1;
+  width: 21px;
+  height: 21px;
+  border-radius: 4px;
+}
+.studying .multiple-answers .option-number {
+  display: none;
+}
+.study-controls-panel .storage-choice {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.study-controls-panel .quiet {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.option-shortcut {
+  font: inherit;
+  font-size: 12px;
+  min-width: 22px;
+  text-align: center;
+  color: #897798;
+  border: 1px solid #e8e1ed;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+/* Programmatic focus belongs to the content until the learner chooses an answer/rating. */
+.studying .options:focus,
+.studying .reveal-answer:focus {
+  outline: none;
+}

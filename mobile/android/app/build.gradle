@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
     namespace 'app.recall.mobile'
     compileSdk 35
-    defaultConfig { applicationId 'app.recall.mobile'; minSdk 26; targetSdk 35; versionCode 5; versionName '0.3.1-preview.1' }
+    defaultConfig { applicationId 'app.recall.mobile'; minSdk 26; targetSdk 35; versionCode 6; versionName '0.3.2-preview.1' }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     // Preview signing only. Keep the private keystore outside Git; stable publisher signing is follow-up work.
     buildTypes { release { minifyEnabled false; debuggable false; signingConfig signingConfigs.debug } }

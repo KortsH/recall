@@ -2,7 +2,7 @@
 
 A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.3.1-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.3.1-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.3.1-preview.1)
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.3.2-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.3.2-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.3.2-preview.1)
 
 ## Install and use
 
@@ -133,3 +133,5 @@ MIT licensed.
 If a server outage leaves answers unsynced, Settings can export a private recovery file. The [recovery CLI instructions](docs/PORTABLE.md#recover-pending-server-answers) explain preview and safe replay.
 
 To learn a deck from scratch, choose **Reset learning**, optionally download a progress backup, and confirm **Reset to zero**. This preserves the questions and resets only that deck's learning. Shared-server resets affect its connected devices; stale offline answers cannot restore the old progress. See [reset and recovery details](docs/PORTABLE.md#start-a-deck-again).
+
+Use **Study controls** (the gear during a session, or Settings) to change single-choice auto-submit and the continuation key. Defaults are number/click to submit a single answer and Space to continue feedback. Multiple-answer questions have checkboxes and an explicit Enter/Check step. Preferences stay on the device; they do not change quiz grading or server progress.
