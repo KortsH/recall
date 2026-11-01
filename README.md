@@ -1,6 +1,6 @@
 # Recall
 
-A focused exam learning tool. Bring a question bank, download it to your device, and progress from recognition to active recall. React + TypeScript + Vite, a plain Node HTTP server, and PostgreSQL. Local or private home-server deployment; no AI integration, account, or subscription.
+A focused exam learning tool. Bring a question bank, download it to your device, and progress from recognition to active recall. React + TypeScript + Vite, a plain Node HTTP server, and PostgreSQL. Local or private home-server deployment; no account, or subscription.
 
 Downloaded mode studies on the device and syncs progress in batches. Live-server mode is optional. Install the PWA on your phone to share quizzes and progress through the server. See [hosting and mobile use](docs/HOSTING.md) and [future work](docs/FUTURE.md).
 
