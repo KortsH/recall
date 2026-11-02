@@ -19,9 +19,11 @@ Requested for **1 November 2026**. The preview implementation is complete; relea
 - [x] Device-local Light/Dark/System appearance, immediate header toggle and consistent lowercase r-and-dot branding across SVG, PWA icons and Android source.
 - [x] Explicit read-aloud using installed local browser voices, with cancellation on card changes and no answer reading before reveal.
 - [ ] Browser-integrated speech-to-text: detect on-device recognition/language-pack availability, require explicit microphone action, preview dictated text before submission and disclose any remote processing before enabling a fallback. Test physical Android/iPhone and desktop accessibility. Until then use the device keyboard or OS dictation in the answer field.
-- [ ] Publish refreshed Windows/Android binaries containing the latest library, flags, hints, theme and voice controls. The hosted browser app follows main; the versioned v0.3.2 preview installers contain their release snapshot.
+- [x] Refresh Windows/Android preview binaries with library layouts, flags, hints, dark mode, consistent branding and local voice controls (v0.4.0-preview.1).
+- [x] App-update notices with explicit Save & reload, draft/reveal restoration and no automatic study reload. Settings shows the UI version and offers a manual update check.
+- [x] Android saved-state acknowledgement before native reload/workspace changes or incoming attachments; explicit choices for pending progress, recovery export and older-page fallback. Physical-device verification remains below.
 
-- Android bundles the offline study interface, supports device-only first launch, JSON file import/export, and optional HTTPS server connection. Next: physical-device tests, stable release signing, connection-change handling for unsynced server progress, and native iOS. The PWA supports both platforms now.
+- Android bundles the offline study interface, supports device-only first launch, JSON file import/export, optional HTTPS server connection and guarded switching with unsynced progress. Next: physical-device tests, stable release signing and native iOS. The PWA supports both platforms now.
   Tracked in [issue #1](https://github.com/KortsH/recall/issues/1).
 - Portable quiz/progress files are implemented: stable IDs, import preview, additive/replacement question updates, explicit keep/replace progress choices and semantic-hash validation. Files can be transferred through Files, WhatsApp or any channel. Next: optional multi-file import and explicit resolution of simultaneous question edits.
   Tracked in [issue #2](https://github.com/KortsH/recall/issues/2).

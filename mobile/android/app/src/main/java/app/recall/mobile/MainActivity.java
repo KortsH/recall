@@ -42,6 +42,9 @@ public class MainActivity extends Activity {
     private String server,pendingExport;
     private Uri pendingImport;
     private boolean deviceOnly,pageReady;
+    private final WorkspaceLeaveGuard leaveGuard=new WorkspaceLeaveGuard();
+    private Runnable afterLeave;
+    private boolean changingWorkspace;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -60,7 +63,30 @@ public class MainActivity extends Activity {
         if(Intent.ACTION_SEND.equals(intent.getAction())){Uri uri=intent.getParcelableExtra(Intent.EXTRA_STREAM);return uri!=null&&"content".equals(uri.getScheme())?uri:null;}
         Uri uri=Intent.ACTION_VIEW.equals(intent.getAction())?intent.getData():null;return uri!=null&&"content".equals(uri.getScheme())?uri:null;
     }
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);Uri uri=importUri(intent);if(uri!=null){pendingImport=uri;chooseDevice();}}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);Uri uri=importUri(intent);if(uri!=null){pendingImport=uri;requestLeave(true,()->chooseDevice());}}
+    private void requestLeave(boolean switching,Runnable next){
+        if(web==null){next.run();return;}
+        if(pendingExport!=null||picker!=null){Toast.makeText(this,"Finish the file picker before changing workspaces.",Toast.LENGTH_LONG).show();return;}
+        if(leaveGuard.waiting())return;
+        changingWorkspace=switching;afterLeave=next;
+        final String token=leaveGuard.begin();final WebView current=web;
+        web.evaluateJavascript("window.dispatchEvent(new CustomEvent('recall-prepare-leave',{detail:"+JSONObject.quote(token)+"}));",null);
+        web.postDelayed(()->{
+            if(!leaveGuard.timeout(token)||web!=current)return;
+            final Runnable action=afterLeave;afterLeave=null;
+            new AlertDialog.Builder(this).setTitle("Could not confirm saved state").setMessage("This page may need an update, or a save may still be running. Stored quizzes and submitted offline answers stay at this address. Current unsaved text may be lost if you continue.").setPositiveButton("Keep studying",null).setNegativeButton("Continue anyway",(d,w)->{if(web==current&&action!=null)action.run();}).show();
+        },8000);
+    }
+    private void leaveReply(JSONObject payload){
+        WorkspaceLeaveGuard.Reply reply=leaveGuard.accept(payload.optString("token",""),payload.optInt("pending",-1),payload.optString("error",""));
+        if(reply==null)return;
+        final Runnable action=afterLeave;afterLeave=null;
+        if(reply.error!=null){Toast.makeText(this,reply.error,Toast.LENGTH_LONG).show();return;}
+        if(action==null)return;
+        if(changingWorkspace&&reply.pending>0){
+            new AlertDialog.Builder(this).setTitle("Progress is waiting to sync").setMessage(reply.pending+" session(s) still have pending answers. They stay stored at this server address. Return to the same address to sync them; switching does not transfer them to another workspace. You can export a private recovery file in Settings first.").setPositiveButton("Keep studying",null).setNegativeButton("Switch; keep pending",(d,w)->action.run()).setNeutralButton("Open recovery export",(d,w)->web.evaluateJavascript("window.dispatchEvent(new Event('recall-show-recovery'));",null)).show();
+        }else action.run();
+    }
     private void chooseDevice(){deviceOnly=true;preferences.edit().putString("mode","device").apply();showStudy(null);}
     private void setup(){
         if(web!=null){web.destroy();web=null;}
@@ -78,7 +104,7 @@ public class MainActivity extends Activity {
         if(web!=null){web.destroy();web=null;}
         pageReady=false;root.removeAllViews();
         Button settings=new Button(this);settings.setText(deviceOnly?"Recall · on this device":"Recall · server connection");settings.setAllCaps(false);root.addView(settings,new LinearLayout.LayoutParams(-1,dp(42)));
-        settings.setOnClickListener(v->new AlertDialog.Builder(this).setTitle(deviceOnly?"Device workspace":"Your server").setMessage(deviceOnly?"Quizzes and progress are stored on this phone. Use Export to keep a backup or share a quiz.":server+"\n\nSync pending progress before switching. Device-only and server workspaces stay separate.").setPositiveButton("Keep studying",null).setNeutralButton("Workspace options",(d,w)->setup()).setNegativeButton("Reload",(d,w)->web.reload()).show());
+        settings.setOnClickListener(v->new AlertDialog.Builder(this).setTitle(deviceOnly?"Device workspace":"Your server").setMessage(deviceOnly?"Quizzes and progress are stored on this phone. Use Export to keep a backup or share a quiz.":server+"\n\nSync pending progress before switching. Device-only and server workspaces stay separate.").setPositiveButton("Keep studying",null).setNeutralButton("Workspace options",(d,w)->requestLeave(true,()->setup())).setNegativeButton("Reload",(d,w)->requestLeave(false,()->web.reload())).show());
         web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));
         WebSettings config=web.getSettings();config.setJavaScriptEnabled(true);config.setDomStorageEnabled(true);config.setAllowFileAccess(false);config.setAllowContentAccess(true);config.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);config.setSupportMultipleWindows(false);config.setJavaScriptCanOpenWindowsAutomatically(false);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);WebView.setWebContentsDebuggingEnabled(false);
@@ -97,10 +123,11 @@ public class MainActivity extends Activity {
             }
         });
         if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER))WebViewCompat.addWebMessageListener(web,"RecallFiles",Collections.singleton(Uri.parse(origin).buildUpon().path("").build().toString().replaceAll("/$","")),(view,message,sourceOrigin,isMainFrame,reply)->{
-            if(!isMainFrame||!ServerAddress.sameOrigin(origin,sourceOrigin.toString()))return;
+            if(view!=web||!isMainFrame||!ServerAddress.sameOrigin(origin,sourceOrigin.toString()))return;
             try{
                 JSONObject payload=new JSONObject(message.getData());String action=payload.getString("action");
                 if(action.equals("ready")){pageReady=true;receivePending();return;}
+                if(action.equals("leave")){leaveReply(payload);return;}
                 if(!action.equals("save")||pendingExport!=null)return;
                 String content=payload.getString("content");if(content.getBytes(StandardCharsets.UTF_8).length>MAX_FILE)throw new Exception("File exceeds 5 MB");new JSONObject(content);
                 String name=payload.optString("name","quiz.recall.json").replaceAll("[^A-Za-z0-9._-]","-");if(name.length()>120)name=name.substring(0,100)+".recall.json";

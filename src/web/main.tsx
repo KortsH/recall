@@ -20,6 +20,17 @@ import {
   type ThemePreference,
 } from "./theme.ts";
 import { ReadAloud } from "./speech.tsx";
+import { version as appVersion } from "../../package.json";
+import {
+  saveAnswerDraft,
+  readAnswerDraft,
+  clearAnswerDraft,
+} from "./drafts.ts";
+import {
+  subscribeUpdates,
+  startAppUpdates,
+  checkAppUpdates,
+} from "./updates.ts";
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -67,6 +78,7 @@ import "./readability.css";
 import "./study.css";
 import "./library.css";
 import "./theme.css";
+import "./updates.css";
 import {
   api,
   personalMode,
@@ -78,6 +90,7 @@ import {
   downloadStatus,
   exportPendingRecovery,
   discardResetEvidence,
+  flushDeviceState,
 } from "./cache.ts";
 
 applyTheme(loadTheme());
@@ -167,6 +180,14 @@ function App() {
   > | null>(null);
   const [discardResetOpen, setDiscardResetOpen] = useState(false);
   const [flagRequest, setFlagRequest] = useState<Item | null>(null);
+  const [appUpdate, setAppUpdate] = useState({
+    available: false,
+    supported: false,
+    checking: false,
+    error: "",
+  });
+  const [deferUpdate, setDeferUpdate] = useState(false);
+  useEffect(() => subscribeUpdates(setAppUpdate), []);
   const [response, setResponse] = useState<any>(""),
     [selected, setSelected] = useState<string[]>([]),
     [pairs, setPairs] = useState<Record<string, string>>({}),
@@ -175,6 +196,77 @@ function App() {
   const [now, setNow] = useState(Date.now()),
     [mobileNav, setMobileNav] = useState(false);
   const answerPendingRef = useRef(false);
+  const leaveState = useRef<any>(null);
+  leaveState.current = {
+    session,
+    response,
+    selected,
+    pairs,
+    feedback,
+    reveal,
+    busy,
+    editing: !!(
+      editor ||
+      importOpen ||
+      flagRequest ||
+      shareOpen ||
+      resetRequest ||
+      discardResetOpen ||
+      controlsOpen
+    ),
+  };
+  function preserveDraft() {
+    const current = leaveState.current;
+    if (current.busy || answerPendingRef.current)
+      throw new Error(
+        "Wait for the current answer or save to finish, then try again.",
+      );
+    if (current.editing)
+      throw new Error(
+        "Finish or close the open editor or dialog before leaving this workspace.",
+      );
+    if (current.session?.card && !current.feedback)
+      saveAnswerDraft(personalMode(), current.session, {
+        response: String(current.response ?? ""),
+        selected: current.selected,
+        pairs: current.pairs,
+        ...(current.reveal ? { reveal: current.reveal } : {}),
+      });
+  }
+  useEffect(() => {
+    const prepare = async (event: Event) => {
+      const token = String((event as CustomEvent).detail ?? "");
+      if (!/^[a-f0-9-]{36}$/.test(token) || !window.RecallFiles) return;
+      try {
+        preserveDraft();
+        const status = await flushDeviceState();
+        window.RecallFiles.postMessage(
+          JSON.stringify({ action: "leave", token, pending: status.pending }),
+        );
+      } catch (error) {
+        window.RecallFiles.postMessage(
+          JSON.stringify({
+            action: "leave",
+            token,
+            error: (error as Error).message,
+          }),
+        );
+      }
+    };
+    const recovery = () => {
+      setSession(null);
+      setSection("settings");
+      setNotice(
+        "Export unsynced progress here before switching workspaces. Pending answers stay on this server’s workspace.",
+      );
+    };
+    window.addEventListener("recall-prepare-leave", prepare);
+    window.addEventListener("recall-show-recovery", recovery);
+    return () => {
+      window.removeEventListener("recall-prepare-leave", prepare);
+      window.removeEventListener("recall-show-recovery", recovery);
+    };
+  }, []);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const optionsRef = useRef<HTMLDivElement>(null);
   const revealRef = useRef<HTMLDivElement>(null);
@@ -183,6 +275,16 @@ function App() {
     studyRef = useRef<HTMLElement>(null),
     continueRef = useRef<HTMLButtonElement>(null);
   const deck = decks.find((d) => d.id === deckId);
+  useEffect(() => {
+    if (!session?.card) return;
+    const draft = readAnswerDraft(personalMode(), session);
+    if (draft) {
+      setResponse(draft.response);
+      setSelected(draft.selected);
+      setPairs(draft.pairs);
+      if (draft.reveal && session.revealed) setReveal(draft.reveal);
+    }
+  }, [session?.id, session?.cursor, session?.card?.revision]);
   useEffect(() => {
     const receive = (event: Event) => {
       setImportRaw(String((event as CustomEvent).detail));
@@ -281,11 +383,29 @@ function App() {
       localStorage.setItem(sessionKey(), s.id);
     });
   const leave = () => {
+    try {
+      preserveDraft();
+    } catch (e) {
+      setError((e as Error).message);
+      return;
+    }
     if (downloadedMode()) void syncDownloads().catch(() => {});
     setSession(null);
     resetAnswer();
     void refresh();
     setSection("overview");
+  };
+  const applyAppUpdate = () => {
+    try {
+      preserveDraft();
+    } catch (e) {
+      setError((e as Error).message);
+      return;
+    }
+    void run(async () => {
+      await flushDeviceState();
+      window.location.reload();
+    });
   };
   const openReset = () =>
     void run(async () => {
@@ -367,6 +487,7 @@ function App() {
           rating,
         },
       );
+      clearAnswerDraft(personalMode(), session);
       setSession(r.session);
       if (r.feedback && !r.feedback.selfAssessed) setFeedback(r.feedback);
       else resetAnswer();
@@ -890,6 +1011,31 @@ function App() {
             </button>
           </div>
         </header>
+        {appUpdate.available && !deferUpdate && (
+          <div className="app-update-banner" role="status">
+            <div>
+              <strong>An app update is ready.</strong>
+              <span>
+                Your current question and pending progress stay saved on this
+                device.
+              </span>
+            </div>
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() => setDeferUpdate(true)}
+            >
+              Later
+            </button>
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={applyAppUpdate}
+            >
+              Save & reload
+            </button>
+          </div>
+        )}
         {cache.error && (
           <div className="cache-status" role="status">
             {cache.error}
@@ -1451,6 +1597,58 @@ function App() {
                       : "Your server stores shared questions and progress; downloaded mode keeps a copy on this device."}
                   </p>
                 </div>
+                <section className="settings-card">
+                  <h2>App updates</h2>
+                  <p>Version {appVersion}</p>
+                  {appUpdate.available ? (
+                    <>
+                      <p>
+                        A new web app is downloaded. Save & reload preserves
+                        your current answer draft and pending progress.
+                      </p>
+                      <button
+                        className="button primary"
+                        disabled={busy}
+                        onClick={applyAppUpdate}
+                      >
+                        Save & reload app
+                      </button>
+                    </>
+                  ) : (
+                    <p>
+                      Your app keeps working while an update downloads. It never
+                      reloads an active study session automatically.
+                    </p>
+                  )}
+                  {appUpdate.supported && (
+                    <button
+                      className="button secondary"
+                      disabled={appUpdate.checking || busy}
+                      onClick={() => {
+                        setDeferUpdate(false);
+                        void checkAppUpdates();
+                      }}
+                    >
+                      {appUpdate.checking
+                        ? "Checking…"
+                        : "Check for app update"}
+                    </button>
+                  )}
+                  {appUpdate.error && <p role="alert">{appUpdate.error}</p>}
+                  <p>
+                    Windows/Android installations bundle their own interface.
+                    Download a newer installer to update it; your workspace
+                    stays separate from application files.
+                  </p>
+                  <a
+                    className="text-button"
+                    href="https://github.com/KortsH/recall/releases"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Browse app releases
+                  </a>
+                </section>
                 <section className="settings-card">
                   <h2>Study controls</h2>
                   <StudyControlsPanel
@@ -3467,6 +3665,7 @@ if (
   import.meta.env.PROD &&
   location.hostname !== "appassets.androidplatform.net"
 )
-  void navigator.serviceWorker
-    .register(`${import.meta.env.BASE_URL}sw.js`)
-    .catch(() => {});
+  void startAppUpdates(
+    navigator.serviceWorker,
+    `${import.meta.env.BASE_URL}sw.js`,
+  );

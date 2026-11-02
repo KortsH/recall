@@ -112,11 +112,10 @@ async function persist() {
   }
   window.dispatchEvent(new Event("recall-cache"));
 }
-async function load() {
-  if (state) return state;
+async function readStoredState() {
   const db = await database();
   try {
-    state = await new Promise<State | undefined>((resolve, reject) => {
+    return await new Promise<State | undefined>((resolve, reject) => {
       const r = db
         .transaction("state")
         .objectStore("state")
@@ -127,6 +126,10 @@ async function load() {
   } finally {
     db.close();
   }
+}
+async function load() {
+  if (state) return state;
+  state = await readStoredState();
   if (!state) {
     const snapshot = personalMode()
       ? {
@@ -371,6 +374,14 @@ export const exportPendingRecovery = (deckId?: string) =>
       })),
       sessions,
     );
+  });
+/** Wait for local writes before a native navigation or explicit app reload. No network. */
+export const flushDeviceState = () =>
+  serial(async () => {
+    // Every queued mutation already awaits its IndexedDB commit. Do not rewrite a stale
+    // snapshot over another tab, or fetch a server just to leave a workspace.
+    if (!state) state = await readStoredState();
+    return downloadStatus();
   });
 export async function api<T>(
   path: string,

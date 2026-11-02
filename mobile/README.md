@@ -8,6 +8,8 @@ Import through the JSON file picker, or Open with Recall for supported JSON cont
 
 TLS validation is normal; mixed content, file:// access, third-party cookies and WebView debugging are disabled. App data is excluded from Android cloud backup. Keep Android System WebView current for native file export. Clear app data only after exporting personal backups.
 
+Native reload/workspace changes first request a saved-state acknowledgement from the active main frame. The web app preserves the current answer/reveal draft and waits for local writes without fetching a server. Pending sessions require an explicit keep/switch/recovery choice; switching retains their original origin's IndexedDB. A per-request token prevents stale or replayed acknowledgements from navigating another view. A busy editor/save blocks the change. Unsupported older pages time out to a warning with an explicit override; no automatic switch occurs. Incoming JSON attachments use this check when a study view is already open. These protocol paths have browser/unit checks; physical Android lifecycle and picker testing remains outstanding.
+
 ## Build
 
 Run `npm ci` in the repository, then with JDK 17+ and Android SDK 35 installed:

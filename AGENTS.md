@@ -33,6 +33,8 @@ Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --f
 
 ## Change rules
 
+- Keep app updates explicit: a new service-worker controller offers Save & reload and never forces an active tab to reload. Preserve typed/selected/matched answer and reveal drafts before reload/native navigation, scoped to workspace/session/question/variant/revision; restoring a draft must never submit or self-grade it. Keep app-shell cache lookups scoped to the active build and retain older assets while tabs are open. Native leave acknowledgements are origin-bound, main-frame only and tied to a single request token; pending answers stay in their original workspace until synced or explicitly discarded.
+
 - Author optional `hint` cues without giving away answers. Preserve existing hints and `flag` review notes when revising an export. Hints are metadata; assisted success must never increase unaided mastery. `question-hint`, `flag`, `questions --flagged with --json` and dry-run-first `organize` expose the same review/organization operations as the UI. Flagged questions stay excluded even when Cram/Test bypass prerequisites; allowing their dependents is an explicit per-flag decision, not fake mastery. See `docs/QUESTION_BANK.md`.
 
 - Author and preserve `depends_on` prerequisite IDs. Read the prerequisite section in `docs/QUESTION_BANK.md` before generating questions. Run `recall prerequisites <deck>` alongside the coverage audit. Definitions precede variant definitions and applications; every listed parent is required. Keep dependency-only updates separate from wording corrections so mastery is preserved. Validate the complete prospective graph, including cross-topic links, before replacing or archiving records.

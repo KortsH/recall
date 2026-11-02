@@ -1,0 +1,38 @@
+.app-update-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 30px;
+  background: #ede7fa;
+  border-bottom: 1px solid #d8c9ed;
+  color: #614784;
+  font-size: 13px;
+}
+.app-update-banner > div {
+  flex: 1;
+  min-width: 200px;
+}
+.app-update-banner strong,
+.app-update-banner span {
+  display: block;
+}
+.app-update-banner span {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.app-update-banner .button {
+  padding: 9px 13px;
+  font-size: 12px;
+}
+:root[data-theme="dark"] .app-update-banner {
+  background: #332841;
+  border-color: #614676;
+  color: #e2cdf7;
+}
+@media (max-width: 640px) {
+  .app-update-banner {
+    padding: 12px 16px;
+  }
+}

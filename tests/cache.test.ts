@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { indexedDB } from "fake-indexeddb";
+import { indexedDB, IDBFactory } from "fake-indexeddb";
 import { parseBank } from "../src/core/bank.ts";
 import { emptyProgress } from "../src/core/types.ts";
 
@@ -67,6 +67,8 @@ test("downloaded study makes no per-answer requests and survives a module restar
     revision: session.card.revision,
     response: "A",
   });
+  const savedState = await cache.flushDeviceState();
+  assert.equal(savedState.pending, 1);
   assert.equal(result.feedback.correct, true);
   assert.deepEqual(requests, ["/api/snapshot"]);
   unavailable = true;
@@ -96,4 +98,15 @@ test("downloaded study makes no per-answer requests and survives a module restar
   await restarted.syncDownloads();
   assert.deepEqual(requests, ["/api/snapshot", "/api/sync"]);
   assert.equal(restarted.downloadStatus().pending, 0);
+  Object.assign(globalThis, { indexedDB: new IDBFactory() });
+  const cold = await import(
+    new URL("../src/web/cache.ts?cold-native-leave=1", import.meta.url).href
+  );
+  const beforeColdLeave = [...requests];
+  assert.equal((await cold.flushDeviceState()).pending, 0);
+  assert.deepEqual(
+    requests,
+    beforeColdLeave,
+    "Leaving a never-downloaded workspace must not fetch a server",
+  );
 });

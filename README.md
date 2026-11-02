@@ -2,7 +2,7 @@
 
 A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.3.2-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.3.2-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.3.2-preview.1)
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.4.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.4.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.4.0-preview.1)
 
 ## Install and use
 
@@ -33,6 +33,8 @@ This downloads the versioned release installer, verifies its SHA-256 checksum, a
 4. Study, add/edit questions and organize prerequisites offline. **Export → Save quiz file** opens Android's save-file picker. Share that saved file through your preferred app.
 
 You can also choose **Open with Recall** for a JSON attachment when the sending app supplies a supported content URI. Importing still shows a preview. Keep Android System WebView updated for native file export. The APK contains no private server address, database credentials or SSH keys. Optional **Workspace options → Connect to server** accepts your own HTTPS origin; a private server may require your VPN. Device and server workspaces remain separate.
+
+Before reloading or changing an active workspace, Android asks the page to save its current answer draft and finish local writes. If answers are waiting to sync, choose **Keep studying**, **Open recovery export**, or **Switch; keep pending**. Pending answers remain at the original server address; return to that exact address to sync them later. Opening a JSON attachment while studying uses the same check. An older page that cannot acknowledge saving requires a separate **Continue anyway** choice, with a warning that its current unsaved text may be lost. Physical-device checks are still on the preview roadmap.
 
 ### Browser, iPhone, macOS and Linux
 
@@ -257,3 +259,5 @@ If a server outage leaves answers unsynced, Settings can export a private recove
 To learn a deck from scratch, choose **Reset learning**, optionally download a progress backup, and confirm **Reset to zero**. This preserves the questions and resets only that deck's learning. Shared-server resets affect its connected devices; stale offline answers cannot restore the old progress. See [reset and recovery details](docs/PORTABLE.md#start-a-deck-again).
 
 Use **Study controls** (the gear during a session, or Settings) to change single-choice auto-submit and the continuation key. Defaults are number/click to submit a single answer and Space to continue feedback. Multiple-answer questions have checkboxes and an explicit Enter/Check step. Preferences stay on the device; they do not change quiz grading or server progress.
+
+**Settings → App updates** shows the installed UI version and can check for a web update. A downloaded update offers **Later** or **Save & reload**; it never reloads an active session automatically. Save & reload keeps the current typed/selected/matched answer draft, revealed self-assessment state and pending progress. **Save & leave** also preserves an unfinished answer. Drafts are separate for device/server workspaces and only resume on the same session, question, variant and revision. Application updates do not import questions or reset learning. For Windows/Android's bundled interface, install the new preview from the download links above; app files and study storage remain separate.
