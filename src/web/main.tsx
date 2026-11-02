@@ -505,6 +505,7 @@ function App() {
       : card?.format === "flashcard" || String(response).trim().length > 0;
   const submit = (rating?: string, responseOverride?: unknown) => {
     if (answerPendingRef.current || busy || !session || !card) return;
+    window.dispatchEvent(new Event("recall-stop-dictation"));
     answerPendingRef.current = true;
     const submittedResponse = responseOverride ?? actualResponse;
     void run(async () => {
@@ -549,6 +550,7 @@ function App() {
       feedback
     )
       return;
+    window.dispatchEvent(new Event("recall-stop-dictation"));
     answerPendingRef.current = true;
     void run(async () => {
       const r = await api<Reveal>(`/sessions/${session.id}/reveal`, {
@@ -2548,7 +2550,12 @@ function App() {
                               ref={inputRef}
                               rows={4}
                               value={response}
-                              onChange={(e) => setResponse(e.target.value)}
+                              onChange={(e) => {
+                                window.dispatchEvent(
+                                  new Event("recall-stop-dictation"),
+                                );
+                                setResponse(e.target.value);
+                              }}
                               onKeyDown={(e) => {
                                 if (
                                   e.key === "Enter" &&
@@ -2570,27 +2577,15 @@ function App() {
                               key={`${session.id}:${session.cursor}:${card.revision}`}
                               draftKey={`${session.id}:${session.cursor}:${card.revision}`}
                               disabled={busy}
-                              onInsert={(text) => {
-                                setResponse((previous: string) =>
-                                  previous.trim()
-                                    ? `${previous.trimEnd()} ${text}`
-                                    : text,
-                                );
+                              value={response}
+                              onChange={setResponse}
+                              onSubmit={() => submit()}
+                              onReady={() => {
                                 inputRef.current?.focus({
                                   preventScroll: true,
                                 });
                               }}
                             />
-                            {session.mode !== "test" && (
-                              <button
-                                className="button subtle mental-recall"
-                                disabled={busy}
-                                title={tr("app.mental_recall_help")}
-                                onClick={revealMental}
-                              >
-                                {tr("app.answer_in_my_head")}
-                              </button>
-                            )}
                             <p>
                               {card.selfGrade
                                 ? tr(
@@ -2702,25 +2697,38 @@ function App() {
                                   "app.enter_to_check_shift_enter_for_a_new_line",
                                 )}
                         </span>
-                        {(card.format !== "multiple_choice" ||
-                          !controls.autoSubmitSingle) && (
-                          <button
-                            className="button primary"
-                            disabled={busy || !canAnswer}
-                            onClick={() => submit()}
-                          >
-                            {busy
-                              ? tr("app.saving")
-                              : card.format === "flashcard"
-                                ? tr("app.reveal_answer")
-                                : card.selfGrade && session.mode !== "test"
-                                  ? tr("app.compare_answer")
-                                  : session.mode === "test"
-                                    ? tr("app.save_answer")
-                                    : tr("app.check_answer")}
-                            <ArrowRight size={17} />
-                          </button>
-                        )}
+                        <div className="answer-actions">
+                          {card.format === "written" &&
+                            session.mode !== "test" && (
+                              <button
+                                className="button mental-recall"
+                                disabled={busy}
+                                title={tr("app.mental_recall_help")}
+                                onClick={revealMental}
+                              >
+                                {tr("app.answer_in_my_head")}
+                              </button>
+                            )}
+                          {(card.format !== "multiple_choice" ||
+                            !controls.autoSubmitSingle) && (
+                            <button
+                              className="button primary"
+                              disabled={busy || !canAnswer}
+                              onClick={() => submit()}
+                            >
+                              {busy
+                                ? tr("app.saving")
+                                : card.format === "flashcard"
+                                  ? tr("app.reveal_answer")
+                                  : card.selfGrade && session.mode !== "test"
+                                    ? tr("app.compare_answer")
+                                    : session.mode === "test"
+                                      ? tr("app.save_answer")
+                                      : tr("app.check_answer")}
+                              <ArrowRight size={17} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </section>

@@ -286,3 +286,43 @@
 .studying .reveal-answer:focus {
   outline: none;
 }
+.answer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.answer-actions .mental-recall {
+  color: #266150;
+  background: #e4f2e8;
+  border: 1px solid #bad8c6;
+}
+.answer-actions .mental-recall:hover {
+  background: #d4e9dc;
+}
+:root[data-theme="dark"] .answer-actions .mental-recall {
+  color: #b4e3c4;
+  background: #254339;
+  border-color: #4e8063;
+}
+:root[data-theme="dark"] .answer-actions .mental-recall:hover {
+  background: #305344;
+}
+@media (max-width: 700px) {
+  .studying .card-bottom {
+    flex-wrap: wrap;
+  }
+  .studying .card-bottom > span {
+    width: 100%;
+  }
+  .answer-actions {
+    margin-left: auto;
+  }
+}
+@media (max-width: 480px) {
+  .answer-actions .button {
+    padding: 10px 11px;
+    font-size: 12px;
+  }
+}

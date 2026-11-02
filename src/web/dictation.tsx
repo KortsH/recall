@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Mic, Square, X } from "lucide-react";
+import { Mic, Square } from "lucide-react";
 import { availableLanguages, getLanguage, tr, useLanguage } from "./i18n.ts";
 
-// The Web Speech API remains browser-specific and is absent from lib.dom in some TS versions.
 export interface Recognition {
   lang: string;
   continuous: boolean;
@@ -44,44 +43,60 @@ function preferences() {
     return { remote: false, lang: speechLanguage(getLanguage()) };
   }
 }
+const append = (prefix: string, text: string) =>
+  [prefix.trimEnd(), text.trim()].filter(Boolean).join(" ").slice(0, 16000);
 
-/** Browser microphone only. No recording storage, uploads to Recall, or automatic answer submission. */
+/** Explicit, continuous browser dictation. Writes text only; never grades or submits automatically. */
 export function Dictation({
-  onInsert,
+  value,
+  onChange,
+  onSubmit,
+  onReady,
   disabled = false,
   draftKey,
 }: {
-  onInsert: (text: string) => void;
+  value: string;
+  onChange: (text: string) => void;
+  onSubmit: () => void;
+  onReady?: () => void;
   disabled?: boolean;
   draftKey: string;
 }) {
   useLanguage();
   const [prefs, setPrefs] = useState(preferences);
   const [phase, setPhase] = useState<"idle" | "checking" | "listening">("idle");
-  const [preview, setPreview] = useState(() => {
-    try {
-      return (
-        sessionStorage
-          .getItem(`recall-dictation-preview:${draftKey}`)
-          ?.slice(0, 16000) ?? ""
-      );
-    } catch {
-      return "";
-    }
-  });
+  const [error, setError] = useState("");
+  const answer = useRef(value),
+    changeAnswer = useRef(onChange),
+    submitAnswer = useRef(onSubmit),
+    focusAnswer = useRef(onReady);
+  changeAnswer.current = onChange;
+  submitAnswer.current = onSubmit;
+  focusAnswer.current = onReady;
+  useEffect(() => {
+    answer.current = value;
+  }, [value]);
+  // Preserve an uninserted preview from the previous app version on this exact card.
   useEffect(() => {
     try {
-      const key = `recall-dictation-preview:${draftKey}`;
-      if (preview) sessionStorage.setItem(key, preview);
-      else sessionStorage.removeItem(key);
+      const key = `recall-dictation-preview:${draftKey}`,
+        old = sessionStorage.getItem(key);
+      if (old) {
+        if (!answer.current.endsWith(old.trim())) {
+          answer.current = append(answer.current, old);
+          changeAnswer.current(answer.current);
+        }
+        sessionStorage.removeItem(key);
+      }
     } catch {
-      /* Editing still works without browser storage. */
+      /* Normal answer drafts remain available without legacy preview storage. */
     }
-  }, [draftKey, preview]);
-  const [error, setError] = useState("");
+  }, [draftKey]);
   const active = useRef<Recognition | null>(null),
     generation = useRef(0),
-    timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    wanted = useRef(false),
+    timer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    options = useRef<HTMLDetailsElement>(null);
   const speechWindow =
     typeof window === "undefined"
       ? undefined
@@ -93,6 +108,7 @@ export function Dictation({
     speechWindow?.SpeechRecognition ?? speechWindow?.webkitSpeechRecognition;
   const supported = !!Constructor && window.isSecureContext;
   function dispose() {
+    wanted.current = false;
     generation.current++;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
@@ -136,22 +152,99 @@ export function Dictation({
     try {
       localStorage.setItem(preferenceKey, JSON.stringify(next));
     } catch {
-      /* Still usable without saved preferences. */
+      /* Optional preference storage. */
     }
   }
   async function start() {
     if (!supported || disabled || phase !== "idle") return;
     dispose();
     const token = generation.current;
-    const prefix = preview.trimEnd();
+    wanted.current = true;
     setError("");
     setPhase("checking");
+    let emptyEnds = 0;
+    const valid = (r?: Recognition) =>
+      token === generation.current &&
+      wanted.current &&
+      (!r || active.current === r);
+    const fail = (
+      key:
+        | "dictation.localUnavailable"
+        | "dictation.denied"
+        | "dictation.languageUnavailable"
+        | "dictation.failed",
+    ) => {
+      if (valid()) {
+        cancel();
+        setError(tr(key));
+      }
+    };
+    const begin = (r: Recognition, first = false) => {
+      if (!valid()) return;
+      const prefix = answer.current;
+      let received = false;
+      r.lang = prefs.lang;
+      r.continuous = true;
+      r.interimResults = true;
+      if ("processLocally" in r) r.processLocally = !prefs.remote;
+      active.current = r;
+      r.onresult = (event) => {
+        if (!valid(r)) return;
+        const text = Array.from(
+          event.results,
+          (result) => result[0]?.transcript ?? "",
+        )
+          .join(" ")
+          .trim();
+        received ||= !!text;
+        answer.current = append(prefix, text);
+        changeAnswer.current(answer.current);
+      };
+      r.onerror = (event) => {
+        if (!valid(r)) return;
+        // Silence is a thinking pause; the subsequent end event restarts capture.
+        if (event.error === "no-speech") return;
+        fail(
+          event.error === "not-allowed" || event.error === "service-not-allowed"
+            ? "dictation.denied"
+            : event.error === "language-not-supported"
+              ? "dictation.languageUnavailable"
+              : "dictation.failed",
+        );
+      };
+      r.onend = () => {
+        if (!valid(r)) return;
+        r.onresult = r.onerror = r.onend = null;
+        active.current = null;
+        emptyEnds = received ? 0 : emptyEnds + 1;
+        // Browsers may disconnect despite continuous=true. Retain the user's intent,
+        // but avoid a tight restart loop on silent or malfunctioning engines.
+        timer.current = setTimeout(
+          () => {
+            timer.current = null;
+            if (!valid()) return;
+            try {
+              begin(new Constructor!());
+            } catch {
+              fail("dictation.failed");
+            }
+          },
+          Math.min(2000, 250 * Math.max(1, emptyEnds)),
+        );
+      };
+      r.start();
+      if (!valid(r)) return;
+      setPhase("listening");
+      if (first) {
+        if (options.current) options.current.open = false;
+        focusAnswer.current?.();
+      }
+    };
     try {
       const r = new Constructor!();
       if (!prefs.remote) {
         if (!("processLocally" in r)) {
-          setError(tr("dictation.localUnavailable"));
-          setPhase("idle");
+          fail("dictation.localUnavailable");
           return;
         }
         r.processLocally = true;
@@ -160,72 +253,19 @@ export function Dictation({
             langs: [prefs.lang],
             processLocally: true,
           });
-          if (token !== generation.current) return;
+          if (!valid()) return;
           if (result !== "available") {
-            setError(tr("dictation.localUnavailable"));
-            setPhase("idle");
+            fail("dictation.localUnavailable");
             return;
           }
         }
-      } else if ("processLocally" in r) r.processLocally = false;
-      if (token !== generation.current) return;
+      }
+      if (!valid()) return;
       window.dispatchEvent(new Event("recall-stop-reading"));
       window.speechSynthesis?.cancel();
-      r.lang = prefs.lang;
-      r.continuous = false;
-      r.interimResults = true;
-      active.current = r;
-      r.onresult = (event) => {
-        if (token !== generation.current) return;
-        const transcript = Array.from(
-          event.results,
-          (result) => result[0]?.transcript ?? "",
-        )
-          .join(" ")
-          .trim();
-        setPreview(
-          [prefix, transcript].filter(Boolean).join(" ").slice(0, 16000),
-        );
-      };
-      r.onerror = (event) => {
-        if (token !== generation.current) return;
-        setError(
-          tr(
-            event.error === "not-allowed" ||
-              event.error === "service-not-allowed"
-              ? "dictation.denied"
-              : event.error === "language-not-supported"
-                ? "dictation.languageUnavailable"
-                : event.error === "no-speech"
-                  ? "dictation.noSpeech"
-                  : "dictation.failed",
-          ),
-        );
-        cancel();
-      };
-      r.onend = () => {
-        if (token === generation.current) cancel();
-      };
-      r.start();
-      if (token !== generation.current) return;
-      setPhase("listening");
-      timer.current = setTimeout(() => {
-        if (active.current === r) {
-          try {
-            r.stop();
-            timer.current = setTimeout(() => {
-              if (active.current === r) cancel();
-            }, 5000);
-          } catch {
-            cancel();
-          }
-        }
-      }, 60000);
+      begin(r, true);
     } catch {
-      if (token === generation.current) {
-        cancel();
-        setError(tr("dictation.failed"));
-      }
+      fail("dictation.failed");
     }
   }
   const languages = [
@@ -237,7 +277,25 @@ export function Dictation({
   ];
   const names = new Intl.DisplayNames([getLanguage()], { type: "language" });
   return (
-    <div className="dictation" onKeyDown={(e) => e.stopPropagation()}>
+    <div
+      className="dictation"
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (
+          phase === "listening" &&
+          e.key === "Enter" &&
+          !e.shiftKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey &&
+          !e.nativeEvent.isComposing
+        ) {
+          e.preventDefault();
+          cancel();
+          submitAnswer.current();
+        }
+      }}
+    >
       {supported ? (
         <>
           <div className="dictation-tools">
@@ -247,13 +305,7 @@ export function Dictation({
               disabled={disabled}
               aria-pressed={phase === "listening"}
               onClick={() => {
-                if (phase === "listening") {
-                  try {
-                    active.current?.stop();
-                  } catch {
-                    cancel();
-                  }
-                } else if (phase === "checking") cancel();
+                if (phase !== "idle") cancel();
                 else void start();
               }}
             >
@@ -264,7 +316,7 @@ export function Dictation({
                   ? tr("dictation.checking")
                   : tr("dictation.start")}
             </button>
-            <details>
+            <details ref={options}>
               <summary>{tr("dictation.options")}</summary>
               <label>
                 {tr("dictation.language")}
@@ -280,7 +332,7 @@ export function Dictation({
                   ))}
                 </select>
               </label>
-              <label className="dictation-remote">
+              <label>
                 <input
                   type="checkbox"
                   checked={prefs.remote}
@@ -301,43 +353,6 @@ export function Dictation({
           <span role="status">
             {phase === "listening" ? tr("dictation.listening") : error}
           </span>
-          {preview && (
-            <div className="dictation-preview">
-              <label>
-                {tr("dictation.preview")}
-                <textarea
-                  rows={3}
-                  value={preview}
-                  disabled={phase !== "idle"}
-                  onChange={(e) => setPreview(e.target.value)}
-                />
-              </label>
-              <p>{tr("dictation.review")}</p>
-              <button
-                type="button"
-                className="button subtle"
-                disabled={disabled || phase !== "idle" || !preview.trim()}
-                onClick={() => {
-                  onInsert(preview.trim());
-                  setPreview("");
-                }}
-              >
-                {tr("dictation.insert")}
-              </button>
-              <button
-                type="button"
-                className="text-button"
-                disabled={disabled}
-                onClick={() => {
-                  cancel();
-                  setPreview("");
-                }}
-              >
-                <X size={14} />
-                {tr("dictation.discard")}
-              </button>
-            </div>
-          )}
         </>
       ) : (
         <p className="dictation-privacy">{tr("dictation.unsupported")}</p>

@@ -1,6 +1,6 @@
 {
   "name": "recall-study",
-  "version": "0.6.1-preview.1",
+  "version": "0.6.2-preview.1",
   "private": true,
   "type": "module",
   "description": "A focused, local adaptive exam learning tool.",
