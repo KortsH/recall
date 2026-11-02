@@ -11,7 +11,19 @@ concurrency:
   group: github-pages
   cancel-in-progress: false
 jobs:
+  refresh-after-release:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Refresh from the protected main branch
+        run: gh workflow run pages.yml --ref main --repo "$GH_REPO"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
   build:
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
