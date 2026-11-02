@@ -58,9 +58,11 @@ export function newSession(
   );
   if (!queue.length)
     throw new Error(
-      prerequisiteStatus(items).some((s) => !s.unlocked)
-        ? "No unlocked questions are due in this selection. Master the prerequisites first; see the question library for the required IDs. Try another topic or Cram to practise foundations."
-        : "Nothing is due in this selection. Try Cram to keep practising.",
+      items.every((i) => i.archived || i.question.flag)
+        ? "All questions in this deck are flagged for review. Remove a flag in the question library to continue."
+        : prerequisiteStatus(items).some((s) => !s.unlocked)
+          ? "No unlocked questions are due in this selection. Master the prerequisites first; see the question library for the required IDs. Try another topic or Cram to practise foundations."
+          : "Nothing is due in this selection. Try Cram to keep practising.",
     );
   return {
     id,
@@ -142,8 +144,15 @@ export function prepareSession(s: Session, items: Item[]) {
       ids: queue.map((e) => e.questionId),
     };
     delete s.revealed;
+    delete s.hinted;
   }
   pruneLocked(s, items);
+  if (s.learning)
+    s.learning.ids = s.learning.ids.filter((id) =>
+      items.some(
+        (i) => i.question.id === id && !i.archived && !i.question.flag,
+      ),
+    );
   if (s.mode === "learn") {
     nextLearningSet(s, items);
     const current = s.queue[s.cursor];
@@ -154,6 +163,7 @@ export function prepareSession(s: Session, items: Item[]) {
       if (expected.variantId !== current.variantId) {
         s.queue[s.cursor] = expected;
         delete s.revealed;
+        delete s.hinted;
       }
     }
   }
@@ -165,6 +175,7 @@ export function evaluateAttempt(
   rating: string | undefined,
   test: boolean,
   at = new Date().toISOString(),
+  hintUsed = false,
 ): Attempt {
   const v = resolveVariant(item.question, variantId);
   let correct = grade(v, response);
@@ -175,6 +186,7 @@ export function evaluateAttempt(
     correct = rating !== "again";
   }
   return {
+    ...(hintUsed ? { hintUsed: true } : {}),
     questionId: item.question.id,
     variantId: v.id,
     format: v.type,
@@ -192,6 +204,38 @@ export function evaluateAttempt(
     at,
   };
 }
+/** Record assistance before revealing a cue. It is not a model-answer reveal. */
+export function requestHint(
+  s: Session,
+  item: Item,
+  input: { version: number; revision: number },
+) {
+  if (s.finished || s.learningReset || s.version !== input.version)
+    throw new Error("Session changed. Reload to continue.");
+  if (s.deadline && Date.parse(s.deadline) <= Date.now())
+    throw new Error("Session time has expired");
+  const entry = s.queue[s.cursor];
+  if (
+    !entry ||
+    entry.questionId !== item.question.id ||
+    item.archived ||
+    !!item.question.flag ||
+    item.revision !== input.revision
+  )
+    throw new Error("Question changed. Refresh this deck.");
+  const v = resolveVariant(item.question, entry.variantId);
+  const text = v.hint ?? item.question.hint;
+  if (
+    s.mode === "test" ||
+    !["written", "flashcard"].includes(v.type) ||
+    !text ||
+    s.revealed?.cursor === s.cursor
+  )
+    throw new Error("A hint is not available for this card");
+  if (s.hinted?.cursor !== s.cursor || s.hinted.revision !== item.revision)
+    s.hinted = { cursor: s.cursor, revision: item.revision, text };
+  return s.hinted.text;
+}
 /** Shared session transition; adapters handle durability and optimistic concurrency. */
 export function advanceSession(
   s: Session,
@@ -201,7 +245,7 @@ export function advanceSession(
 ) {
   if (s.finished || s.version !== input.version)
     throw new Error("Session changed. Reload to continue.");
-  if (item.archived || item.revision !== input.revision)
+  if (item.archived || item.question.flag || item.revision !== input.revision)
     throw new Error("Question changed. Refresh this deck.");
   const entry = s.queue[s.cursor];
   if (!entry || entry.questionId !== item.question.id)
@@ -218,6 +262,8 @@ export function advanceSession(
     response,
     input.rating,
     s.mode === "test",
+    undefined,
+    s.hinted?.cursor === s.cursor && s.hinted.revision === item.revision,
   );
   const progress =
     attempt.correct === null
@@ -230,6 +276,7 @@ export function advanceSession(
           new Date(attempt.at),
           input.rating,
           attempt.skill,
+          attempt.hintUsed,
         );
   if (s.mode === "learn" && s.learning && !progress.mastered) {
     s.queue.push(
@@ -244,6 +291,7 @@ export function advanceSession(
   s.answers.push(attempt);
   s.cursor++;
   delete s.revealed;
+  delete s.hinted;
   if (context) {
     const updated = context.map((i) =>
       i.question.id === item.question.id ? { ...i, progress } : i,
@@ -279,7 +327,9 @@ export function pruneLocked(s: Session, items: Item[]) {
   if (s.finished) return;
   const override = s.ignorePrerequisites && ["cram", "test"].includes(s.mode);
   const active = new Set(
-    items.filter((i) => !i.archived).map((i) => i.question.id),
+    items
+      .filter((i) => !i.archived && !i.question.flag)
+      .map((i) => i.question.id),
   );
   const unlocked = new Set(
     prerequisiteStatus(items)
@@ -295,13 +345,19 @@ export function pruneLocked(s: Session, items: Item[]) {
   if (queue.length !== s.queue.length) {
     s.queue = queue;
     delete s.revealed;
+    delete s.hinted;
   }
   s.finished = s.cursor >= s.queue.length;
 }
 export function sessionView(s: Session, items: Item[]) {
   const current = s.queue[s.cursor];
   const item = current
-    ? items.find((i) => !i.archived && i.question.id === current.questionId)
+    ? items.find(
+        (i) =>
+          !i.archived &&
+          !i.question.flag &&
+          i.question.id === current.questionId,
+      )
     : null;
   let seed = 2166136261;
   for (const c of `${s.id}:${s.cursor}`)
@@ -356,15 +412,23 @@ export function sessionView(s: Session, items: Item[]) {
           deckMastered: items.filter(
             (i) =>
               !i.archived &&
+              !i.question.flag &&
               (!s.topic || i.question.topic === s.topic) &&
               i.progress.mastered,
           ).length,
           deckTotal: items.filter(
-            (i) => !i.archived && (!s.topic || i.question.topic === s.topic),
+            (i) =>
+              !i.archived &&
+              !i.question.flag &&
+              (!s.topic || i.question.topic === s.topic),
           ).length,
         }
       : undefined,
     revealed: s.revealed?.cursor === s.cursor ? s.revealed : undefined,
+    hint:
+      s.hinted?.cursor === s.cursor && s.hinted.revision === item?.revision
+        ? s.hinted.text
+        : undefined,
     result: s.finished
       ? {
           answers: valid,

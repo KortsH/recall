@@ -12,6 +12,7 @@ const grading = {
 const variantSchema = z
   .object({
     id: text,
+    hint: text.optional(),
     skill: z.enum(["recall", "application"]).optional(),
     type: z.enum([
       "multiple_choice",
@@ -35,6 +36,11 @@ const questionSchema = z
   .object({
     id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/),
     topic: text.default("General"),
+    flag: z
+      .object({ note: text, allowDependents: z.boolean().default(false) })
+      .strict()
+      .optional(),
+    hint: text.optional(),
     concept: text.optional(),
     depends_on: z
       .array(z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/))
@@ -139,6 +145,8 @@ export function semanticContent(q: Question): string {
     concept,
     difficulty,
     depends_on,
+    hint,
+    flag,
     ...content
   } = q;
   const canonical = (value: unknown): unknown =>
@@ -147,7 +155,10 @@ export function semanticContent(q: Question): string {
       : value && typeof value === "object"
         ? Object.fromEntries(
             Object.entries(value)
-              .filter(([k, v]) => k !== "explanation" && v !== undefined)
+              .filter(
+                ([k, v]) =>
+                  !["explanation", "hint"].includes(k) && v !== undefined,
+              )
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([k, v]) => [k, canonical(v)]),
           )

@@ -27,6 +27,7 @@ const progressSchema = z
     recalls: count,
     recognition: count,
     selfAssessed: count,
+    assisted: count.optional(),
     mastered: z.boolean(),
     lastReviewed: date,
     nextReview: date,
@@ -43,6 +44,7 @@ const progressSchema = z
       p.recalls <= p.streak &&
       p.recognition <= p.correct &&
       p.selfAssessed <= p.attempts &&
+      (p.assisted ?? 0) <= p.attempts &&
       p.mastered === (p.streak >= 3 && p.recalls >= 2),
     "Inconsistent progress counters or mastery",
   );

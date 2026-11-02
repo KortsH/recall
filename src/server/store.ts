@@ -3,6 +3,7 @@ import {
   sessionView,
   newSession,
   prepareSession,
+  requestHint,
 } from "../core/study.ts";
 import {
   prerequisiteStatus,
@@ -30,6 +31,12 @@ import {
 import { transaction, type DB } from "./db.ts";
 import { auditQuestions } from "../core/audit.ts";
 import { resetPreview, closeResetSession } from "../core/reset.ts";
+import {
+  planOrganization,
+  filterQuestions,
+  type QuestionFilters,
+  type OrganizationInput,
+} from "../core/organization.ts";
 
 export class AppError extends Error {
   constructor(
@@ -347,29 +354,34 @@ export class Store {
       "Question not found",
     );
   }
-  async listQuestions(
-    deckId: string,
-    filters: {
-      topic?: string;
-      concept?: string;
-      skill?: string;
-      search?: string;
-      archived?: boolean;
-    } = {},
-  ) {
-    return (await this.items(deckId, this.pool, filters.archived)).filter(
-      (i) =>
-        (!filters.topic || i.question.topic === filters.topic) &&
-        (!filters.concept || i.question.concept === filters.concept) &&
-        (!filters.skill || i.question.skill === filters.skill) &&
-        (!filters.search ||
-          JSON.stringify(i.question)
-            .toLowerCase()
-            .includes(filters.search.toLowerCase())),
+  async listQuestions(deckId: string, filters: QuestionFilters = {}) {
+    return filterQuestions(
+      await this.items(deckId, this.pool, filters.archived),
+      filters,
     );
   }
+
   async audit(deckId: string) {
     return auditQuestions((await this.items(deckId)).map((i) => i.question));
+  }
+  async organizeQuestions(deckId: string, input: OrganizationInput) {
+    await this.deck(deckId);
+    return transaction(this.pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-deck:" + deckId,
+      ]);
+      const items = await this.items(deckId, db);
+      const plan = planOrganization(items, input);
+      if (!plan.dryRun)
+        for (const change of plan.changes) {
+          const item = items.find((i) => i.question.id === change.id)!;
+          await this.saveQuestion(db, deckId, {
+            ...item.question,
+            topic: change.topic,
+          });
+        }
+      return plan;
+    });
   }
   async archiveQuestion(deckId: string, id: string, restore = false) {
     return transaction(this.pool, async (db) => {
@@ -606,7 +618,7 @@ export class Store {
         ),
         "Question not found",
       );
-      if (item.revision !== input.revision)
+      if (item.question.flag || item.revision !== input.revision)
         throw new AppError("Question changed. Reload this card.", 409);
       const v = requireValue(
         resolveVariant(item.question, entry.variantId),
@@ -625,6 +637,21 @@ export class Store {
         explanation: v.explanation ?? item.question.explanation,
         rubric: v.rubric ?? item.question.rubric ?? [],
       };
+    });
+  }
+  async hint(id: string, input: { version: number; revision: number }) {
+    return transaction(this.pool, async (db) => {
+      const s = await this.loadSession(id, db, true);
+      this.checkVersion(s, input.version);
+      const item = requireValue(
+        (await this.items(s.deckId, db)).find(
+          (i) => i.question.id === s.queue[s.cursor]?.questionId,
+        ),
+        "Question not found",
+      );
+      const hint = requestHint(s, item, input);
+      await this.saveSession(s, db);
+      return { version: s.version, hint };
     });
   }
   async answer(

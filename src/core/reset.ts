@@ -23,7 +23,7 @@ export function resetItems(items: Item[]): Item[] {
 }
 /** Retain historical evidence, but it can never contribute to the new learning run. */
 export function closeResetSession(session: Session): Session {
-  const { revealed, ...rest } = session;
+  const { revealed, hinted, ...rest } = session;
   return {
     ...rest,
     finished: true,

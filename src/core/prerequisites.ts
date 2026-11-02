@@ -37,14 +37,23 @@ export function prerequisiteStatus(items: Item[]) {
     items.filter((i) => !i.archived).map((i) => [i.question.id, i]),
   );
   const memo = new Map<string, boolean>();
+  function satisfied(id: string, path = new Set<string>()): boolean {
+    const parent = byId.get(id);
+    return (
+      !!parent &&
+      (parent.question.flag
+        ? parent.question.flag.allowDependents
+        : parent.progress.mastered) &&
+      unlocked(id, path)
+    );
+  }
   function unlocked(id: string, path = new Set<string>()): boolean {
     if (memo.has(id)) return memo.get(id)!;
     const item = byId.get(id);
     if (!item || path.has(id)) return false;
     const next = new Set(path).add(id);
-    const result = (item.question.depends_on ?? []).every(
-      (parent) =>
-        !!byId.get(parent)?.progress.mastered && unlocked(parent, next),
+    const result = (item.question.depends_on ?? []).every((parent) =>
+      satisfied(parent, next),
     );
     memo.set(id, result);
     return result;
@@ -53,12 +62,29 @@ export function prerequisiteStatus(items: Item[]) {
     id: i.question.id,
     unlocked: !i.archived && unlocked(i.question.id),
     depends_on: i.question.depends_on ?? [],
-    blockedBy: (i.question.depends_on ?? []).filter(
-      (id) => !byId.get(id)?.progress.mastered || !unlocked(id),
-    ),
+    blockedBy: (i.question.depends_on ?? []).filter((id) => !satisfied(id)),
   }));
 }
 
+/** Preview the full downstream impact before flagging a foundation. */
+export function dependentQuestions(items: Item[], id: string) {
+  const found = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const item of items)
+      if (
+        !item.archived &&
+        item.question.id !== id &&
+        !found.has(item.question.id) &&
+        item.question.depends_on?.some((p) => p === id || found.has(p))
+      ) {
+        found.add(item.question.id);
+        changed = true;
+      }
+  }
+  return items.filter((i) => found.has(i.question.id));
+}
 export function prospectiveQuestions(
   existing: Item[],
   incoming: Question[],

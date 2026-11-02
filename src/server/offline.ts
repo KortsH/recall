@@ -89,6 +89,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
       if (
         old &&
         (old.data.questionId !== submitted.questionId ||
+          !!old.data.hintUsed !== !!submitted.hintUsed ||
           JSON.stringify(old.data.response) !==
             JSON.stringify(submitted.response))
       )
@@ -97,7 +98,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
       let attempt: Attempt;
       if (old && old.data.correct !== null)
         attempt = { ...old.data, invalidated: old.invalidated || stale };
-      else if (stale) {
+      else if (stale || item.question.flag) {
         attempt = { ...submitted, correct: null, invalidated: true };
         rejected.push(item.question.id);
       } else {
@@ -112,6 +113,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
           Number.isFinite(Date.parse(submitted.at))
             ? submitted.at
             : new Date().toISOString(),
+          submitted.hintUsed === true || prior?.hinted?.cursor === index,
         );
         if (attempt.correct !== null) {
           item.progress = updateProgress(
@@ -122,6 +124,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
             new Date(),
             attempt.rating,
             attempt.skill,
+            attempt.hintUsed,
           );
           await db.query(
             "INSERT INTO progress(deck_id,question_id,data) VALUES($1,$2,$3) ON CONFLICT(deck_id,question_id) DO UPDATE SET data=$3",

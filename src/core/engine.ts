@@ -70,23 +70,29 @@ export function updateProgress(
   now = new Date(),
   rating?: string,
   skill: "recall" | "application" = "recall",
+  hintUsed = false,
 ): Progress {
   const active = format === "written" || format === "flashcard";
-  const streak = correct ? p.streak + 1 : 0;
-  const recalls = correct ? p.recalls + (active ? 1 : 0) : 0;
+  const streak = correct ? p.streak + Number(!hintUsed) : 0;
+  const recalls = correct ? p.recalls + Number(active && !hintUsed) : 0;
   const mastered = correct && streak >= 3 && recalls >= 2;
-  const interval = correct
-    ? rating === "hard"
-      ? 10
-      : mastered
-        ? rating === "easy"
-          ? 3 * 24 * 60
-          : 24 * 60
-        : active
-          ? 60
-          : 10
-    : 2;
+  const interval = hintUsed
+    ? 2
+    : correct
+      ? rating === "hard"
+        ? 10
+        : mastered
+          ? rating === "easy"
+            ? 3 * 24 * 60
+            : 24 * 60
+          : active
+            ? 60
+            : 10
+      : 2;
   return {
+    ...(hintUsed || p.assisted !== undefined
+      ? { assisted: (p.assisted ?? 0) + Number(hintUsed) }
+      : {}),
     skills: {
       ...p.skills,
       [skill]: {
@@ -99,7 +105,7 @@ export function updateProgress(
     wrong: p.wrong + Number(!correct),
     streak,
     recalls,
-    recognition: p.recognition + Number(correct && !active),
+    recognition: p.recognition + Number(correct && !active && !hintUsed),
     selfAssessed: p.selfAssessed + Number(selfAssessed),
     mastered,
     lastReviewed: now.toISOString(),
@@ -154,7 +160,10 @@ export function learningEntry(
       ),
     );
     const pool = context
-      .filter((i) => !i.archived && i.question.id !== item.question.id)
+      .filter(
+        (i) =>
+          !i.archived && !i.question.flag && i.question.id !== item.question.id,
+      )
       .sort(
         (a, b) =>
           Number(b.question.topic === item.question.topic) -
@@ -202,6 +211,7 @@ export function buildQueue(
   const eligible = items.filter(
     (i) =>
       !i.archived &&
+      !i.question.flag &&
       ((ignorePrerequisites && ["test", "cram"].includes(mode)) ||
         unlocked.has(i.question.id)) &&
       (mode !== "learn" ||
@@ -323,6 +333,9 @@ export function publicCard(
     topic: item.question.topic,
     concept: item.question.concept,
     question: v.question,
+    hasHint:
+      ["written", "flashcard"].includes(v.type) &&
+      !!(v.hint ?? item.question.hint),
     options:
       entry.variantId === "learn-choice"
         ? shuffle(

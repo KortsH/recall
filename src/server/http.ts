@@ -122,6 +122,12 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
           return json(res, 200, await store.resetLearning(id, await body(req)));
         if (rest === "audit" && method === "GET")
           return json(res, 200, await store.audit(id));
+        if (rest === "organize" && method === "POST")
+          return json(
+            res,
+            200,
+            await store.organizeQuestions(id, await body(req)),
+          );
         if (rest === "questions" && method === "GET")
           return json(
             res,
@@ -132,6 +138,11 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
               skill: url.searchParams.get("skill") ?? undefined,
               search: url.searchParams.get("search") ?? undefined,
               archived: url.searchParams.get("archived") === "1",
+              status: url.searchParams.get("status") ?? undefined,
+              difficulty: url.searchParams.get("difficulty") ?? undefined,
+              hints: url.searchParams.get("hints") ?? undefined,
+              flagged: url.searchParams.get("flagged") ?? undefined,
+              sort: url.searchParams.get("sort") ?? undefined,
             }),
           );
         if (rest === "export" && method === "GET")
@@ -171,6 +182,7 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
             return json(res, 200, await store.answer(id, b));
           if (rest === "reveal")
             return json(res, 200, await store.reveal(id, b));
+          if (rest === "hint") return json(res, 200, await store.hint(id, b));
           if (rest === "finish")
             return json(res, 200, await store.finish(id, b.version));
           if (rest === "rate")

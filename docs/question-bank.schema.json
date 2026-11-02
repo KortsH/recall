@@ -39,6 +39,30 @@
             "minLength": 1,
             "maxLength": 20000
           },
+          "flag": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "allowDependents": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "note",
+              "allowDependents"
+            ],
+            "additionalProperties": false
+          },
+          "hint": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
           "concept": {
             "type": "string",
             "minLength": 1,
@@ -155,6 +179,11 @@
               "type": "object",
               "properties": {
                 "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                },
+                "hint": {
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 20000

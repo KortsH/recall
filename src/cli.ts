@@ -9,6 +9,7 @@ import { readBank } from "./core/bank.ts";
 import { remoteBackend, type Backend } from "./remote.ts";
 import { auditQuestions } from "./core/audit.ts";
 import { parseRecovery } from "./core/recovery.ts";
+import { UNASSIGNED_TOPIC, type TopicMove } from "./core/organization.ts";
 import {
   parsePortable,
   exportPortable,
@@ -16,6 +17,7 @@ import {
 } from "./core/portable.ts";
 import {
   prerequisiteStatus,
+  dependentQuestions,
   validatePrerequisites,
 } from "./core/prerequisites.ts";
 
@@ -291,7 +293,165 @@ program
   });
 
 program
+  .command("question-hint <deck> <id>")
+  .description(
+    "Read, author or remove an optional recall cue without resetting progress",
+  )
+  .option("--set <text>", "Set a short cue that does not reveal the answer")
+  .option("--clear", "Remove the cue")
+  .action(async (deck, id, o) => {
+    if (o.set !== undefined && o.clear)
+      throw new Error("Choose --set or --clear");
+    const s = await connect(),
+      d = await s.deck(deck),
+      item = await s.question(d.id, id);
+    if (o.set !== undefined || o.clear) {
+      const q = { ...item.question };
+      if (o.clear) delete q.hint;
+      else q.hint = o.set;
+      await s.editQuestion(d.id, id, q, item.revision);
+    }
+    print(await s.question(d.id, id));
+  });
+
+program
+  .command("organize <deck>")
+  .description(
+    "Preview atomic topic moves; add --apply to commit. General means uncategorized.",
+  )
+  .option("--ids <ids>", "Question IDs, comma-separated")
+  .option("--from <topic>", "Select an entire source topic")
+  .option("--unassigned", "Select uncategorized questions")
+  .option("--search <text>", "Filter source questions by prompt, ID or concept")
+  .option("--to <topic>", "Destination topic")
+  .option("--unassign", "Move to uncategorized")
+  .option("--file <file>", "JSON array of {id,topic,fromTopic?} moves")
+  .option("--apply", "Commit all moves in one transaction")
+  .action(async (deck, o) => {
+    const s = await connect(),
+      d = await s.deck(deck);
+    let moves: TopicMove[];
+    if (o.file) {
+      if (o.ids || o.from || o.unassigned || o.search || o.to || o.unassign)
+        throw new Error("Use --file alone with optional --apply");
+      moves = JSON.parse(await readFile(o.file, "utf8"));
+    } else {
+      if (
+        (!o.ids && !o.from && !o.unassigned && !o.search) ||
+        !!o.to === !!o.unassign ||
+        (o.from && o.unassigned)
+      )
+        throw new Error(
+          "Select questions with --ids, --from, --unassigned or --search; choose --to or --unassign",
+        );
+      const ids = o.ids
+        ? new Set<string>(
+            o.ids
+              .split(",")
+              .map((x: string) => x.trim())
+              .filter(Boolean),
+          )
+        : undefined;
+      const items = await s.items(d.id);
+      if (
+        ids &&
+        [...ids].some((id) => !items.some((i) => i.question.id === id))
+      )
+        throw new Error("Unknown question ID in --ids");
+      moves = items
+        .filter(
+          (i) =>
+            (!ids || ids.has(i.question.id)) &&
+            (!o.from || i.question.topic === o.from) &&
+            (!o.unassigned || i.question.topic === UNASSIGNED_TOPIC) &&
+            (!o.search ||
+              `${i.question.id} ${i.question.question} ${i.question.concept}`
+                .toLowerCase()
+                .includes(o.search.toLowerCase())),
+        )
+        .map((i) => ({
+          id: i.question.id,
+          fromTopic: i.question.topic,
+          topic: o.unassign ? UNASSIGNED_TOPIC : o.to,
+        }));
+    }
+    print(await s.organizeQuestions(d.id, { moves, apply: !!o.apply }));
+  });
+
+program
+  .command("flag <deck> <id>")
+  .description(
+    "Inspect a question and downstream impact, or flag it with a review note",
+  )
+  .option(
+    "--note <text>",
+    "Flag and skip this question, keeping the reason in the bank",
+  )
+  .option(
+    "--allow-dependents",
+    "Explicitly bypass this prerequisite for follow-ups; other requirements still apply",
+  )
+  .option(
+    "--keep-dependents-locked",
+    "Keep follow-ups blocked on this flagged prerequisite (default)",
+  )
+  .option("--clear", "Remove the flag and restore normal prerequisite rules")
+  .action(async (deck, id, o) => {
+    if (
+      (o.allowDependents && o.keepDependentsLocked) ||
+      (o.clear &&
+        (o.note !== undefined || o.allowDependents || o.keepDependentsLocked))
+    )
+      throw new Error("Choose one flag action");
+    const s = await connect(),
+      d = await s.deck(deck),
+      item = await s.question(d.id, id);
+    if (
+      o.note !== undefined ||
+      o.allowDependents ||
+      o.keepDependentsLocked ||
+      o.clear
+    ) {
+      const q = { ...item.question };
+      if (o.clear) delete q.flag;
+      else {
+        const note = o.note ?? q.flag?.note;
+        if (!note)
+          throw new Error(
+            "Supply --note explaining why the question needs review",
+          );
+        q.flag = {
+          note,
+          allowDependents: o.allowDependents
+            ? true
+            : o.keepDependentsLocked
+              ? false
+              : (q.flag?.allowDependents ?? false),
+        };
+      }
+      await s.editQuestion(d.id, id, q, item.revision);
+    }
+    const items = await s.items(d.id);
+    print({
+      question: await s.question(d.id, id),
+      dependents: dependentQuestions(items, id).map((i) => ({
+        id: i.question.id,
+        question: i.question.question,
+        answer: i.question.answer,
+        depends_on: i.question.depends_on,
+      })),
+    });
+  });
+program
   .command("questions <deck>")
+  .option("--flagged <filter>", "with or without")
+  .option(
+    "--status <status>",
+    "unseen, learning, mastered, locked or available",
+  )
+  .option("--difficulty <level>", "1–5")
+  .option("--hints <filter>", "with or without")
+  .option("--sort <sort>", "original, prompt, id or difficulty")
   .option("--topic <topic>")
   .option("--concept <concept>")
   .option("--skill <skill>", "recall or application")
@@ -307,6 +467,11 @@ program
       skill: o.skill,
       search: o.search,
       archived: o.archived,
+      status: o.status,
+      difficulty: o.difficulty,
+      hints: o.hints,
+      flagged: o.flagged,
+      sort: o.sort,
     });
     if (o.json) print(rows);
     else
@@ -318,6 +483,7 @@ program
           skill: i.question.skill ?? "recall",
           question: i.question.question,
           archived: i.archived,
+          flag: i.question.flag?.note,
         })),
       );
   });
@@ -453,10 +619,25 @@ async function study(
       } else if (c.format === "flashcard") {
         await ask("Recall the answer, then press Enter to reveal. ");
         response = "";
-      } else
-        response = await ask(
-          "Answer (separate required parts with semicolons): ",
-        );
+      } else {
+        do {
+          response = await ask(
+            "Answer (separate required parts with semicolons)" +
+              (c.hasHint && view.mode !== "test" ? ", or :hint" : "") +
+              ": ",
+          );
+          if (response === ":hint" && c.hasHint && view.mode !== "test") {
+            const cue = await s.hint(view.id, {
+              version: view.version,
+              revision: c.revision,
+            });
+            view = { ...view, version: cue.version, hint: cue.hint };
+            console.log(
+              `Hint: ${cue.hint}\nAssisted practice: this answer will not increase unaided mastery.`,
+            );
+          } else break;
+        } while (true);
+      }
       let rating: string | undefined;
       if (c.selfGrade && view.mode !== "test") {
         const reveal = await s.reveal(view.id, {
@@ -583,6 +764,22 @@ program
       await (
         await connect()
       ).reveal(id, JSON.parse(await readFile(o.file, "utf8"))),
+    ),
+  );
+program
+  .command("hint <id>")
+  .description(
+    "Request the current open card’s cue and record assisted practice",
+  )
+  .requiredOption(
+    "--file <file>",
+    "JSON {version,revision} from the current session",
+  )
+  .action(async (id, o) =>
+    print(
+      await (
+        await connect()
+      ).hint(id, JSON.parse(await readFile(o.file, "utf8"))),
     ),
   );
 program

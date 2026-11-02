@@ -9,7 +9,7 @@ import { createPool, migrate, databaseUrl } from "../src/server/db.ts";
 import { Store } from "../src/server/store.ts";
 import { parseBank } from "../src/core/bank.ts";
 import { createApp } from "../src/server/http.ts";
-import { newSession, advanceSession } from "../src/core/study.ts";
+import { newSession, advanceSession, requestHint } from "../src/core/study.ts";
 import { syncOfflineSession } from "../src/server/offline.ts";
 import { remoteBackend } from "../src/remote.ts";
 import { createRecovery } from "../src/core/recovery.ts";
@@ -58,6 +58,187 @@ async function fresh() {
   });
   return result.deckId;
 }
+test("HTTP hints and offline evidence preserve assistance without double mastery credit", async () => {
+  const imported = await store.importBank(
+      parseBank({
+        deck: "Hint " + randomUUID(),
+        questions: [
+          {
+            id: "base",
+            question: "Synthetic cue prompt",
+            answer: "alpha",
+            acceptedAnswers: ["alpha"],
+            hint: "A starting point",
+          },
+          {
+            id: "child",
+            question: "Synthetic follow-up",
+            answer: "beta",
+            depends_on: ["base"],
+          },
+        ],
+      }),
+    ),
+    id = imported.deckId,
+    remote = remoteBackend(base);
+  let s = await remote.createSession(id, { mode: "learn" });
+  s = (
+    await remote.answer(s.id, {
+      version: s.version,
+      revision: 1,
+      response: "alpha",
+    })
+  ).session;
+  assert.equal(s.card?.format, "written");
+  const cue = await remote.hint(s.id, { version: s.version, revision: 1 });
+  await assert.rejects(
+    remote.hint(s.id, { version: s.version, revision: 1 }),
+    /changed/,
+  );
+  assert.equal((await remote.getSession(s.id)).hint, "A starting point");
+  const result = await remote.answer(s.id, {
+    version: cue.version,
+    revision: 1,
+    response: "alpha",
+  });
+  assert.equal(result.feedback?.hintUsed, true);
+  let item = await remote.question(id, "base");
+  assert.equal(item.progress.recalls, 0);
+  assert.equal(item.progress.mastered, false);
+  const before = item.progress;
+  await remote.editQuestion(
+    id,
+    "base",
+    { ...item.question, hint: "Revised cue" },
+    item.revision,
+  );
+  item = await remote.question(id, "base");
+  assert.equal(item.revision, 1);
+  assert.deepEqual(item.progress, before);
+  const items = await remote.items(id),
+    local = newSession(id, items, { mode: "learn" });
+  requestHint(local, item, { version: local.version, revision: item.revision });
+  const r = advanceSession(
+    local,
+    item,
+    { version: local.version, revision: item.revision, response: "alpha" },
+    items,
+  );
+  assert.equal(r.attempt.hintUsed, true);
+  await syncOfflineSession(store, local);
+  await syncOfflineSession(store, local);
+  item = await remote.question(id, "base");
+  assert.equal(item.progress.attempts, 3);
+  assert.equal(item.progress.assisted, 2);
+  assert.equal(item.progress.recalls, 0);
+  const stripped = structuredClone(local);
+  delete stripped.answers[0].hintUsed;
+  await assert.rejects(
+    syncOfflineSession(store, stripped),
+    /cannot be rewritten/,
+  );
+});
+test("bulk organization is atomic and flags preserve progress while controlling downstream eligibility", async () => {
+  const id = await fresh(),
+    remote = remoteBackend(base),
+    s = await remote.createSession(id, { mode: "learn" });
+  await remote.answer(s.id, {
+    version: s.version,
+    revision: s.card!.revision,
+    response: ["A"],
+  });
+  const before = await remote.items(id),
+    moves = before.map((i) => ({
+      id: i.question.id,
+      topic: "Sorted",
+      fromTopic: i.question.topic,
+    }));
+  assert.equal((await remote.organizeQuestions(id, { moves })).dryRun, true);
+  assert.deepEqual(await remote.items(id), before);
+  await assert.rejects(
+    remote.organizeQuestions(id, {
+      moves: [...moves, { id: "missing", topic: "Sorted" }],
+      apply: true,
+    }),
+    /not found/,
+  );
+  assert.deepEqual(await remote.items(id), before);
+  assert.equal(
+    (await remote.organizeQuestions(id, { moves, apply: true })).moved,
+    5,
+  );
+  let after = await remote.items(id);
+  assert.deepEqual(
+    after.map((i) => i.progress),
+    before.map((i) => i.progress),
+  );
+  assert.deepEqual(
+    after.map((i) => i.revision),
+    before.map((i) => i.revision),
+  );
+  const root = await remote.question(id, "q0"),
+    child = await remote.question(id, "q1");
+  await remote.editQuestion(
+    id,
+    "q1",
+    { ...child.question, depends_on: ["q0"] },
+    child.revision,
+  );
+  await remote.editQuestion(
+    id,
+    "q0",
+    {
+      ...root.question,
+      flag: { note: "Needs a clearer prompt", allowDependents: false },
+    },
+    root.revision,
+  );
+  assert.ok(
+    (await remote.listQuestions(id, { status: "locked" })).some(
+      (i) => i.question.id === "q1",
+    ),
+  );
+  const cram = await remote.createSession(id, {
+    mode: "cram",
+    ignorePrerequisites: true,
+  });
+  assert.ok(
+    !(await store.loadSession(cram.id)).queue.some(
+      (e) => e.questionId === "q0",
+    ),
+  );
+  await remote.editQuestion(
+    id,
+    "q0",
+    {
+      ...root.question,
+      flag: { note: "Needs a clearer prompt", allowDependents: true },
+    },
+    root.revision,
+  );
+  assert.ok(
+    !(await remote.listQuestions(id, { status: "locked" })).some(
+      (i) => i.question.id === "q1",
+    ),
+  );
+  assert.equal(
+    (await remote.listQuestions(id, { flagged: "with" }))[0].question.id,
+    "q0",
+  );
+  const exported = await remote.exportBank(id);
+  assert.equal(
+    exported.questions.find((q) => q.id === "q0")!.flag?.note,
+    "Needs a clearer prompt",
+  );
+  assert.deepEqual((await remote.question(id, "q0")).progress, root.progress);
+  await assert.rejects(
+    remote.organizeQuestions(id, {
+      moves: [{ id: "q0", topic: "Other", fromTopic: "Old topic" }],
+      apply: true,
+    }),
+    /Topic changed/,
+  );
+});
 test("prerequisite graph updates are atomic, protect archives and preserve revisions", async () => {
   const id = await fresh();
   const original = await store.question(id, "q1");
@@ -414,6 +595,43 @@ test("CLI import, export and stats operate on the same real database", async () 
     );
     cli(["answer", s.id, "--file", response]);
     assert.equal(cli(["stats", title, "--json"]).stats.attempts, 1);
+    assert.equal(
+      cli(["organize", title, "--ids", "q0,q1", "--to", "Sorted"]).dryRun,
+      true,
+    );
+    assert.equal(cli(["question", title, "q0"]).question.topic, "MAC");
+    assert.equal(
+      cli(["organize", title, "--ids", "q0,q1", "--to", "Sorted", "--apply"])
+        .moved,
+      2,
+    );
+    assert.equal(
+      cli([
+        "question-hint",
+        title,
+        "q0",
+        "--set",
+        "Think about the first concept",
+      ]).question.hint,
+      "Think about the first concept",
+    );
+    assert.equal(
+      cli(["questions", title, "--hints", "with", "--json"]).length,
+      1,
+    );
+    assert.equal(
+      cli(["flag", title, "q0", "--note", "Rewrite this prompt"]).question
+        .question.flag.allowDependents,
+      false,
+    );
+    assert.equal(
+      cli(["questions", title, "--flagged", "with", "--json"]).length,
+      1,
+    );
+    assert.equal(
+      cli(["flag", title, "q0", "--clear"]).question.question.flag,
+      undefined,
+    );
     const exported = join(dir, "out.json");
     const r = spawnSync(
       process.execPath,

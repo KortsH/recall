@@ -16,6 +16,7 @@ import {
   advanceSession,
   sessionView,
   prepareSession,
+  requestHint,
 } from "../core/study.ts";
 import { prerequisiteStatus } from "../core/prerequisites.ts";
 import { resolveVariant } from "../core/questions.ts";
@@ -23,6 +24,7 @@ import { updateProgress } from "../core/engine.ts";
 import { createRecovery } from "../core/recovery.ts";
 import { auditQuestions } from "../core/audit.ts";
 import { resetPreview, resetItems, closeResetSession } from "../core/reset.ts";
+import { planOrganization } from "../core/organization.ts";
 
 interface Snapshot {
   downloadedAt: string;
@@ -476,6 +478,33 @@ export async function api<T>(
       }
       if (rest === "questions" && verb === "GET")
         return (s.items[id] ?? []).filter((i) => !i.archived) as T;
+      if (rest === "organize" && verb === "POST") {
+        if (!personalMode()) {
+          await syncInternal(s);
+          result = await serverApi(path, body, verb);
+          if (body.apply === true)
+            s.items[id] = await serverApi<Item[]>(`/decks/${id}/questions`);
+        } else {
+          const plan = planOrganization(s.items[id], body);
+          result = plan as T;
+          if (!plan.dryRun) {
+            const topics = new Map(plan.changes.map((c) => [c.id, c.topic]));
+            s.items[id] = s.items[id].map((i) =>
+              topics.has(i.question.id)
+                ? {
+                    ...i,
+                    question: {
+                      ...i.question,
+                      topic: topics.get(i.question.id)!,
+                    },
+                  }
+                : i,
+            );
+          }
+        }
+        await persist();
+        return result;
+      }
       if (rest === "export" && verb === "GET")
         return {
           schemaVersion: 1,
@@ -578,6 +607,17 @@ export async function api<T>(
         }
         await persist();
         return result;
+      }
+      if (rest === "hint") {
+        const item = items.find(
+          (i) => i.question.id === session.queue[session.cursor]?.questionId,
+        );
+        if (!item) throw new Error("Question not available");
+        const hint = requestHint(session, item, body);
+        session.version++;
+        if (!personalMode()) s.dirty[session.id] = true;
+        await persist();
+        return { version: session.version, hint } as T;
       }
       if (rest === "reveal") {
         if (session.mode === "test")

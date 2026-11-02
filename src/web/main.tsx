@@ -11,6 +11,8 @@ import { parsePortable, exportPortable } from "../core/portable.ts";
 import { saveJson } from "./files.ts";
 import { emptyProgress } from "../core/types.ts";
 import { QuestionLibrary } from "./library.tsx";
+import type { TopicMove } from "../core/organization.ts";
+import { dependentQuestions } from "../core/prerequisites.ts";
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -39,6 +41,8 @@ import {
   Command,
   GraduationCap,
   PanelLeftClose,
+  Lightbulb,
+  Flag,
 } from "lucide-react";
 import type { Store } from "../server/store.ts";
 import type { Question, Item, Attempt } from "../core/types.ts";
@@ -52,6 +56,7 @@ import "@fontsource/manrope/latin-600.css";
 import "@fontsource/manrope/latin-700.css";
 import "./readability.css";
 import "./study.css";
+import "./library.css";
 import {
   api,
   personalMode,
@@ -134,6 +139,7 @@ function App() {
     ReturnType<Store["resetLearning"]>
   > | null>(null);
   const [discardResetOpen, setDiscardResetOpen] = useState(false);
+  const [flagRequest, setFlagRequest] = useState<Item | null>(null);
   const [response, setResponse] = useState<any>(""),
     [selected, setSelected] = useState<string[]>([]),
     [pairs, setPairs] = useState<Record<string, string>>({}),
@@ -370,6 +376,7 @@ function App() {
       shareOpen ||
       resetRequest ||
       discardResetOpen ||
+      flagRequest ||
       controlsOpen
     )
       return;
@@ -398,6 +405,7 @@ function App() {
     shareOpen,
     resetRequest,
     discardResetOpen,
+    flagRequest,
     controlsOpen,
   ]);
   useEffect(() => {
@@ -426,6 +434,7 @@ function App() {
         importOpen ||
         resetRequest ||
         discardResetOpen ||
+        flagRequest ||
         controlsOpen ||
         !session
       )
@@ -558,6 +567,71 @@ function App() {
     }
   };
   const exportDeck = () => setShareOpen(true);
+  const openFlag = (id: string) =>
+    void run(async () => {
+      setFlagRequest(
+        await api<Item>(`/decks/${deckId}/questions/${encodeURIComponent(id)}`),
+      );
+    });
+  const saveFlag = (flag?: Question["flag"]) =>
+    void run(async () => {
+      if (!flagRequest) return;
+      const current = await api<Item>(
+        `/decks/${deckId}/questions/${encodeURIComponent(flagRequest.question.id)}`,
+      );
+      const question = { ...current.question };
+      if (flag) question.flag = flag;
+      else delete question.flag;
+      await api(
+        `/decks/${deckId}/questions/${encodeURIComponent(question.id)}`,
+        { question, revision: current.revision },
+        "PUT",
+      );
+      setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+      if (session) {
+        setSession(await api<SessionView>(`/sessions/${session.id}`));
+        if (
+          session.card?.questionId === question.id ||
+          feedback?.questionId === question.id
+        )
+          resetAnswer();
+      }
+      setFlagRequest(null);
+      await refresh();
+      setNotice(
+        flag
+          ? "Flagged for review and skipped. Your note is saved in the deck."
+          : "Flag removed. Normal learning rules restored.",
+      );
+    });
+  const moveQuestions = async (moves: TopicMove[], message: string) => {
+    if (busy) return false;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/decks/${deckId}/organize`, { moves, apply: true });
+      setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+      await refresh();
+      setNotice(message);
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const showHint = () =>
+    void run(async () => {
+      if (!session?.card || feedback || reveal || answerPendingRef.current)
+        return;
+      const result = await api<{ version: number; hint: string }>(
+        `/sessions/${session.id}/hint`,
+        { version: session.version, revision: session.card.revision },
+      );
+      setSession({ ...session, version: result.version, hint: result.hint });
+      inputRef.current?.focus({ preventScroll: true });
+    });
   const shareDeck = (includeProgress: boolean) =>
     void run(async () => {
       const bank = await api<any>(`/decks/${deckId}/export`);
@@ -784,7 +858,9 @@ function App() {
           </div>
         )}
         {!inStudy && (
-          <div className="page">
+          <div
+            className={`page ${section === "library" ? "library-page" : ""}`}
+          >
             {section === "overview" && (
               <>
                 <div className="page-heading">
@@ -1162,14 +1238,14 @@ function App() {
                     disabled={!deck}
                     onClick={exportDeck}
                   >
-                    <Download size={16} />
+                    <Upload size={16} />
                     Export
                   </button>
                   <button
                     className="button primary"
                     onClick={() => setImportOpen(true)}
                   >
-                    <Plus size={16} />
+                    <Download size={16} />
                     Import
                   </button>
                 </div>
@@ -1182,6 +1258,8 @@ function App() {
                   onTopic={setTopic}
                   onEdit={setEditor}
                   onUpdate={updateOrganization}
+                  onMove={moveQuestions}
+                  onFlag={setFlagRequest}
                 />
               </>
             )}
@@ -1586,9 +1664,16 @@ function App() {
                       : "Let’s make this one stick."}
                   </span>
                   {feedback.selfAssessed && <small>SELF-ASSESSED</small>}
+                  {feedback.hintUsed && <small>HINT USED</small>}
                 </div>
                 <div className="eyebrow">{feedback.topic}</div>
                 <h2>{feedback.question}</h2>
+                {feedback.hintUsed && (
+                  <p className="assisted-note">
+                    Assisted practice. This answer does not increase unaided
+                    recall or unlock prerequisites.
+                  </p>
+                )}
                 <div className="model-answer">
                   <span>MODEL ANSWER</span>
                   <p>{feedback.answer}</p>
@@ -1603,6 +1688,14 @@ function App() {
                   >
                     <Pencil size={14} />
                     Something off? Edit question
+                  </button>
+                  <button
+                    className="text-button quiet"
+                    disabled={busy}
+                    onClick={() => openFlag(feedback.questionId)}
+                  >
+                    <Flag size={14} />
+                    Flag for review
                   </button>
                   <button
                     className="button primary"
@@ -1654,8 +1747,43 @@ function App() {
                               ? "MAKE THE CONNECTION"
                               : "RECOGNITION"}
                       </span>
+                      <button
+                        className="icon-button question-flag-button"
+                        aria-label="Flag and skip question"
+                        title="Flag and skip this question"
+                        disabled={busy}
+                        onClick={() => openFlag(card.questionId)}
+                      >
+                        <Flag size={17} />
+                      </button>
                     </div>
                     <h2>{card.question}</h2>
+                    {card.hasHint && session.mode !== "test" && !reveal && (
+                      <div className="study-hint">
+                        {session.hint ? (
+                          <div role="status">
+                            <strong>
+                              <Lightbulb size={16} />
+                              Hint used
+                            </strong>
+                            <p>{session.hint}</p>
+                            <small>
+                              Assisted practice — try it without a hint next
+                              time to build mastery.
+                            </small>
+                          </div>
+                        ) : (
+                          <button
+                            className="text-button"
+                            disabled={busy}
+                            onClick={showHint}
+                          >
+                            <Lightbulb size={16} />
+                            Show hint <small>Counts as assisted practice</small>
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {session.learning && !card.options && (
                       <p className="answer-hint">
                         {card.options
@@ -1951,9 +2079,9 @@ function App() {
                           <Keyboard size={15} />
                           {card.format === "multiple_choice" &&
                           controls.autoSubmitSingle
-                            ? "Click an answer or press 1–9 to submit"
+                            ? `Click an answer or press 1–${Math.min(9, card.options?.length ?? 0)} to submit${(card.options?.length ?? 0) > 9 ? " · Arrow keys for more" : ""}`
                             : card.options
-                              ? "1–9 to select · Enter to check"
+                              ? `1–${Math.min(9, card.options.length)} to select${card.options.length > 9 ? " · Arrow keys for more" : ""} · Enter to check`
                               : "Enter to check · Shift + Enter for a new line"}
                         </span>
                         {(card.format !== "multiple_choice" ||
@@ -2107,6 +2235,15 @@ function App() {
           onExport={shareDeck}
         />
       )}
+      {flagRequest && (
+        <FlagDialog
+          item={flagRequest}
+          items={items}
+          busy={busy}
+          onClose={() => setFlagRequest(null)}
+          onSave={saveFlag}
+        />
+      )}
       {importOpen && (
         <ImportDialog
           busy={busy}
@@ -2177,6 +2314,12 @@ function Results({
             from accuracy.
           </p>
         )}
+        {r.answers.some((a) => a.hintUsed && !a.outdated) && (
+          <p>
+            {r.answers.filter((a) => a.hintUsed && !a.outdated).length} answers
+            used hints. Assisted answers are excluded from unaided mastery.
+          </p>
+        )}
         <div className="result-actions">
           <button className="button secondary" onClick={onBack}>
             Back to your deck
@@ -2222,6 +2365,7 @@ function Results({
               <small>
                 {a.topic}
                 {a.selfAssessed ? " · Self-assessed" : ""}
+                {a.hintUsed ? " · Hint used" : ""}
                 {a.outdated ? " · Changed question, excluded from score" : ""}
               </small>
             </span>
@@ -2502,6 +2646,169 @@ function ResetDialog({
     </div>
   );
 }
+function FlagDialog({
+  item,
+  items,
+  busy,
+  onClose,
+  onSave,
+}: {
+  item: Item;
+  items: Item[];
+  busy: boolean;
+  onClose: () => void;
+  onSave: (flag?: Question["flag"]) => void;
+}) {
+  const ref = useDialog(onClose);
+  const [note, setNote] = useState(item.question.flag?.note ?? "");
+  const [allow, setAllow] = useState(
+    item.question.flag?.allowDependents ?? false,
+  );
+  const dependents = dependentQuestions(items, item.question.id);
+  return (
+    <div className="modal-backdrop">
+      <div
+        className="modal flag-dialog"
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="flag-title"
+      >
+        <div className="modal-head">
+          <h2 id="flag-title">Flag question for review</h2>
+          <button
+            className="icon-button"
+            aria-label="Close flag"
+            disabled={busy}
+            onClick={onClose}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <p className="flag-prompt">{item.question.question}</p>
+        <p>
+          This question will be skipped in every study mode until you remove its
+          flag. Its existing progress is kept.
+        </p>
+        <label className="field">
+          Review note
+          <textarea
+            autoFocus
+            rows={3}
+            maxLength={20000}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="What is unclear, incorrect, or worth rewriting?"
+          />
+        </label>
+        {dependents.length > 0 && (
+          <>
+            <h3>
+              {dependents.length} follow-up question
+              {dependents.length === 1 ? "" : "s"}
+            </h3>
+            <p>
+              Review the affected questions below. Hover over a prompt or expand
+              it to see its answer.
+            </p>
+            <div className="flag-dependents">
+              {dependents.map((i) => (
+                <details key={i.question.id}>
+                  <summary title={i.question.answer}>
+                    {i.question.question}
+                    <small>
+                      {i.question.id}
+                      {i.question.depends_on?.includes(item.question.id)
+                        ? " · Direct follow-up"
+                        : " · Further downstream"}
+                    </small>
+                  </summary>
+                  <p>
+                    <strong>Model answer</strong>
+                    <br />
+                    {i.question.answer}
+                  </p>
+                </details>
+              ))}
+            </div>
+            <fieldset className="flag-policy">
+              <legend>What should happen to follow-ups?</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="flag-policy"
+                  checked={!allow}
+                  onChange={() => setAllow(false)}
+                />
+                <span>
+                  Keep them locked on this prerequisite
+                  <small>
+                    Recommended while an incorrect foundation needs fixing.
+                  </small>
+                </span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="flag-policy"
+                  checked={allow}
+                  onChange={() => setAllow(true)}
+                />
+                <span>
+                  Bypass this flagged prerequisite
+                  <small>
+                    Follow-ups can appear when their other prerequisites are
+                    met. Downstream questions still require their own
+                    foundations. This does not mark the flagged question
+                    mastered.
+                  </small>
+                </span>
+              </label>
+            </fieldset>
+          </>
+        )}
+        <p className="small">
+          The flag and note travel with question-bank exports, so you or an
+          assistant can review them later.
+        </p>
+        <div className="modal-foot">
+          {item.question.flag && (
+            <button
+              className="text-button"
+              disabled={busy}
+              onClick={() => onSave()}
+            >
+              Remove flag
+            </button>
+          )}
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="button primary"
+            disabled={busy || !note.trim()}
+            onClick={() =>
+              onSave({
+                note: note.trim(),
+                allowDependents: dependents.length ? allow : false,
+              })
+            }
+          >
+            {busy
+              ? "Saving…"
+              : item.question.flag
+                ? "Save flag"
+                : "Flag & skip"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function Editor({
   item,
   items,
@@ -2734,6 +3041,19 @@ function Editor({
                 value={q.explanation}
                 onChange={(e) => field("explanation", e.target.value)}
               />
+            </label>
+            <label className="field">
+              Optional hint
+              <textarea
+                rows={2}
+                value={q.hint ?? ""}
+                placeholder="A cue or a starting point, without giving away the answer"
+                onChange={(e) => field("hint", e.target.value || undefined)}
+              />
+              <small>
+                Shown only when requested during open recall. Hint-assisted
+                answers do not build unaided mastery. Leave blank for no hint.
+              </small>
             </label>
             {q.options && (
               <>

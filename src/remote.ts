@@ -13,6 +13,8 @@ export type Backend = Pick<
   | "recentSessions"
   | "answer"
   | "reveal"
+  | "hint"
+  | "organizeQuestions"
   | "finish"
   | "rateTest"
   | "listQuestions"
@@ -69,6 +71,8 @@ export function remoteBackend(base: string): Backend {
     recentSessions: (id) => call(`/decks/${enc(id)}/sessions`),
     answer: (id, input) => call(`/sessions/${enc(id)}/answer`, input),
     reveal: (id, input) => call(`/sessions/${enc(id)}/reveal`, input),
+    hint: (id, input) => call(`/sessions/${enc(id)}/hint`, input),
+    organizeQuestions: (id, input) => call(`/decks/${enc(id)}/organize`, input),
     finish: (id, version) => call(`/sessions/${enc(id)}/finish`, { version }),
     rateTest: (id, index, rating) =>
       call(`/sessions/${enc(id)}/rate`, { index, rating }),
