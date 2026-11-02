@@ -1,5 +1,17 @@
 # Question banks
 
+For a complete first-quiz walkthrough, copyable LLM prompt and UI/CLI import examples, start with [Make a quiz from your notes](../README.md#make-a-quiz-from-your-notes).
+
+## Optional cues and review flags
+
+Questions and explicit variants may include a nonempty `hint` string. Use a cue, not a disguised answer. An explicit variant's hint overrides the objective hint. Hints are requested explicitly on written/flashcard cards; Test disallows them. Assistance is recorded before revealing the cue, persists across reload/sync, and is exported as `Attempt.hintUsed` plus optional `Progress.assisted`. Correct assisted answers count in accuracy but do not increase streak, recall or recognition credit. Existing mastery remains; wrong assisted answers lose mastery normally. An assisted answer receives a short review interval. Hint-only changes preserve semantic hashes and learning progress.
+
+A question may include `flag: { "note": "Reason to review", "allowDependents": false }`. It is excluded from every study queue, including Cram/Test prerequisite overrides. Follow-ups stay blocked on this flagged parent by default, even if it was previously mastered. Explicit `allowDependents: true` bypasses this parent requirement only when its own upstream prerequisites are satisfied; all other parents and downstream mastery requirements remain. This never changes the parent's mastery. Remove `flag` to restore normal rules. Flags/notes are metadata, included in exports, and do not reset progress. Preserve them when generating updated banks; importing a replacement question object without its flag removes it.
+
+The UI previews direct and transitive follow-ups before saving a flag. `questions <deck> --flagged with --json` exposes notes for external review; `flag <deck> <id>` shows the question and downstream prompts/answers. Use `--note`, `--allow-dependents`, `--keep-dependents-locked` or `--clear` to edit it. Ordinary archive/restore still validates graph integrity; flagging does not remove graph nodes.
+
+`organize <deck>` previews bulk topic moves; `--apply` commits all or none, preserving progress, revisions and dependencies. Select IDs, a source topic, uncategorized cards or a search, or supply a JSON move array with `--file`. An optional `fromTopic` guards against overwriting a concurrent move. The uncategorized UI label corresponds to JSON topic `General`. Library and CLI filters use the same status/difficulty/hints/flags/sort implementation.
+
 ## Prerequisite learning
 
 Use `depends_on: ["foundation-id", "another-id"]` on a question. This is an AND relationship: every listed objective must meet the existing mastery threshold. Empty or omitted arrays are immediately eligible. References use stable IDs in the same deck and may cross topics. Put prerequisites on objectives, not format variants.

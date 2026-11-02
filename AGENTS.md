@@ -33,6 +33,8 @@ Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --f
 
 ## Change rules
 
+- Author optional `hint` cues without giving away answers. Preserve existing hints and `flag` review notes when revising an export. Hints are metadata; assisted success must never increase unaided mastery. `question-hint`, `flag`, `questions --flagged with --json` and dry-run-first `organize` expose the same review/organization operations as the UI. Flagged questions stay excluded even when Cram/Test bypass prerequisites; allowing their dependents is an explicit per-flag decision, not fake mastery. See `docs/QUESTION_BANK.md`.
+
 - Author and preserve `depends_on` prerequisite IDs. Read the prerequisite section in `docs/QUESTION_BANK.md` before generating questions. Run `recall prerequisites <deck>` alongside the coverage audit. Definitions precede variant definitions and applications; every listed parent is required. Keep dependency-only updates separate from wording corrections so mastery is preserved. Validate the complete prospective graph, including cross-topic links, before replacing or archiving records.
 - Normal Learn must never bypass locks. Only an explicit Cram/Test override may do so. Unlocking is independent of review dates. Keep live and downloaded session transitions in `src/core/study.ts`; newly eligible objectives enter the next working set in a running learning session. Learn starts with recognition (authored choices or existing answer options), then recall; keep at most 16 active objectives and finish the current set before introducing fresh ones. Session-only `learn-choice` options must not modify the question bank or semantic hashes.
 

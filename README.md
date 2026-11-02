@@ -51,6 +51,103 @@ To move your own learning between devices, export with **Include my learning pro
 
 **Back up your files.** Clearing app/site data removes local quizzes and progress. A questions-only file does not contain your progress; export with progress when you want a personal backup.
 
+## Make a quiz from your notes
+
+Recall takes an ordinary JSON file. You can write it yourself, ask any chat assistant to create it, or give an agent with terminal access the CLI instructions below. **There is no AI service inside Recall:** generation happens in the tool you choose, then Recall validates and stores the result. You do not need an agent harness, API key or terminal to import a quiz.
+
+### The question format
+
+Save this example as `bank.json`, or use it as a template when prompting an assistant:
+
+```json
+{
+  "schemaVersion": 1,
+  "deck": "Queues practice",
+  "description": "Definitions before applications",
+  "questions": [
+    {
+      "id": "queue-fifo",
+      "topic": "Queues",
+      "concept": "FIFO ordering",
+      "skill": "recall",
+      "question": "What removal order defines a FIFO queue?",
+      "answer": "First in, first out",
+      "options": ["First in, first out", "Last in, first out", "Highest priority first", "Random order"],
+      "correct": ["First in, first out"],
+      "acceptedAnswers": ["First in, first out", "Oldest item first"],
+      "hint": "Think about people waiting in a line.",
+      "explanation": "The earliest item added is the earliest removed.",
+      "difficulty": 1,
+      "tags": ["definition"],
+      "depends_on": []
+    },
+    {
+      "id": "queue-first-removal",
+      "topic": "Queues",
+      "concept": "FIFO ordering",
+      "skill": "application",
+      "question": "A, then B, then C enter an empty FIFO queue. Which item leaves first?",
+      "answer": "A",
+      "acceptedAnswers": ["A"],
+      "explanation": "A arrived earliest.",
+      "difficulty": 2,
+      "tags": ["scenario"],
+      "depends_on": ["queue-fifo"]
+    }
+  ]
+}
+```
+
+The minimum is `deck` plus `questions`, with an `id`, `question` and `answer` for every record. Keep IDs stable when revising a quiz. `topic` organizes the library; `depends_on` controls unlocking and requires **every** listed prerequisite. Difficulty runs from 1 to 5. An optional `hint` should suggest a starting point without revealing the answer.
+
+One record is one learning objective: Recall can show it as choices, written recall and a flashcard, sharing progress across formats. Authored `options` provide better distractors; otherwise Learn reuses other bank answers for introductory recognition. `correct` contains exact option strings: one means single choice, several mean select-all. Use `acceptedAnswers` for short, exact aliases; for open prose omit it and let the learner compare with the model answer and self-assess. Use `requiredParts` for separately required short parts, or `variants` for alternate formats of the same objective. See the [authoring guide](docs/QUESTION_BANK.md) and [complete JSON Schema](docs/question-bank.schema.json).
+
+### With a chat assistant, without terminal access
+
+Paste your notes and the example above into your preferred assistant, then use this prompt:
+
+> Turn these notes into a Recall JSON question bank using the supplied structure. Use only the source material; ask before guessing about ambiguous facts. Start with 15–25 useful objectives, with clear definitions, distinctions and short applications. Give each objective a stable, meaningful ID, topic, concept, skill (recall or application), question, answer, explanation and difficulty from 1–5. Use depends_on for foundations that must be learned first; include every referenced ID and avoid cycles. Avoid near-duplicate objectives: use variants for alternate formats. Add optional short hints that give a starting point without giving the answer away. Where useful, supply plausible but incorrect distractors and exact correct option strings. Use acceptedAnswers only for short, objectively checkable answers; leave open prose for model-answer self-assessment. Return valid JSON, without Markdown fences, suitable for saving as bank.json. For updates, preserve IDs, hints, flags and dependency links from my existing export unless we deliberately change them.
+
+Open **Question library → Import**. Choose the saved JSON file, or paste the complete JSON into **Question bank JSON**. Choose **Preview import**, inspect the proposed changes, then **Apply import**. Matching IDs update existing questions rather than creating copies. Leave **Replace this deck** off when adding questions; turn it on only for a complete replacement bank. Replacement archives omitted cards rather than permanently deleting them. A missing prerequisite or a cycle prevents the import from applying.
+
+For later revisions, export the current bank and give it back to the assistant alongside your new notes. Review its changes before importing. You can also use **New question**, edit a question directly, or **Flag & skip** a questionable card with a note for later review. No CLI is required for this workflow.
+
+### With an agent harness or terminal
+
+An agent harness is simply an assistant that can read files and run commands in your checkout. Give it your notes and this instruction:
+
+> Read AGENTS.md and docs/QUESTION_BANK.md. Inspect the current bank, prerequisite status and coverage audit before making changes. Generate or revise a bank in the ignored private/ directory using stable IDs, keeping existing hints, review flags and dependencies. Validate it, preview the import and report additions, edits and proposed archives. Do not reset learning or generate redundant objectives. Use replacement only if I explicitly requested a complete replacement. Keep my material and connection settings out of Git.
+
+The CLI requires a source checkout and `npm ci`; the Windows/Android downloads do not install a terminal CLI. **File-only commands work without PostgreSQL or a server:**
+
+```sh
+npm run recall -- validate private/bank.json
+npm run recall -- pack private/bank.json -o private/quiz.recall.json
+```
+
+For a device-only workspace, import that resulting file through the UI. The CLI does not directly edit your browser's IndexedDB. For a configured PostgreSQL database or your own Recall server, use:
+
+```sh
+# Inspect before authoring. --silent makes JSON stdout suitable for scripts.
+npm run --silent recall -- questions "My quiz" --json
+npm run recall -- export "My quiz" -o private/current-bank.json
+npm run recall -- audit "My quiz"
+npm run recall -- prerequisites "My quiz"
+
+# Add/update; omitted IDs remain.
+npm run recall -- import private/bank.json --dry-run --json
+npm run recall -- import private/bank.json --json
+
+# Complete replacement: inspect proposed archives first.
+npm run recall -- import private/bank.json --replace --dry-run --json
+npm run recall -- import private/bank.json --replace --json
+
+# Or target your own HTTP server explicitly; no direct database access needed.
+npm run --silent recall -- --server https://recall.example.net questions "My quiz" --json
+```
+
+By default the CLI uses `RECALL_SERVER_URL` if configured, otherwise the local `DATABASE_URL`. Check the destination before writing. Use `--deck "My quiz"` on import when the JSON's deck name differs from the intended destination. Exporting questions keeps dependencies, hints and review notes; add `--portable` for a shareable `.recall.json` file, and `--progress` only when intentionally including personal learning data.
+
 ## Learn
 
 - **Learn:** starts every new objective with multiple choice, then builds active recall in small working sets (12 by default). Master a set before the next unlocked questions enter. Saved sessions keep the same set. Enter checks written answers; Shift+Enter adds a line.
@@ -63,6 +160,27 @@ Three consecutive successes, including two active recalls, establish initial mas
 `depends_on` lists all prerequisites a question requires. Learn unlocks dependent questions dynamically as foundations are mastered. A prerequisite becoming due does not relock its children; losing mastery can. Topic tabs organize material independently of prerequisites. Drag A onto B to make A depend on B, or drop onto a topic heading to move it. The editor's searchable prerequisite picker works on phones and with the keyboard.
 
 Use **Something off? Edit question** after an answer. Semantic corrections reset that objective's progress; explanation, topic and dependency changes preserve it. Exact aliases and explicit multi-part grading are supported; prose uses a model answer and self-assessment. There is no AI grader or in-app generation service.
+
+Optional hints appear on open recall cards when you request them. Hint use is recorded as assisted practice: a correct assisted answer does not increase the unaided streak or recall count, and cannot establish mastery or unlock prerequisites. Test mode offers no hints. Incorrect assisted answers still count as mistakes.
+
+**Flag & skip** saves a review note and hides the question from all study modes. When it has follow-ups, review their prompts and answers before choosing whether to keep them locked or explicitly bypass this one flagged prerequisite. Other prerequisite requirements still apply. Removing the flag restores normal rules; flagging never marks a card mastered. Flags and notes are part of bank exports, so review them before sharing.
+
+The library offers a topic list, two- and three-column grids, and a compact list. Layout and the uncategorized sidebar preference stay on your device. Filter by status, difficulty, hints or flags; select matching cards and move them together, or drag selected cards onto a topic heading. **Undo last change** reverses a move. Uncategorized cards use the existing `General` topic in JSON. The CLI can do the same organization in a single transaction:
+
+```sh
+npm run recall -- questions "My quiz" --flagged with --json
+npm run recall -- questions "My quiz" --status locked --hints without --sort difficulty --json
+npm run recall -- organize "My quiz" --ids queue-fifo,queue-first-removal --to "Queues"
+npm run recall -- organize "My quiz" --from "Old topic" --to "New topic" --apply
+npm run recall -- organize "My quiz" --unassigned --to "Foundations" --apply
+npm run recall -- organize "My quiz" --ids queue-fifo --unassign --apply
+npm run recall -- question-hint "My quiz" queue-fifo --set "Think about people waiting in a line."
+npm run recall -- flag "My quiz" queue-fifo --note "Clarify the wording"
+npm run recall -- flag "My quiz" queue-fifo --allow-dependents
+npm run recall -- flag "My quiz" queue-fifo --clear
+```
+
+`organize` previews by default; `--apply` commits the whole batch atomically. `--file moves.json` accepts an array of `{ "id": "question-id", "topic": "Destination", "fromTopic": "Expected current topic" }` for several destinations at once. Moves, hints and flags preserve existing revisions and progress. To request a hint in scripted study, `hint <session-id> --file card.json` takes the current `{ "version": 0, "revision": 1 }`; interactive written study accepts `:hint`. See `npm run recall -- --help` for all commands.
 
 ## Optional shared server
 
