@@ -19,6 +19,11 @@ const result = spawnSync(
     env: {
       ...process.env,
       VITE_RECALL_STANDALONE: "true",
+      VITE_RECALL_PLATFORM: native
+        ? "android"
+        : process.argv.includes("--windows")
+          ? "windows"
+          : "web",
       RECALL_BUILD_DIR: directory,
       RECALL_WEB_BASE: base,
     },

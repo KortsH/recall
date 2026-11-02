@@ -1,5 +1,5 @@
 param(
-    [string]$ReleaseTag='v0.8.0-preview.1',
+    [string]$ReleaseTag='v0.8.1-preview.1',
     [string]$ReleaseDirectory,
     [string]$Destination,
     [switch]$NoLaunch,

@@ -710,5 +710,12 @@
   "guide.make.title": "Make your own quiz",
   "guide.make.body": "Use an ordinary online assistant with your notes. Recall imports its JSON; there is no AI service or API key inside Recall.",
   "guide.make.why": "Start small, review the model answers, and add only the features you need. For later changes, export your current quiz first so your assistant can keep ids and your corrections.",
-  "guide.make.defaults": "You can paste JSON directly into Import. No harness, terminal, server or manual code editing is required."
+  "guide.make.defaults": "You can paste JSON directly into Import. No harness, terminal, server or manual code editing is required.",
+  "updates.available": "Update available",
+  "updates.show": "View update",
+  "updates.release": "Recall {{version}} is available",
+  "updates.install": "Download and install the update when you are ready. Your quizzes and progress stay on this device.",
+  "updates.download": "View download",
+  "updates.installed": "Installed app: {{version}}",
+  "updates.events": "Checks on opening, returning to the app and reconnecting — no polling timer. Installed apps check public GitHub releases; no quiz data is sent. Updates never interrupt or reload your study session automatically."
 }

@@ -27,6 +27,7 @@ Requested for **1 November 2026**. The personal-use preview is complete. Formal 
 - [ ] Physical-device speech-recognition quality, language-pack and accessibility checks across browsers; embedded WebViews may not expose recognition.
 - [x] Refresh Windows/Android preview binaries with library layouts, flags, hints, dark mode, consistent branding and local voice controls (v0.4.0-preview.1).
 - [x] App-update notices with explicit Save & reload, draft/reveal restoration and no automatic study reload. Settings shows the UI version and offers a manual update check.
+- [x] Event-triggered update discovery on opening/foreground/reconnection, quiet persistent reminders, and Windows/Android release notifications based on the installed app version. No interval polling, auto-installation or background push service.
 - [x] Android saved-state acknowledgement before native reload/workspace changes or incoming attachments; explicit choices for pending progress, recovery export and older-page fallback. Physical-device verification remains below.
 
 - Android bundles the offline interface and supports device-only study, files, explicit server selection and guarded workspace switching. Safari PWA covers iPhone. Native iOS was excluded by the owner; issue #1 is closed as not planned.

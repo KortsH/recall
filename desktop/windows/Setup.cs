@@ -8,7 +8,7 @@ using System.Text;
 using System.Windows.Forms;
 
 internal static class RecallSetup {
-    const string Version="0.8.0-preview.1";
+    const string Version="0.8.1-preview.1";
     [STAThread] static void Main(string[] args){try{
         string root=Path.GetFullPath(Option(args,"--install-dir",Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"RecallPersonal")));
         string folder=Path.Combine(root,"versions",Version);Directory.CreateDirectory(folder);

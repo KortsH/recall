@@ -1,5 +1,6 @@
 import { OfflineEdits } from "./edits.tsx";
 import { Walkthrough } from "./walkthrough.tsx";
+import { UpdateNotice } from "./update-notice.tsx";
 import "./walkthrough.css";
 import "./edits.css";
 import { ErrorMessage } from "./error.tsx";
@@ -47,6 +48,8 @@ import {
   subscribeUpdates,
   startAppUpdates,
   checkAppUpdates,
+  startUpdateEvents,
+  type UpdateState,
 } from "./updates.ts";
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
@@ -214,7 +217,7 @@ function App() {
   > | null>(null);
   const [discardResetOpen, setDiscardResetOpen] = useState(false);
   const [flagRequest, setFlagRequest] = useState<Item | null>(null);
-  const [appUpdate, setAppUpdate] = useState({
+  const [appUpdate, setAppUpdate] = useState<UpdateState>({
     available: false,
     supported: false,
     checking: false,
@@ -222,6 +225,10 @@ function App() {
   });
   const [deferUpdate, setDeferUpdate] = useState(false);
   useEffect(() => subscribeUpdates(setAppUpdate), []);
+  useEffect(
+    () => setDeferUpdate(false),
+    [appUpdate.available, appUpdate.release?.version],
+  );
   const [response, setResponse] = useState<any>(""),
     [selected, setSelected] = useState<string[]>([]),
     [pairs, setPairs] = useState<Record<string, string>>({}),
@@ -935,7 +942,32 @@ function App() {
     setMobileNav(false);
     setGuideOpen(true);
   };
-  if (guideOpen) return <Walkthrough onClose={() => setGuideOpen(false)} />;
+  const updateNotice = (
+    <UpdateNotice
+      state={appUpdate}
+      deferred={deferUpdate}
+      busy={busy}
+      onLater={() => setDeferUpdate(true)}
+      onShow={() => setDeferUpdate(false)}
+      onReload={applyAppUpdate}
+      onDownload={() => {
+        try {
+          preserveDraft();
+          return true;
+        } catch (error) {
+          setError((error as Error).message);
+          return false;
+        }
+      }}
+    />
+  );
+  if (guideOpen)
+    return (
+      <>
+        {updateNotice}
+        <Walkthrough onClose={() => setGuideOpen(false)} />
+      </>
+    );
   return (
     <div className={`app ${inStudy ? "studying" : ""}`}>
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
@@ -1130,32 +1162,7 @@ function App() {
             </button>
           </div>
         </header>
-        {appUpdate.available && !deferUpdate && (
-          <div className="app-update-banner" role="status">
-            <div>
-              <strong>{tr("app.an_app_update_is_ready")}</strong>
-              <span>
-                {tr(
-                  "app.your_current_question_and_pending_progress_stay_saved_on",
-                )}
-              </span>
-            </div>
-            <button
-              className="button secondary"
-              disabled={busy}
-              onClick={() => setDeferUpdate(true)}
-            >
-              {tr("common.later")}
-            </button>
-            <button
-              className="button primary"
-              disabled={busy}
-              onClick={applyAppUpdate}
-            >
-              {tr("app.save_reload")}
-            </button>
-          </div>
-        )}
+        {updateNotice}
         {!cache.personal &&
           cache.pendingEdits > 0 &&
           section !== "settings" && (
@@ -1814,6 +1821,27 @@ function App() {
                     {tr("app.version")}
                     {appVersion}
                   </p>
+                  {appUpdate.installedVersion && (
+                    <p>
+                      {tr("updates.installed", {
+                        version: appUpdate.installedVersion,
+                      })}
+                    </p>
+                  )}
+                  <p>{tr("updates.events")}</p>
+                  {appUpdate.release && (
+                    <p>
+                      <a
+                        href={appUpdate.release.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {tr("updates.release", {
+                          version: appUpdate.release.version,
+                        })}
+                      </a>
+                    </p>
+                  )}
                   {appUpdate.available ? (
                     <>
                       <p>
@@ -4111,12 +4139,26 @@ function ImportDialog({
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);
-if (
-  "serviceWorker" in navigator &&
-  import.meta.env.PROD &&
-  location.hostname !== "appassets.androidplatform.net"
-)
-  void startAppUpdates(
-    navigator.serviceWorker,
-    `${import.meta.env.BASE_URL}sw.js`,
-  );
+async function watchUpdates() {
+  if (
+    "serviceWorker" in navigator &&
+    import.meta.env.PROD &&
+    location.hostname !== "appassets.androidplatform.net"
+  )
+    await startAppUpdates(
+      navigator.serviceWorker,
+      `${import.meta.env.BASE_URL}sw.js`,
+    );
+  startUpdateEvents({
+    window,
+    document,
+    version: appVersion,
+    platform:
+      import.meta.env.VITE_RECALL_PLATFORM === "windows"
+        ? "windows"
+        : import.meta.env.VITE_RECALL_PLATFORM === "android"
+          ? "android"
+          : undefined,
+  });
+}
+void watchUpdates();

@@ -710,5 +710,12 @@
   "guide.make.title": "Loo oma viktoriin",
   "guide.make.body": "Kasuta oma märkmetega tavalist veebipõhist vestlusabilist. Recall impordib JSON-i; rakenduses pole tehisintellekti teenust ega API-võtit.",
   "guide.make.why": "Alusta väikeselt, kontrolli näidisvastuseid ja lisa ainult vajalikud võimalused. Muudatusteks ekspordi kõigepealt praegune pakk, et abiline säilitaks id-d ja sinu parandused.",
-  "guide.make.defaults": "JSON-i saab otse importimisaknasse kleepida. Agenti, terminali, serverit ega käsitsi koodi muutmist pole vaja."
+  "guide.make.defaults": "JSON-i saab otse importimisaknasse kleepida. Agenti, terminali, serverit ega käsitsi koodi muutmist pole vaja.",
+  "updates.available": "Uuendus on saadaval",
+  "updates.show": "Vaata uuendust",
+  "updates.release": "Recall {{version}} on saadaval",
+  "updates.install": "Laadi uuendus alla ja paigalda sobival ajal. Viktoriinid ja õpitulemused jäävad sellesse seadmesse.",
+  "updates.download": "Vaata allalaadimist",
+  "updates.installed": "Paigaldatud rakendus: {{version}}",
+  "updates.events": "Uuendusi kontrollitakse avamisel, rakendusse naasmisel ja ühenduse taastumisel — ilma perioodilise päringuta. Paigaldatud rakendused kontrollivad avalikke GitHubi väljalaskeid; viktoriiniandmeid ei saadeta. Uuendus ei katkesta õppimist ega laadi lehte automaatselt uuesti."
 }

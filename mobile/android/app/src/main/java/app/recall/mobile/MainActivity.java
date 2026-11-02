@@ -126,7 +126,7 @@ public class MainActivity extends Activity {
                 if(!LOCAL_ORIGIN.equals(request.getUrl().getScheme()+"://"+request.getUrl().getHost()))return null;
                 WebResourceResponse response=loader.shouldInterceptRequest(request.getUrl());
                 if(response==null)return new WebResourceResponse("text/plain","UTF-8",404,"Not found",Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));
-                response.setResponseHeaders(Collections.singletonMap("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'self'"));return response;
+                response.setResponseHeaders(Collections.singletonMap("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://kortsh.github.io; font-src 'self'; base-uri 'self'"));return response;
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 String target=request.getUrl().toString();if(ServerAddress.sameOrigin(origin,target))return false;
@@ -137,6 +137,10 @@ public class MainActivity extends Activity {
             if(view!=web||!isMainFrame||!ServerAddress.sameOrigin(origin,sourceOrigin.toString()))return;
             try{
                 JSONObject payload=new JSONObject(message.getData());String action=payload.getString("action");
+                if(action.equals("appInfo")){
+                    JSONObject info=new JSONObject();info.put("platform","android");info.put("version",BuildConfig.VERSION_NAME);
+                    web.evaluateJavascript("window.dispatchEvent(new CustomEvent('recall-app-info',{detail:"+info.toString()+"}));",null);return;
+                }
                 if(action.equals("language")){
                     String language=payload.optString("language","");
                     if(language.length()<=35&&languages.contains(language)){
@@ -168,6 +172,7 @@ public class MainActivity extends Activity {
             web.evaluateJavascript("window.dispatchEvent(new CustomEvent('recall-import',{detail:"+JSONObject.quote(text)+"}));",null);
         }catch(Exception e){Toast.makeText(this,text("native.openError"),Toast.LENGTH_LONG).show();}
     }
+    @Override protected void onResume(){super.onResume();if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('recall-app-resume'));",null);}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);if(web!=null)web.saveState(state);}
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);
         if(request==OPEN_JSON&&picker!=null){picker.onReceiveValue(result==RESULT_OK&&data!=null&&data.getData()!=null?new Uri[]{data.getData()}:null);picker=null;}

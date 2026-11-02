@@ -39,7 +39,7 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
       res.setHeader("X-Frame-Options", "DENY");
       res.setHeader(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://kortsh.github.io; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
       );
       if (!allowedHost(req.headers.host))
         throw new AppError("Host not allowed", 403);

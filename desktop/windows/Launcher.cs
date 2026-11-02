@@ -13,7 +13,7 @@ using System.Threading;
 using System.Windows.Forms;
 
 internal static class RecallLauncher {
-    const string Version="0.8.0-preview.1";
+    const string Version="0.8.1-preview.1";
     static TcpListener listener;
     static Control dispatch;
     static NotifyIcon tray;
@@ -81,7 +81,7 @@ internal static class RecallLauncher {
     static string Mime(string extension){switch(extension.ToLowerInvariant()){case ".txt":return "text/plain; charset=utf-8";case ".html":return "text/html; charset=utf-8";case ".js":return "text/javascript; charset=utf-8";case ".css":return "text/css; charset=utf-8";case ".json":case ".webmanifest":return "application/json";case ".svg":return "image/svg+xml";case ".png":return "image/png";case ".ico":return "image/x-icon";case ".woff":return "font/woff";case ".woff2":return "font/woff2";default:return null;}}
     static void Reply(Stream stream,int status,string text,string mime,bool head){ReplyBytes(stream,status,Encoding.UTF8.GetBytes(text),mime??"text/plain; charset=utf-8",head);}
     static void ReplyBytes(Stream stream,int status,byte[] data,string mime,bool head){
-        string header="HTTP/1.1 "+status+" "+(status==200?"OK":"Error")+"\r\nContent-Type: "+mime+"\r\nContent-Length: "+data.Length+"\r\nConnection: close\r\nCache-Control: no-cache\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'\r\n\r\n";
+        string header="HTTP/1.1 "+status+" "+(status==200?"OK":"Error")+"\r\nContent-Type: "+mime+"\r\nContent-Length: "+data.Length+"\r\nConnection: close\r\nCache-Control: no-cache\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://kortsh.github.io; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'\r\n\r\n";
         byte[] bytes=Encoding.ASCII.GetBytes(header);stream.Write(bytes,0,bytes.Length);if(!head)stream.Write(data,0,data.Length);
     }
 }

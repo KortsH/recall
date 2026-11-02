@@ -2,6 +2,8 @@ name: Browser app
 on:
   push:
     branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,6 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: main
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
@@ -24,6 +27,10 @@ jobs:
       - run: npm run build:standalone
         env:
           RECALL_WEB_BASE: /${{ github.event.repository.name }}/
+      - name: Publish public release feed
+        run: node --import tsx scripts/release-feed.ts && node --import tsx scripts/pwa.ts build/standalone
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

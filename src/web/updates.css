@@ -26,6 +26,15 @@
   padding: 9px 13px;
   font-size: 12px;
 }
+.app-update-banner.compact {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  gap: 8px;
+  font-size: 12px;
+}
+.app-update-banner.compact strong {
+  flex: 1;
+}
 :root[data-theme="dark"] .app-update-banner {
   background: #332841;
   border-color: #614676;

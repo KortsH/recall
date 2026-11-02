@@ -3,7 +3,7 @@ $ErrorActionPreference='Stop'
 $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Push-Location $repo
 try {
-    if(-not $SkipWebBuild){ & node --import tsx scripts/standalone.ts; if($LASTEXITCODE -ne 0){throw 'Web build failed'} }
+    if(-not $SkipWebBuild){ & node --import tsx scripts/standalone.ts --windows; if($LASTEXITCODE -ne 0){throw 'Web build failed'} }
     $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     if(-not (Test-Path -LiteralPath $compiler)){$compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'}
     if(-not (Test-Path -LiteralPath $compiler)){throw 'Building the Windows installer requires .NET Framework 4.8 on Windows.'}
