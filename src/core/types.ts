@@ -16,6 +16,16 @@ export interface Variant {
   rubric?: string[];
 }
 export interface Question {
+  reversible?: boolean;
+  reverse?: {
+    question: string;
+    answer: string;
+    acceptedAnswers?: string[];
+    requiredParts?: string[][];
+    rubric?: string[];
+    explanation?: string;
+    hint?: string;
+  };
   flag?: { note: string; allowDependents: boolean };
   hint?: string;
   depends_on?: string[];
@@ -42,6 +52,7 @@ export interface Bank {
   questions: Question[];
 }
 export interface Progress {
+  recallDirections?: { forward: number; reverse: number };
   assisted?: number;
   skills?: Partial<
     Record<"recall" | "application", { attempts: number; correct: number }>
@@ -121,6 +132,7 @@ export interface Attempt {
   at: string;
 }
 export interface PublicCard {
+  answerParts?: number;
   retentionCheck?: boolean;
   hasHint?: boolean;
   questionId: string;

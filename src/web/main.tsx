@@ -31,6 +31,8 @@ import {
   type ThemePreference,
 } from "./theme.ts";
 import { ReadAloud } from "./speech.tsx";
+import { SubmittedAnswer, responseText } from "./answers.tsx";
+import { resolveVariant } from "../core/questions.ts";
 import { Dictation } from "./dictation.tsx";
 import "./dictation.css";
 import { version as appVersion } from "../../package.json";
@@ -749,8 +751,8 @@ function App() {
           ...feedback,
           explanation: result.reset
             ? tr("study.editedAttempt")
-            : (question.variants.find((v) => v.id === feedback.variantId)
-                ?.explanation ?? question.explanation),
+            : (resolveVariant(question, feedback.variantId).explanation ??
+              question.explanation),
         });
       void refresh();
     });
@@ -2209,9 +2211,15 @@ function App() {
                     )}
                   </p>
                 )}
-                <div className="model-answer">
-                  <span>{tr("app.model_answer")}</span>
-                  <p>{feedback.answer}</p>
+                <div className="answer-comparison">
+                  <SubmittedAnswer
+                    value={feedback.response}
+                    mental={feedback.mentalRecall}
+                  />
+                  <div className="model-answer">
+                    <span>{tr("app.model_answer")}</span>
+                    <p>{feedback.answer}</p>
+                  </div>
                 </div>
                 {feedback.explanation && (
                   <p className="explanation">{feedback.explanation}</p>
@@ -2275,17 +2283,6 @@ function App() {
                   <section className="study-card" ref={studyRef}>
                     <div className="card-topline">
                       <span className="topic-tag">{card.topic}</span>
-                      <span className="format-label">
-                        {card.retentionCheck
-                          ? tr("app.memory_check")
-                          : card.format === "written"
-                            ? tr("app.active_recall")
-                            : card.format === "flashcard"
-                              ? tr("app.recall_reflect")
-                              : card.format === "matching"
-                                ? tr("app.make_the_connection")
-                                : tr("app.recognition")}
-                      </span>
                       <button
                         className="icon-button question-flag-button"
                         aria-label={tr("app.flag_and_skip_question")}
@@ -2330,17 +2327,6 @@ function App() {
                           </button>
                         )}
                       </div>
-                    )}
-                    {session.learning && !card.options && (
-                      <p className="answer-hint">
-                        {card.options
-                          ? tr(
-                              "app.start_by_recognising_the_answer_you_ll_recall_it",
-                            )
-                          : tr(
-                              "app.now_recall_it_without_the_choices_two_successful_recalls",
-                            )}
-                      </p>
                     )}
                     {!reveal && (
                       <>
@@ -2586,15 +2572,13 @@ function App() {
                                 });
                               }}
                             />
-                            <p>
-                              {card.selfGrade
-                                ? tr(
-                                    "app.you_ll_compare_with_a_model_answer_and_assess",
-                                  )
-                                : tr(
-                                    "app.for_multi_part_rules_separate_each_part_with_a",
-                                  )}
-                            </p>
+                            {(card.answerParts ?? 0) > 1 && (
+                              <p>
+                                {tr(
+                                  "app.for_multi_part_rules_separate_each_part_with_a",
+                                )}
+                              </p>
+                            )}
                           </div>
                         )}
                       </>
@@ -2609,15 +2593,18 @@ function App() {
                           "app.compare_your_answer_with_the_model",
                         )}
                       >
-                        <span className="eyebrow">
-                          {tr("app.model_answer")}
-                        </span>
-                        {reveal.mental && (
-                          <p className="explanation">
-                            {tr("app.mental_recall_help")}
-                          </p>
-                        )}
-                        <p className="reveal-model">{reveal.answer}</p>
+                        <div className="answer-comparison">
+                          <SubmittedAnswer
+                            value={session.revealed?.response ?? actualResponse}
+                            mental={reveal.mental}
+                          />
+                          <div className="model-answer">
+                            <span className="eyebrow">
+                              {tr("app.model_answer")}
+                            </span>
+                            <p className="reveal-model">{reveal.answer}</p>
+                          </div>
+                        </div>
                         <ReadAloud
                           text={reveal.answer}
                           label={tr("app.read_model_answer")}
@@ -3003,9 +2990,10 @@ function Results({
           <div className="result-answer-body">
             <span className="eyebrow">{tr("results.your_answer")}</span>
             <p>
-              {typeof a.response === "string"
-                ? a.response
-                : JSON.stringify(a.response)}
+              {responseText(a.response) ||
+                (a.mentalRecall
+                  ? tr("study.answered_mentally")
+                  : tr("study.no_written_answer"))}
             </p>
             <span className="eyebrow">{tr("app.model_answer")}</span>
             <p>{a.answer}</p>
@@ -3673,6 +3661,70 @@ function Editor({
                 onChange={(e) => field("answer", e.target.value)}
               />
             </label>
+            <fieldset className="reversal-editor">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!q.reversible}
+                  onChange={(e) =>
+                    setQ((previous) => ({
+                      ...previous,
+                      reversible: e.target.checked,
+                      reverse: e.target.checked
+                        ? (previous.reverse ?? { question: "", answer: "" })
+                        : undefined,
+                    }))
+                  }
+                />
+                {tr("editor.reversible")}
+              </label>
+              {q.reversible && (
+                <>
+                  <label className="field">
+                    {tr("editor.reverse_question")}
+                    <textarea
+                      rows={2}
+                      value={q.reverse?.question ?? ""}
+                      onChange={(e) =>
+                        field("reverse", {
+                          ...q.reverse,
+                          question: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    {tr("editor.reverse_answer")}
+                    <textarea
+                      rows={2}
+                      value={q.reverse?.answer ?? ""}
+                      onChange={(e) =>
+                        field("reverse", {
+                          ...q.reverse,
+                          answer: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    {tr("editor.reverse_aliases")}
+                    <textarea
+                      rows={2}
+                      value={(q.reverse?.acceptedAnswers ?? []).join("\n")}
+                      onChange={(e) =>
+                        field("reverse", {
+                          ...q.reverse,
+                          acceptedAnswers: e.target.value.trim()
+                            ? e.target.value.split("\n").filter(Boolean)
+                            : undefined,
+                        })
+                      }
+                    />
+                  </label>
+                  <small>{tr("editor.reverse_help")}</small>
+                </>
+              )}
+            </fieldset>
             <label className="field">
               {tr("common.explanation")}
               <textarea

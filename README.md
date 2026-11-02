@@ -2,7 +2,7 @@
 
 A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.6.2-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.6.2-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.6.2-preview.1)
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.7.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.7.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.7.0-preview.1)
 
 ## Install and use
 
@@ -277,3 +277,5 @@ Use **Study controls** (the gear during a session, or Settings) to change single
 Learn also adds delayed memory checks of older mastered questions, at recall level rather than multiple choice. The session budget scales with deck size (about 5 checks for 30 questions, 20 for 100), excludes recent cards, flags and locked prerequisites, and remains bounded. A failed check removes mastery, returns that objective to relearning and increases checks of other older objectives. Selecting a check never changes its due date or grants mastery.
 
 For written practice, **Answer in my head** (or Enter in an empty answer box) reveals the model without typing. Compare your mental response and explicitly choose Again, Hard, Good or Easy; revealing alone never earns credit. This is self-assessed recall, including for questions that also support automatic text checking. Test mode keeps answers hidden until completion. CLI/API users can send `mental: true` with the usual `version`, `revision` and `response` to `reveal`, then submit an explicit rating using the returned session version.
+
+Two-way recall is optional per question: `reversible: true` requires an authored `reverse` object with `question` and `answer`, plus optional aliases/parts/rubric/explanation/hint. See [examples/reversible.json](examples/reversible.json) and the [authoring guide](docs/QUESTION_BANK.md#two-way-recall). The question editor exposes the same fields. Both directions share an ID and progress; reversible mastery requires successful unaided recall each way. Old banks remain compatible. Enabling/changing reverse content resets only the edited objective's learning through normal semantic-revision rules. Feedback now shows your submitted answer alongside the model; mental recall is labeled honestly without inventing text.

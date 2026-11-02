@@ -326,3 +326,52 @@
     font-size: 12px;
   }
 }
+.answer-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 12px 0;
+}
+.answer-comparison > div {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.answer-comparison .submitted-answer {
+  background: var(--surface);
+}
+.answer-comparison p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 150px;
+  overflow: auto;
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 8px 0 0;
+}
+.reversal-editor {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.reversal-editor > label:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.reversal-editor input[type="checkbox"] {
+  width: auto;
+}
+@media (max-width: 600px) {
+  .answer-comparison {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .answer-comparison p {
+    max-height: 110px;
+  }
+}

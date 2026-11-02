@@ -25,7 +25,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.6.2-preview.1");
+  .version("0.7.0-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",

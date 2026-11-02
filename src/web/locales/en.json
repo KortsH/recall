@@ -600,5 +600,12 @@
   "dictation.localUnavailable": "On-device speech is unavailable for this language or its language pack is missing. Use keyboard dictation, or explicitly allow the browser’s speech service in Voice options.",
   "dictation.languageUnavailable": "This speech service does not support the selected language. Try another language or keyboard dictation.",
   "dictation.denied": "Microphone or speech access was denied. You can change your browser permissions or keep typing.",
-  "dictation.failed": "Dictation could not start or was interrupted. Check microphone, language and connection settings, or keep typing."
+  "dictation.failed": "Dictation could not start or was interrupted. Check microphone, language and connection settings, or keep typing.",
+  "study.answered_mentally": "Answered in your head",
+  "study.no_written_answer": "No written answer",
+  "editor.reversible": "Practise this question in both directions",
+  "editor.reverse_question": "Reverse question",
+  "editor.reverse_answer": "Reverse model answer",
+  "editor.reverse_aliases": "Accepted reverse answers (optional, one per line)",
+  "editor.reverse_help": "Write a clear reverse prompt and its answer. Both directions share this question’s progress; mastery requires recall in each direction."
 }

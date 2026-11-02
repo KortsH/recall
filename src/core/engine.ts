@@ -1,4 +1,4 @@
-import { variants, resolveVariant } from "./questions.ts";
+import { variants, resolveVariant, recallDirection } from "./questions.ts";
 import { prerequisiteStatus } from "./prerequisites.ts";
 import type {
   Item,
@@ -71,11 +71,27 @@ export function updateProgress(
   rating?: string,
   skill: "recall" | "application" = "recall",
   hintUsed = false,
+  direction?: "forward" | "reverse",
 ): Progress {
   const active = format === "written" || format === "flashcard";
   const streak = correct ? p.streak + Number(!hintUsed) : 0;
   const recalls = correct ? p.recalls + Number(active && !hintUsed) : 0;
-  const mastered = correct && streak >= 3 && recalls >= 2;
+  const recallDirections =
+    direction || p.recallDirections
+      ? { ...(p.recallDirections ?? { forward: 0, reverse: 0 }) }
+      : undefined;
+  if (recallDirections) {
+    if (!correct) {
+      recallDirections.forward = 0;
+      recallDirections.reverse = 0;
+    } else if (direction && active && !hintUsed) recallDirections[direction]++;
+  }
+  const mastered =
+    correct &&
+    streak >= 3 &&
+    recalls >= 2 &&
+    (!recallDirections ||
+      (recallDirections.forward > 0 && recallDirections.reverse > 0));
   const interval = hintUsed
     ? 2
     : correct
@@ -90,6 +106,7 @@ export function updateProgress(
             : 10
       : 2;
   return {
+    ...(recallDirections ? { recallDirections } : {}),
     ...(hintUsed || p.assisted !== undefined
       ? { assisted: (p.assisted ?? 0) + Number(hintUsed) }
       : {}),
@@ -114,7 +131,20 @@ export function updateProgress(
 }
 export function chooseVariant(item: Item, mode: string, offset = 0): Variant {
   const all = variants(item.question);
+  const reverse = item.question.reversible && item.question.reverse;
+  const direction = !item.progress.recallDirections?.forward
+    ? "forward"
+    : !item.progress.recallDirections?.reverse
+      ? "reverse"
+      : item.progress.recalls % 2
+        ? "reverse"
+        : "forward";
   if (mode === "flashcards") {
+    if (reverse)
+      return resolveVariant(
+        item.question,
+        direction === "reverse" ? "reverse-flashcard" : "flashcard",
+      );
     const cards = all.filter((v) => v.type === "flashcard");
     return cards[item.progress.attempts % cards.length];
   }
@@ -125,6 +155,11 @@ export function chooseVariant(item: Item, mode: string, offset = 0): Variant {
       candidates.find(
         (v) => v.type === "multiple_choice" || v.type === "multiple_select",
       ) ?? candidates[0]
+    );
+  if (reverse)
+    return resolveVariant(
+      item.question,
+      direction === "reverse" ? "reverse" : "written",
     );
   const recalls = candidates.filter(
     (v) => v.type !== "multiple_choice" && v.type !== "multiple_select",
@@ -327,6 +362,7 @@ export function publicCard(
   };
   return {
     ...(entry.retentionCheck ? { retentionCheck: true } : {}),
+    ...(v.requiredParts ? { answerParts: v.requiredParts.length } : {}),
     questionId: item.question.id,
     variantId: v.id,
     revision: item.revision,
@@ -336,7 +372,12 @@ export function publicCard(
     question: v.question,
     hasHint:
       ["written", "flashcard"].includes(v.type) &&
-      !!(v.hint ?? item.question.hint),
+      !!(
+        v.hint ??
+        (recallDirection(item.question, v.id) === "reverse"
+          ? undefined
+          : item.question.hint)
+      ),
     options:
       entry.variantId === "learn-choice"
         ? shuffle(

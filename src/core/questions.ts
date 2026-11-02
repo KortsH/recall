@@ -37,8 +37,35 @@ export function variants(q: Question): Variant[] {
       skill: q.skill,
     },
     ...q.variants.map((v) => ({ ...v, skill: v.skill ?? q.skill })),
+    ...(q.reversible && q.reverse
+      ? [
+          {
+            ...q.reverse,
+            rubric: q.reverse.rubric ?? [],
+            id: "reverse",
+            type: "written" as const,
+            skill: q.skill,
+          },
+          {
+            ...q.reverse,
+            rubric: q.reverse.rubric ?? [],
+            id: "reverse-flashcard",
+            type: "flashcard" as const,
+            skill: q.skill,
+          },
+        ]
+      : []),
   ];
 }
+export const recallDirection = (
+  q: Question,
+  variantId: string,
+): "forward" | "reverse" | undefined =>
+  q.reversible && q.reverse
+    ? variantId === "reverse" || variantId === "reverse-flashcard"
+      ? "reverse"
+      : "forward"
+    : undefined;
 export function resolveVariant(q: Question, id: string): Variant {
   // A presentation generated from existing deck answers, never bank content.
   // Grading always takes the correct answer from the current question.

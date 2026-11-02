@@ -28,6 +28,10 @@ const progressSchema = z
     recognition: count,
     selfAssessed: count,
     assisted: count.optional(),
+    recallDirections: z
+      .object({ forward: count, reverse: count })
+      .strict()
+      .optional(),
     mastered: z.boolean(),
     lastReviewed: date,
     nextReview: date,
@@ -45,7 +49,14 @@ const progressSchema = z
       p.recognition <= p.correct &&
       p.selfAssessed <= p.attempts &&
       (p.assisted ?? 0) <= p.attempts &&
-      p.mastered === (p.streak >= 3 && p.recalls >= 2),
+      (!p.recallDirections ||
+        p.recallDirections.forward + p.recallDirections.reverse <= p.recalls) &&
+      p.mastered ===
+        (p.streak >= 3 &&
+          p.recalls >= 2 &&
+          (!p.recallDirections ||
+            (p.recallDirections.forward > 0 &&
+              p.recallDirections.reverse > 0))),
     "Inconsistent progress counters or mastery",
   );
 const envelope = z
@@ -93,8 +104,20 @@ export function parsePortable(input: unknown): {
       throw new Error(
         `Invalid Recall file: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
       );
+    const bank = parseBank(parsed.data.bank);
+    for (const q of bank.questions) {
+      const p = parsed.data.progress?.[q.id]?.progress;
+      if (
+        q.reversible &&
+        p?.mastered &&
+        (!p.recallDirections?.forward || !p.recallDirections?.reverse)
+      )
+        throw new Error(
+          `${q.id}: reversible mastery requires successful recall in both directions`,
+        );
+    }
     return {
-      bank: parseBank(parsed.data.bank),
+      bank,
       progress: parsed.data.progress,
     };
   }

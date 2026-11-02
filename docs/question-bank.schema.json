@@ -99,6 +99,68 @@
             "type": "string",
             "maxLength": 20000
           },
+          "reversible": {
+            "type": "boolean"
+          },
+          "reverse": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "answer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "acceptedAnswers": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                }
+              },
+              "requiredParts": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                }
+              },
+              "rubric": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                }
+              },
+              "explanation": {
+                "type": "string",
+                "maxLength": 20000
+              },
+              "hint": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            },
+            "required": [
+              "question",
+              "answer"
+            ],
+            "additionalProperties": false
+          },
           "difficulty": {
             "default": 1,
             "type": "integer",

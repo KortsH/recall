@@ -50,6 +50,19 @@ const questionSchema = z
     question: text,
     answer: text,
     explanation: z.string().max(20000).default(""),
+    reversible: z.boolean().optional(),
+    reverse: z
+      .object({
+        question: text,
+        answer: text,
+        acceptedAnswers: grading.acceptedAnswers,
+        requiredParts: grading.requiredParts,
+        rubric: grading.rubric,
+        explanation: z.string().max(20000).optional(),
+        hint: text.optional(),
+      })
+      .strict()
+      .optional(),
     difficulty: z.number().int().min(1).max(5).default(1),
     tags: z.array(text).default([]),
     type: z
@@ -105,6 +118,10 @@ export function parseBank(input: unknown, deckOverride?: string): Bank {
     if (ids.has(q.id))
       throw new Error(`questions.${index}.id: duplicate ID ${q.id}`);
     ids.add(q.id);
+    if (!!q.reversible !== !!q.reverse)
+      throw new Error(
+        `${q.id}: reversible:true requires an explicit reverse question and answer; omit reverse when reversible is false`,
+      );
     validateChoices(
       q,
       q.id,
@@ -115,6 +132,7 @@ export function parseBank(input: unknown, deckOverride?: string): Bank {
       "written",
       "flashcard",
       "learn-choice",
+      ...(q.reversible ? ["reverse", "reverse-flashcard"] : []),
     ]);
     for (const v of q.variants) {
       if (variantIds.has(v.id))
@@ -147,6 +165,7 @@ export function semanticContent(q: Question): string {
     depends_on,
     hint,
     flag,
+    reversible,
     ...content
   } = q;
   const canonical = (value: unknown): unknown =>
@@ -163,5 +182,7 @@ export function semanticContent(q: Question): string {
               .map(([k, v]) => [k, canonical(v)]),
           )
         : value;
-  return JSON.stringify(canonical(content));
+  return JSON.stringify(
+    canonical({ ...content, ...(reversible ? { reversible: true } : {}) }),
+  );
 }

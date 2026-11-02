@@ -600,5 +600,12 @@
   "dictation.localUnavailable": "Seadmepõhine kõnetuvastus pole selle keele jaoks saadaval või keelepakett puudub. Kasuta klaviatuuri dikteerimist või luba kõnevalikutes brauseri kõnetuvastusteenus.",
   "dictation.languageUnavailable": "See kõnetuvastusteenus ei toeta valitud keelt. Vali teine keel või kasuta klaviatuuri dikteerimist.",
   "dictation.denied": "Mikrofoni või kõnetuvastuse kasutamine keelati. Muuda brauseri õigusi või jätka kirjutamist.",
-  "dictation.failed": "Dikteerimist ei saanud alustada või see katkes. Kontrolli mikrofoni, keele ja ühenduse seadeid või jätka kirjutamist."
+  "dictation.failed": "Dikteerimist ei saanud alustada või see katkes. Kontrolli mikrofoni, keele ja ühenduse seadeid või jätka kirjutamist.",
+  "study.answered_mentally": "Vastasid mõttes",
+  "study.no_written_answer": "Kirjalik vastus puudub",
+  "editor.reversible": "Harjuta küsimust mõlemas suunas",
+  "editor.reverse_question": "Pöördküsimus",
+  "editor.reverse_answer": "Pöördküsimuse näidisvastus",
+  "editor.reverse_aliases": "Lubatud pöördvastused (valikuline, üks real)",
+  "editor.reverse_help": "Kirjuta selge pöördküsimus ja vastus. Mõlemal suunal on ühine õpitulemus; omandamiseks tuleb mõlemas suunas meenutada."
 }

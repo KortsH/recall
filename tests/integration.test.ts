@@ -1412,3 +1412,75 @@ test("written mental recall is explicit, preserves the original blank response a
   invalid.mode = "test";
   await assert.rejects(syncOfflineSession(store, invalid), /outside Test/);
 });
+
+test("reversible questions unlock only after both directions and offline replay credits each direction once", async () => {
+  const make = () =>
+    parseBank({
+      deck: "Reversible " + randomUUID(),
+      questions: [
+        {
+          id: "base",
+          question: "Which order defines a queue?",
+          answer: "First in, first out",
+          acceptedAnswers: ["First in, first out"],
+          reversible: true,
+          reverse: {
+            question: "Which structure removes the oldest item first?",
+            answer: "Queue",
+            acceptedAnswers: ["Queue"],
+          },
+        },
+        {
+          id: "child",
+          question: "Which enters first?",
+          answer: "A",
+          acceptedAnswers: ["A"],
+          depends_on: ["base"],
+        },
+      ],
+    });
+  const id = (await store.importBank(make())).deckId;
+  let view = await store.createSession(id, { mode: "learn", count: 1 });
+  for (const [variant, response] of [
+    ["learn-choice", "First in, first out"],
+    ["written", "First in, first out"],
+    ["reverse", "Queue"],
+  ]) {
+    assert.equal(view.card!.variantId, variant);
+    const result = await store.answer(view.id, {
+      version: view.version,
+      revision: view.card!.revision,
+      response,
+    });
+    view = result.session;
+    const progress = (await store.question(id, "base")).progress;
+    assert.equal(progress.mastered, variant === "reverse");
+  }
+  assert.equal(view.card!.questionId, "child");
+  const id2 = (await store.importBank(make())).deckId,
+    items = await store.items(id2),
+    local = newSession(id2, items, { mode: "learn", count: 1 });
+  for (const response of [
+    "First in, first out",
+    "First in, first out",
+    "Queue",
+  ]) {
+    const item = items.find(
+      (i) => i.question.id === local.queue[local.cursor].questionId,
+    )!;
+    const result = advanceSession(
+      local,
+      item,
+      { version: local.version, revision: 1, response },
+      items,
+    );
+    item.progress = result.progress;
+    local.version++;
+  }
+  await syncOfflineSession(store, local);
+  const before = (await store.question(id2, "base")).progress;
+  assert.equal(before.mastered, true);
+  assert.deepEqual(before.recallDirections, { forward: 1, reverse: 1 });
+  await syncOfflineSession(store, local);
+  assert.deepEqual((await store.question(id2, "base")).progress, before);
+});

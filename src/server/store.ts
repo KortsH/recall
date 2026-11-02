@@ -20,6 +20,7 @@ import {
 } from "../core/authoring.ts";
 import type pg from "pg";
 import { contentHash, parseBank, resolveVariant } from "../core/bank.ts";
+import { recallDirection } from "../core/questions.ts";
 import {
   buildQueue,
   enqueueRetry,
@@ -874,6 +875,9 @@ export class Store {
         true,
         new Date(),
         rating,
+        a.skill,
+        a.hintUsed,
+        recallDirection(item.question, a.variantId),
       );
       await db.query(
         "INSERT INTO progress(deck_id,question_id,data) VALUES($1,$2,$3) ON CONFLICT(deck_id,question_id) DO UPDATE SET data=$3",

@@ -6,7 +6,7 @@ import {
   updateProgress,
   learningEntry,
 } from "./engine.ts";
-import { resolveVariant } from "./questions.ts";
+import { resolveVariant, recallDirection } from "./questions.ts";
 import { prerequisiteStatus } from "./prerequisites.ts";
 import type { Item, Session, Attempt } from "./types.ts";
 import { insertRetentionCheck } from "./retention.ts";
@@ -289,7 +289,11 @@ export function requestHint(
   )
     throw new Error("Question changed. Refresh this deck.");
   const v = resolveVariant(item.question, entry.variantId);
-  const text = v.hint ?? item.question.hint;
+  const text =
+    v.hint ??
+    (recallDirection(item.question, v.id) === "reverse"
+      ? undefined
+      : item.question.hint);
   if (
     s.mode === "test" ||
     !["written", "flashcard"].includes(v.type) ||
@@ -345,6 +349,7 @@ export function advanceSession(
           input.rating,
           attempt.skill,
           attempt.hintUsed,
+          recallDirection(item.question, v.id),
         );
   if (s.mode === "learn" && s.learning && !progress.mastered) {
     s.queue.push(

@@ -116,3 +116,26 @@ Use `concept` to group related objectives and `skill: "recall" | "application"` 
 If an active session's explicit variant is removed by a correction, that card safely falls back to the current objective's written question.
 
 Export the current deck before generating updates so the bank includes manual corrections. Never blindly reimport an old generated file over a corrected bank.
+
+## Two-way recall
+
+For new banks, decide whether each objective is reversible. Set `reversible: false` for one-way scenarios. For a reversible definition, provide `reversible: true` and an explicit `reverse` prompt/answer, for example:
+
+```json
+{
+  "id": "queue-fifo",
+  "question": "What removal order defines a FIFO queue?",
+  "answer": "First in, first out",
+  "acceptedAnswers": ["First in, first out"],
+  "reversible": true,
+  "reverse": {
+    "question": "Which data structure removes the earliest-added item first?",
+    "answer": "Queue",
+    "acceptedAnswers": ["Queue", "FIFO queue"]
+  }
+}
+```
+
+See `examples/reversible.json`. The reverse object also accepts its own optional `requiredParts`, `rubric`, `explanation` and `hint`. Forward hints/rubrics are not reused for reverse recall. The importer validates the pair and rejects missing reverse text or conflicting reserved variant IDs. Old banks without these fields remain one-way; adding `reversible: false` alone preserves semantic hashes and progress. Enabling or changing reverse content changes the learning objective and resets that question's mastery through the normal revision workflow; other questions keep progress.
+
+Learn introduces the objective with forward recognition, then selects forward and reverse recall until both have been successfully recalled without hints. Both directions share the original question ID, prerequisites and progress; no duplicate card records are imported. Mistakes reset the current recall evidence in both directions. Review dates remain separate from prerequisite unlocking. Test can assess a single direction, but one-way results alone cannot establish reversible mastery. Import/export and the existing `question --file ... --revision N` CLI operation preserve both prompts; UI editing has a two-way checkbox and reverse fields. Free prose is still self-assessed after comparing your own submitted answer with the model.

@@ -5,6 +5,7 @@ import { evaluateAttempt } from "../core/study.ts";
 import { updateProgress } from "../core/engine.ts";
 import type { Session, Attempt } from "../core/types.ts";
 import { emptyProgress } from "../core/types.ts";
+import { recallDirection } from "../core/questions.ts";
 
 /** Merge append-only attempt evidence. Never trust a client's claimed correctness. */
 export async function syncOfflineSession(store: Store, input: Session) {
@@ -128,6 +129,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
             attempt.rating,
             attempt.skill,
             attempt.hintUsed,
+            recallDirection(item.question, attempt.variantId),
           );
           await db.query(
             "INSERT INTO progress(deck_id,question_id,data) VALUES($1,$2,$3) ON CONFLICT(deck_id,question_id) DO UPDATE SET data=$3",

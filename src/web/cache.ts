@@ -21,7 +21,7 @@ import {
   revealAnswer,
 } from "../core/study.ts";
 import { prerequisiteStatus } from "../core/prerequisites.ts";
-import { resolveVariant } from "../core/questions.ts";
+import { resolveVariant, recallDirection } from "../core/questions.ts";
 import { updateProgress } from "../core/engine.ts";
 import { createRecovery } from "../core/recovery.ts";
 import { auditQuestions } from "../core/audit.ts";
@@ -1006,6 +1006,8 @@ export async function api<T>(
           new Date(),
           body.rating,
           a.skill,
+          a.hintUsed,
+          recallDirection(item.question, a.variantId),
         );
         session.version++;
         result = view(s, session);

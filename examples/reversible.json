@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "deck": "Two-way recall demo",
+  "description": "One objective, two authored recall directions, then a prerequisite-dependent application.",
+  "questions": [
+    {
+      "id": "queue-fifo",
+      "topic": "Queues",
+      "concept": "FIFO",
+      "skill": "recall",
+      "reversible": true,
+      "question": "What removal order defines a FIFO queue?",
+      "answer": "First in, first out",
+      "acceptedAnswers": [
+        "First in, first out"
+      ],
+      "reverse": {
+        "question": "Which data structure removes the earliest-added item first?",
+        "answer": "Queue",
+        "acceptedAnswers": [
+          "Queue",
+          "FIFO queue"
+        ]
+      },
+      "difficulty": 1,
+      "depends_on": [],
+      "variants": []
+    },
+    {
+      "id": "queue-apply",
+      "topic": "Queues",
+      "concept": "FIFO application",
+      "skill": "application",
+      "reversible": false,
+      "question": "A then B enter an empty FIFO queue. Which leaves first?",
+      "answer": "A",
+      "acceptedAnswers": [
+        "A"
+      ],
+      "difficulty": 2,
+      "depends_on": [
+        "queue-fifo"
+      ],
+      "variants": []
+    }
+  ]
+}
