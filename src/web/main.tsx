@@ -13,6 +13,13 @@ import { emptyProgress } from "../core/types.ts";
 import { QuestionLibrary } from "./library.tsx";
 import type { TopicMove } from "../core/organization.ts";
 import { dependentQuestions } from "../core/prerequisites.ts";
+import {
+  loadTheme,
+  applyTheme,
+  saveTheme,
+  type ThemePreference,
+} from "./theme.ts";
+import { ReadAloud } from "./speech.tsx";
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -43,6 +50,8 @@ import {
   PanelLeftClose,
   Lightbulb,
   Flag,
+  Sun,
+  Moon,
 } from "lucide-react";
 import type { Store } from "../server/store.ts";
 import type { Question, Item, Attempt } from "../core/types.ts";
@@ -57,6 +66,7 @@ import "@fontsource/manrope/latin-700.css";
 import "./readability.css";
 import "./study.css";
 import "./library.css";
+import "./theme.css";
 import {
   api,
   personalMode,
@@ -69,6 +79,8 @@ import {
   exportPendingRecovery,
   discardResetEvidence,
 } from "./cache.ts";
+
+applyTheme(loadTheme());
 
 type Deck = Awaited<ReturnType<Store["decks"]>>[number];
 type SessionView = Awaited<ReturnType<Store["getSession"]>>;
@@ -104,6 +116,21 @@ const modes = [
   },
 ];
 function App() {
+  const [theme, setTheme] = useState<ThemePreference>(loadTheme);
+  const [resolvedTheme, setResolvedTheme] = useState(
+    () => document.documentElement.dataset.theme ?? "light",
+  );
+  const changeTheme = (value: ThemePreference) => {
+    setTheme(value);
+    setResolvedTheme(saveTheme(value));
+  };
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setResolvedTheme(applyTheme(theme));
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [theme]);
   const [cache, setCache] = useState(downloadStatus());
   const [controls, setControls] = useState(loadStudyControls);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -697,10 +724,16 @@ function App() {
             leave();
           }}
         >
-          <span className="brand-icon">
-            r<span>•</span>
+          <img
+            className="brand-icon"
+            src={`${import.meta.env.BASE_URL}recall.svg`}
+            alt="r."
+            width="37"
+            height="37"
+          />
+          <span className="brand-wordmark">
+            recall<span className="brand-dot">.</span>
           </span>
-          recall<span className="brand-dot">.</span>
         </a>
         <div className="workspace-label">
           YOUR STUDY SPACE <span>LOCAL</span>
@@ -833,6 +866,28 @@ function App() {
                 <RotateCcw size={14} />
               </button>
             )}
+            <button
+              className="icon-button theme-toggle"
+              aria-label={
+                resolvedTheme === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              title={
+                resolvedTheme === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              onClick={() =>
+                changeTheme(resolvedTheme === "dark" ? "light" : "dark")
+              }
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun size={18} />
+              ) : (
+                <Moon size={18} />
+              )}
+            </button>
           </div>
         </header>
         {cache.error && (
@@ -1403,6 +1458,41 @@ function App() {
                     onChange={changeControls}
                   />
                 </section>
+                <section className="settings-card">
+                  <h2>Appearance</h2>
+                  <label className="appearance-control">
+                    Theme
+                    <select
+                      aria-label="Theme"
+                      value={theme}
+                      onChange={(e) =>
+                        changeTheme(e.target.value as ThemePreference)
+                      }
+                    >
+                      <option value="system">Follow system</option>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                  </label>
+                  <p>
+                    Saved on this device. Use the sun/moon button in the header
+                    to switch instantly.
+                  </p>
+                </section>
+                <section className="settings-card">
+                  <h2>Read aloud & dictation</h2>
+                  <p>
+                    Use Read aloud on a question or revealed answer. Recall uses
+                    locally installed speech voices when your browser provides
+                    them; it never reads an answer before it is revealed.
+                  </p>
+                  <p>
+                    For dictation, focus the answer field and use your device’s
+                    keyboard microphone or operating-system dictation.
+                    Recognition accuracy and offline availability depend on that
+                    service. Browser-integrated dictation is planned.
+                  </p>
+                </section>
                 {cache.personal && (
                   <div className="settings-card">
                     <h2>Learn here. Share anywhere.</h2>
@@ -1668,6 +1758,7 @@ function App() {
                 </div>
                 <div className="eyebrow">{feedback.topic}</div>
                 <h2>{feedback.question}</h2>
+                <ReadAloud text={feedback.answer} label="Read model answer" />
                 {feedback.hintUsed && (
                   <p className="assisted-note">
                     Assisted practice. This answer does not increase unaided
@@ -1758,6 +1849,7 @@ function App() {
                       </button>
                     </div>
                     <h2>{card.question}</h2>
+                    <ReadAloud text={card.question} label="Read question" />
                     {card.hasHint && session.mode !== "test" && !reveal && (
                       <div className="study-hint">
                         {session.hint ? (
@@ -2025,6 +2117,10 @@ function App() {
                       >
                         <span className="eyebrow">MODEL ANSWER</span>
                         <p className="reveal-model">{reveal.answer}</p>
+                        <ReadAloud
+                          text={reveal.answer}
+                          label="Read model answer"
+                        />
                         <p className="explanation">{reveal.explanation}</p>
                         {reveal.rubric.length > 0 && (
                           <ul>

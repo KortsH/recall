@@ -150,6 +150,10 @@ By default the CLI uses `RECALL_SERVER_URL` if configured, otherwise the local `
 
 ## Learn
 
+Use the sun/moon button in the header to switch between light and dark mode. **Settings → Appearance** also offers **Follow system**. The preference stays on your device and does not change your questions or progress.
+
+**Read question** and **Read model answer** use locally installed speech voices when the browser exposes them. Reading starts only when you click, and stops when you leave/change the card; model answers become readable after reveal or feedback. If no device voice is available, the control is unavailable. For speech-to-text today, focus the answer field and use your phone keyboard's microphone or your operating system's dictation. Recall does not yet request microphone access. Browser recognition needs additional compatibility and privacy handling: some browsers send audio to a remote service, whereas on-device recognition requires supported APIs and language packs. See the [native speech API documentation](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API/Using_the_Web_Speech_API).
+
 - **Learn:** starts every new objective with multiple choice, then builds active recall in small working sets (12 by default). Master a set before the next unlocked questions enter. Saved sessions keep the same set. Enter checks written answers; Shift+Enter adds a line.
 - **Cram:** ignores review dates. **Include locked questions** is an explicit prerequisite override.
 - **Flashcards:** reveal, then self-assess Again / Hard / Good / Easy.
