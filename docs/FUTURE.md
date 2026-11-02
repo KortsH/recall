@@ -16,6 +16,8 @@ Requested for **1 November 2026**. The personal-use preview is complete. Formal 
 
 ## Other follow-up
 
+- [x] Beginner-first README with a paste-only online-LLM workflow, complete JSON field/default reference, and a downloadable guided sample. The public walkthrough previews ordinary questions, reversals, grading, hints, matching, prerequisites, metadata and sharing without changing real study progress.
+
 - [x] Bundled English/Estonian interface catalogs, live device-local language selection, Android setup translations and contributor translation checks/documentation.
 - [ ] Community translations beyond English/Estonian and review by native-speaking contributors; physical-device accessibility and voice-pack checks in each language.
 

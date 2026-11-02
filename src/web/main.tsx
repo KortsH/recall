@@ -1,4 +1,6 @@
 import { OfflineEdits } from "./edits.tsx";
+import { Walkthrough } from "./walkthrough.tsx";
+import "./walkthrough.css";
 import "./edits.css";
 import { ErrorMessage } from "./error.tsx";
 import {
@@ -184,6 +186,12 @@ function App() {
   const [decks, setDecks] = useState<Deck[]>([]),
     [deckId, setDeckId] = useState(""),
     [section, setSection] = useState("overview");
+  const [guideOpen, setGuideOpen] = useState(() => location.hash === "#guide");
+  useEffect(() => {
+    if (guideOpen) history.replaceState(null, "", "#guide");
+    else if (location.hash === "#guide")
+      history.replaceState(null, "", location.pathname + location.search);
+  }, [guideOpen]);
   const [reviewEdits, setReviewEdits] = useState(false);
   const [session, setSession] = useState<SessionView | null>(null),
     [recent, setRecent] = useState<any[]>([]);
@@ -587,6 +595,7 @@ function App() {
   };
   useEffect(() => {
     if (
+      guideOpen ||
       !session ||
       (session.finished && !feedback) ||
       busy ||
@@ -614,6 +623,7 @@ function App() {
     });
     return () => cancelAnimationFrame(frame);
   }, [
+    guideOpen,
     session?.id,
     session?.cursor,
     !!feedback,
@@ -647,6 +657,7 @@ function App() {
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
       if (
+        guideOpen ||
         e.defaultPrevented ||
         e.isComposing ||
         editor ||
@@ -918,6 +929,13 @@ function App() {
   const due = decks.reduce((n, d) => n + d.stats.due, 0),
     total = decks.reduce((n, d) => n + d.stats.total, 0);
   const inStudy = !!session;
+  const openGuide = () => {
+    preserveDraft();
+    window.dispatchEvent(new Event("recall-stop-dictation"));
+    setMobileNav(false);
+    setGuideOpen(true);
+  };
+  if (guideOpen) return <Walkthrough onClose={() => setGuideOpen(false)} />;
   return (
     <div className={`app ${inStudy ? "studying" : ""}`}>
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
@@ -969,6 +987,10 @@ function App() {
               {n.id === "library" && <span className="nav-count">{total}</span>}
             </button>
           ))}
+          <button className="nav-item" onClick={openGuide}>
+            <GraduationCap size={18} />
+            {tr("guide.open")}
+          </button>
         </nav>
         <div className="side-decks">
           <div className="side-label">
@@ -1206,13 +1228,19 @@ function App() {
                       )}
                     </p>
                   </div>
-                  <button
-                    className="button secondary import-button"
-                    onClick={() => setImportOpen(true)}
-                  >
-                    <Plus size={17} />
-                    {tr("app.add_a_deck")}
-                  </button>
+                  <div className="guide-entry-actions">
+                    <button className="button primary" onClick={openGuide}>
+                      {tr("guide.open")}
+                      <ArrowRight size={17} />
+                    </button>
+                    <button
+                      className="button secondary import-button"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <Plus size={17} />
+                      {tr("app.add_a_deck")}
+                    </button>
+                  </div>
                 </div>
                 <div className="overview-stats">
                   <div>

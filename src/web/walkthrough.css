@@ -1,0 +1,319 @@
+.walkthrough {
+  margin-left: 0;
+  min-height: 100vh;
+  padding: 22px max(20px, calc((100vw - 1140px) / 2)) 48px;
+  color: inherit;
+  background: var(--surface, #faf9f7);
+}
+.guide-header,
+.guide-lesson-heading,
+.guide-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.guide-header button,
+.guide-lesson-heading button,
+.guide-footer button,
+.guide-prompt button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.guide-intro {
+  max-width: 900px;
+  padding: 24px 0 18px;
+}
+.guide-intro h1 {
+  font-size: clamp(28px, 3vw, 36px);
+  margin: 12px 0;
+  line-height: 1.18;
+}
+.guide-intro p,
+.guide-description {
+  font-size: 16px;
+  line-height: 1.7;
+}
+.guide-intro small {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.guide-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 26px;
+}
+.guide-steps button {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--line);
+  padding: 8px 11px;
+  border-radius: 20px;
+  font-size: 12px;
+}
+.guide-steps button[aria-current="step"] {
+  background: var(--purple);
+  color: white;
+  border-color: var(--purple);
+}
+.guide-steps button span {
+  margin-right: 6px;
+  opacity: 0.75;
+}
+.guide-lesson-heading h2 {
+  font-size: 26px;
+  margin: 8px 0;
+}
+.guide-lesson-heading h2:focus {
+  outline: none;
+}
+.guide-description {
+  max-width: 900px;
+  margin: 14px 0 22px;
+}
+.guide-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.guide-columns > * {
+  min-width: 0;
+}
+.guide-card,
+.guide-prompt {
+  background: var(--surface, white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 26px;
+}
+.guide-card:focus {
+  outline: none;
+}
+.guide-card h3,
+.guide-prompt h3 {
+  font-size: 23px;
+  line-height: 1.4;
+  margin: 14px 0 22px;
+}
+.guide-card p,
+.guide-explanation p,
+.guide-prompt li {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.guide-options {
+  display: grid;
+  gap: 10px;
+}
+.guide-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 15px;
+  line-height: 1.5;
+}
+.guide-option span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.guide-option[role="checkbox"]::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1px solid var(--muted);
+  border-radius: 3px;
+}
+.guide-option[aria-checked="true"]::before {
+  background: var(--purple);
+  border-color: var(--purple);
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+.guide-option:hover,
+.guide-option[aria-checked="true"] {
+  border-color: var(--purple);
+  background: color-mix(in srgb, var(--purple) 12%, transparent);
+}
+.guide-answer-label {
+  display: block;
+  font-size: 13px;
+}
+.guide-answer-label textarea,
+.guide-prompt textarea {
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0 12px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  line-height: 1.6;
+  font-size: 16px;
+}
+.guide-prompt textarea {
+  font-size: 13px;
+}
+.guide-matching label {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 12px;
+  align-items: center;
+  margin: 14px 0;
+}
+.guide-matching select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.guide-actions,
+.guide-ratings,
+.guide-directions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 18px 0 0;
+}
+.guide-directions {
+  justify-content: flex-start;
+  margin: 0 0 12px;
+}
+.guide-directions [aria-pressed="true"] {
+  border-color: var(--purple);
+  box-shadow: inset 0 0 0 1px var(--purple);
+}
+.guide-feature,
+.guide-json {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.guide-feature summary,
+.guide-json summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.guide-feature summary svg {
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.guide-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.guide-fields code {
+  padding: 5px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--purple) 12%, transparent);
+  font-size: 12px;
+}
+.guide-json pre {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: auto;
+  max-height: 400px;
+  margin: 12px 0 0;
+  white-space: pre;
+}
+.guide-default-summary {
+  padding: 0 12px;
+  color: var(--muted);
+}
+.guide-footer {
+  border-top: 1px solid var(--line);
+  margin-top: 28px;
+  padding-top: 20px;
+}
+.guide-footer > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.guide-hint {
+  margin: 16px 0 0;
+}
+.guide-direction-progress,
+.guide-rubric {
+  color: var(--muted);
+  font-size: 12px !important;
+}
+.guide-locked label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  font-size: 13px;
+}
+.guide-locked input {
+  width: auto;
+}
+.guide-notice {
+  font-size: 13px;
+  color: var(--purple);
+}
+@media (max-width: 760px) {
+  .walkthrough {
+    padding: 16px 16px 32px;
+  }
+  .guide-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .guide-header {
+    flex-wrap: wrap;
+  }
+  .guide-header strong {
+    order: -1;
+    width: 100%;
+  }
+  .guide-intro {
+    padding-top: 26px;
+  }
+  .guide-lesson-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .guide-card,
+  .guide-prompt {
+    padding: 18px;
+  }
+  .guide-footer {
+    flex-wrap: wrap;
+  }
+  .guide-footer > span {
+    order: 3;
+    width: 100%;
+  }
+}
+.guide-entry-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.guide-entry-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.guide-steps {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+.guide-steps button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

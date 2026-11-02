@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "deck": "Recall guided sample",
+  "description": "Original examples for trying Recall and learning the question-bank format.",
+  "questions": [
+    {
+      "id": "guide-first",
+      "question": "Which day appears first in this list: Monday, Tuesday, Wednesday?",
+      "answer": "Monday",
+      "options": [
+        "Monday",
+        "Tuesday",
+        "Wednesday"
+      ],
+      "correct": [
+        "Monday"
+      ]
+    },
+    {
+      "id": "guide-minutes",
+      "topic": "Time",
+      "question": "How many minutes are in one hour?",
+      "answer": "60 minutes",
+      "acceptedAnswers": [
+        "60",
+        "60 minutes",
+        "sixty",
+        "sixty minutes"
+      ]
+    },
+    {
+      "id": "guide-prose",
+      "topic": "Everyday learning",
+      "question": "In your own words, what does a checklist help you do?",
+      "answer": "Keep track of the steps to do and notice any steps you have missed.",
+      "rubric": [
+        "Track the steps",
+        "Notice omissions"
+      ],
+      "explanation": "Your wording can differ. Compare the ideas and rate your recall honestly."
+    },
+    {
+      "id": "guide-fifo",
+      "topic": "Computing",
+      "concept": "FIFO abbreviation",
+      "reversible": true,
+      "question": "What does FIFO stand for?",
+      "answer": "First in, first out",
+      "acceptedAnswers": [
+        "First in, first out"
+      ],
+      "reverse": {
+        "question": "Which abbreviation means first in, first out?",
+        "answer": "FIFO",
+        "acceptedAnswers": [
+          "FIFO"
+        ]
+      }
+    },
+    {
+      "id": "guide-even",
+      "topic": "Numbers",
+      "question": "Which two numbers in this group are even: 1, 2, 3, 4?",
+      "answer": "2; 4",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "correct": [
+        "2",
+        "4"
+      ],
+      "requiredParts": [
+        [
+          "2",
+          "two"
+        ],
+        [
+          "4",
+          "four"
+        ]
+      ],
+      "explanation": "Both 2 and 4 are required; neither 1 nor 3 is even."
+    },
+    {
+      "id": "guide-backup",
+      "topic": "Files",
+      "question": "What do you call a saved copy kept so a file can be recovered?",
+      "answer": "Backup",
+      "acceptedAnswers": [
+        "Backup",
+        "A backup",
+        "Backup copy"
+      ],
+      "hint": "Think about getting your data back after losing the working file."
+    },
+    {
+      "id": "guide-actions",
+      "topic": "Files",
+      "question": "Explain the difference between Save and Undo.",
+      "answer": "Save keeps the current changes; Undo reverses the last change.",
+      "rubric": [
+        "Save keeps changes",
+        "Undo reverses a change"
+      ],
+      "variants": [
+        {
+          "id": "match-actions",
+          "type": "matching",
+          "question": "Match each action to its meaning.",
+          "answer": "Save → Keep changes; Undo → Reverse the last change",
+          "pairs": [
+            {
+              "left": "Save",
+              "right": "Keep changes"
+            },
+            {
+              "left": "Undo",
+              "right": "Reverse the last change"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guide-timer",
+      "topic": "Time",
+      "concept": "Minutes in an hour",
+      "skill": "application",
+      "difficulty": 2,
+      "tags": [
+        "worked-example",
+        "time"
+      ],
+      "reversible": false,
+      "depends_on": [
+        "guide-minutes"
+      ],
+      "question": "A timer starts with one hour. Thirty minutes pass. How many minutes remain?",
+      "answer": "30 minutes",
+      "acceptedAnswers": [
+        "30",
+        "30 minutes",
+        "thirty minutes"
+      ],
+      "explanation": "One hour is 60 minutes; 60 minus 30 leaves 30."
+    },
+    {
+      "id": "guide-minimal",
+      "question": "How many sides does a triangle have?",
+      "answer": "3"
+    }
+  ]
+}

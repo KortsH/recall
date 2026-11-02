@@ -16,6 +16,7 @@ Recall is a small, single-user study tool, usable in a device-only workspace or 
 - `src/cli.ts`: interactive and scriptable CLI using the same services.
 - `src/web/`: React UI. Keep grading and mastery logic out of it.
 - `examples/demo.json`: synthetic format and prerequisite examples.
+- `examples/walkthrough.json` and `src/web/walkthrough*`: public guided sample and format previews. Keep this original synthetic content separate from user decks. Tutorial practice is temporary, uses the shared core, and must never write real progress or make quiz API requests. Keep README examples and the EN/ET walkthrough aligned with the schema.
 
 ## Generate/import questions
 

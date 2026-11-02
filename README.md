@@ -1,8 +1,217 @@
 # Recall
 
-A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
+A free, open-source exam study tool. Start with multiple choice, build active recall, and share quizzes as files. Use it on your device without an account or subscription; connecting your own server is optional.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.7.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.7.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.7.0-preview.1)
+[Try the guided sample](https://kortsh.github.io/recall/#guide) · [Open Recall](https://kortsh.github.io/recall/) · [Windows download](https://github.com/KortsH/recall/releases/download/v0.8.0-preview.1/Recall-Setup.exe) · [Android download](https://github.com/KortsH/recall/releases/download/v0.8.0-preview.1/Recall-Android.apk) · [Release details](https://github.com/KortsH/recall/releases/tag/v0.8.0-preview.1)
+
+## Start here — no coding required
+
+1. **[Try the guided sample](https://kortsh.github.io/recall/#guide).** Start with three ordinary questions, then explore reversals, multiple answers, hints, matching, flashcards, prerequisites and defaults. Each example has an expandable explanation and **Show the JSON**. Skip between chapters freely. Practice stays inside the walkthrough, separate from your own decks and progress.
+2. **Give your notes to your usual online chat assistant**, with the prompt below. No agent harness, terminal, API key or programming knowledge is needed.
+3. **Paste its JSON into Recall:** **Question library → Import → Question bank JSON → Preview import → Apply import**. Saving a file first is optional.
+4. **Check the answers and start Learn.** Correct a question after answering, ask for a hint, answer in your head, or dictate where supported.
+
+The [complete sample bank](examples/walkthrough.json) is downloadable from the walkthrough. Import it to study it as a regular deck with saved progress. Sample questions are original English examples; interface/explanations support English and Estonian.
+
+## Make a quiz from your notes
+
+JSON is structured text. The assistant writes it; Recall validates it. Generation happens outside Recall in the assistant you choose. Recall contains no AI generator or AI grader. Review the facts against your notes: valid JSON can still contain a wrong answer.
+
+Copy this prompt into an ordinary chat conversation and paste your notes beneath it:
+
+```text
+Turn my notes into a Recall question bank. Use only the source material;
+ask about unclear facts instead of inventing answers. Return valid JSON
+only, without Markdown fences. Start with 10–15 useful learning objectives.
+Avoid repeated phrasings of the same objective.
+
+A bank has a deck name and questions array. Each question needs a stable
+id, question and answer. Add topic, concept, skill (recall or application),
+explanation and difficulty (1–5) when useful.
+
+Choose the checking method:
+- acceptedAnswers lists complete aliases for a short exact answer.
+- requiredParts lists separately required parts; each part is a list of
+  aliases. All parts must be present.
+- For open explanations, omit both and add an optional rubric. The learner
+  compares with the model and grades themselves. Do not invent an AI grader.
+
+Decide reversible:false or reversible:true for each question. True requires
+reverse:{question,answer}, with its own optional acceptedAnswers,
+requiredParts, rubric, explanation or hint. Write a clear reverse prompt,
+not a mechanical swap of long sentences. Both directions share one id.
+
+Optional features, only where useful:
+- options and correct: plausible choices and exact correct option strings.
+  One correct answer means single choice; several means select-all.
+- hint: a cue that does not reveal the answer.
+- depends_on: prerequisite ids in this bank. Every parent is required;
+  include all referenced ids and avoid cycles.
+- variants: alternate formats of the same objective. Types are written,
+  flashcard, multiple_choice, multiple_select or matching. Matching uses
+  pairs with unique left/right strings.
+- tags: labels for organization.
+
+Use the example and field reference below. Ordinary questions do not need
+all optional features. For updates, use my exported bank, preserve its ids,
+corrections, hints, flags and dependencies unless I request changes, and
+explain proposed removals separately. Do not silently replace everything.
+```
+
+Also give the assistant this small, complete example:
+
+```json
+{
+  "deck": "Everyday examples",
+  "questions": [
+    {
+      "id": "minutes-001",
+      "question": "How many minutes are in one hour?",
+      "answer": "60 minutes",
+      "acceptedAnswers": ["60", "60 minutes", "sixty minutes"],
+      "reversible": false
+    },
+    {
+      "id": "checklist-001",
+      "question": "In your own words, what does a checklist help you do?",
+      "answer": "Track the steps to do and notice any you have missed.",
+      "rubric": ["Track the steps", "Notice omissions"],
+      "reversible": false
+    }
+  ]
+}
+```
+
+The first answer is checked against aliases. The second is open prose: compare your submitted answer with the model, then choose Again, Hard, Good or Easy. A rubric guides self-assessment; it does not score keywords automatically.
+
+If import reports an error, give that message to the assistant and ask for a corrected **complete JSON object**. Do not paste fragments or an explanation around the JSON. Review question count, wording, answers and proposed archives in the import preview.
+
+## How one question becomes several ways to learn
+
+One record is one learning objective, with a stable id and shared progress. Written recall and a flashcard exist automatically. Learn introduces new objectives with single-answer recognition, preferring authored single-choice options or using other bank answers for introductory choices, then moves to recall in small working sets. You do not need duplicate records for each format.
+
+The guided sample lets you preview formats independently. Normal Learn still enforces working sets and prerequisites. Cram ignores review dates; Test hides model answers until completion. Tutorial practice is not a real attempt in your workspace.
+
+### Reversible questions
+
+```json
+{
+  "id": "fifo-001",
+  "question": "What does FIFO stand for?",
+  "answer": "First in, first out",
+  "acceptedAnswers": ["First in, first out"],
+  "reversible": true,
+  "reverse": {
+    "question": "Which abbreviation means first in, first out?",
+    "answer": "FIFO",
+    "acceptedAnswers": ["FIFO"]
+  }
+}
+```
+
+This is **one objective asked in both directions**. Mastery requires successful unaided recall each way plus the normal repeated-success threshold. A miss resets current successful recall evidence in both directions. Explicit reverse wording lets a definition ask for its term instead of requiring reproduction of the original question sentence. Scenarios often work better one-way.
+
+### Multiple answers and required parts
+
+```json
+{
+  "id": "even-001",
+  "question": "Which two numbers are even: 1, 2, 3, 4?",
+  "answer": "2; 4",
+  "options": ["1", "2", "3", "4"],
+  "correct": ["2", "4"],
+  "requiredParts": [["2", "two"], ["4", "four"]]
+}
+```
+
+Choice format uses checkboxes and Check: select every correct option and no wrong ones. Written format accepts `2; 4` or `four; two`, one part per semicolon/newline. All parts are required, order is flexible, and extra assertions fail. Use this for short formal rules; use self-assessment for paragraphs.
+
+## Complete question-bank field reference
+
+Optional fields can be omitted. Defaults describe behavior; they need not appear in every record. Unknown field names are rejected. Required text is nonempty. The [JSON Schema](docs/question-bank.schema.json) and [authoring guide](docs/QUESTION_BANK.md) add validation details; the importer also checks cross-field rules and the dependency graph.
+
+### Whole-bank object
+
+| Field | Required/default | Purpose |
+| --- | --- | --- |
+| `deck` | Required nonempty string | Quiz name; use the same destination for updates. |
+| `questions` | Required array, 1–10,000 records | Objectives to import, each with a stable id. |
+| `schemaVersion` | Optional; `1` | Format version; only 1 is supported. |
+| `description` | Optional; empty string | Description shown with the deck. |
+| `dependency_semantics` | Optional string | Descriptive compatibility metadata; it does not change the all-prerequisites-required rule. |
+
+### Each question
+
+| Field | Required/default | Effect and when to use it |
+| --- | --- | --- |
+| `id` | Required stable string | Identifies the objective for updates, progress and prerequisites. Use 1–120 letters/digits/dots/underscores/hyphens, starting with a letter/digit. Keep it stable. |
+| `question` | Required string | Forward prompt. |
+| `answer` | Required string | Forward model answer shown after answering/revealing. |
+| `topic` | Optional; `"General"` | Groups the library; does not create dependencies. |
+| `concept` | Optional; question text | Connects related objectives for separation in practice. |
+| `skill` | Optional; `"recall"` | `"recall"` or `"application"`; labels skill/results, without imposing a content ratio. |
+| `explanation` | Optional; empty string | Explains why the answer is right. Explanation-only changes preserve mastery. |
+| `difficulty` | Optional; `1` | Author's integer 1–5 label/filter, not grading strictness or an unlock threshold. |
+| `tags` | Optional; `[]` | String labels for organization/review. |
+| `options` | Optional; 2–12 unique strings | Authored choice answers. Without them, Learn can build introductory choices from other answers. |
+| `correct` | Optional; `[answer]` when options exist | Exact strings from `options`, never indexes. One means single choice; several means select-all. Requires options; if omitted, answer must exactly match its correct option. |
+| `acceptedAnswers` | Optional nonempty string list | Complete short-answer aliases; normalizes case, spacing and limited punctuation, without inferring arbitrary paraphrases. |
+| `requiredParts` | Optional list of alias lists | All separately required short parts. Takes precedence over acceptedAnswers if both are supplied; prefer one checking method. |
+| `rubric` | Optional string list | Points for self-assessment; does not automatically grade prose. |
+| `hint` | Optional nonempty string | Requested cue on written/flashcards. Assisted success does not increase unaided mastery/unlock dependents. Test has no hints. |
+| `depends_on` | Optional; no prerequisites | Ids in this deck; **every** listed parent must be mastered. Missing ids, self-links and cycles fail validation. Review dates are separate. |
+| `reversible` | Optional; one-way behavior | Boolean; true requires authored reverse content. Absent/false stays one-way; adding false alone preserves hashes. |
+| `reverse` | Required only with reversible:true | Reverse prompt and its own checking rules; see below. Not allowed when reversible is absent/false. |
+| `variants` | Optional; `[]` | Additional authored formats of this objective; see below. |
+| `flag` | Optional; no flag | Review object with required `note` and optional `allowDependents` (default false). Hides the card in all modes; true explicitly waives this flagged parent only, without awarding mastery or waiving other parents. Usually omit in newly generated banks. |
+| `type` | Optional legacy field | Top-level written/flashcard/multiple_choice/multiple_select remain accepted for compatibility, but do not restrict an objective to one format. New banks should use content fields and variants. |
+
+Exact checking preserves negation, signs and mathematical directions. With neither aliases nor required parts, written answers use model comparison and explicit self-assessment. **Answer in my head** permits comparison without typing; supported browser dictation writes into the same editable answer box.
+
+### The reverse object
+
+Required: `question`, `answer`. Optional: its own `acceptedAnswers`, `requiredParts`, `rubric`, `explanation`, `hint`, with the meanings above. Forward hints/rubrics are not reused. There is no separate reverse id, topic, difficulty, dependency list or progress record. Reverse choice/matching prompts belong in appropriate authored variants, not unsupported reverse fields.
+
+### Objects inside variants
+
+Each requires `id`, `type`, `question`, `answer`. Optional common fields: `explanation`, `hint`, `skill`, `rubric`. Skill inherits the objective's skill when omitted. Explicit hints override the objective hint; ordinary variant feedback can use the objective explanation/rubric as fallback.
+
+| Type | Additional fields and behavior |
+| --- | --- |
+| `written` | Optional acceptedAnswers or requiredParts; with neither, self-assess. |
+| `flashcard` | Reveal and self-assess; no extra fields needed. |
+| `multiple_choice` | Required options; optional correct with exactly one answer, default `[answer]`. |
+| `multiple_select` | Required options; correct lists all correct strings, default `[answer]` if omitted. |
+| `matching` | Required pairs: 2–12 objects with nonempty left/right strings, unique on both sides. Every pair must match. Answer is the human-readable model mapping. |
+
+Use distinct short variant ids. `choice`, `written`, `flashcard`, `learn-choice` are reserved for automatic formats; reversible objectives also reserve `reverse`, `reverse-flashcard`. Adding a variant does not guarantee a particular Learn step; Learn selects a recognition/recall progression, and reversible objectives use their forward/reverse recall path.
+
+Example inside a question's variants array:
+
+```json
+{
+  "id": "match-actions",
+  "type": "matching",
+  "question": "Match each action to its meaning.",
+  "answer": "Save → Keep changes; Undo → Reverse the last change",
+  "pairs": [
+    {"left": "Save", "right": "Keep changes"},
+    {"left": "Undo", "right": "Reverse the last change"}
+  ]
+}
+```
+
+### Exported .recall.json files
+
+Portable exports wrap the same bank in `{ "format": "recall", "version": 1, "bank": { ... } }`, with optional `createdAt` and an optional app-generated `progress` map. An assistant creating questions should return an ordinary bank, not fabricate progress, hashes or review history. Default exports share questions only. For your own device transfer, explicitly export and restore progress. Device-only workspaces do not synchronize automatically.
+
+## Revise a quiz without starting over
+
+Export your current quiz, give it to the assistant with the requested changes, and preserve ids, corrections, hints, flags and dependencies. Import normally updates/adds by id and keeps omitted cards. **Replace this deck** explicitly archives omitted cards; inspect the preview first. Archive is not permanent deletion.
+
+Unchanged questions retain progress. Changing prompts, answers, grading or reverse content resets that objective through a semantic revision. Topic, concept, difficulty, tags, explanations, hints and dependency-only changes preserve grading revisions. Edit in the library or after answering; flag doubtful material with a review note.
+
+---
 
 ## Install and use
 
@@ -42,8 +251,6 @@ Open [the browser app](https://kortsh.github.io/recall/). Import a file and star
 
 Each browser/profile, phone app and Windows app keeps its own workspace. Use portable files to transfer quizzes or your own progress between them. There is no automatic cross-device sync in device-only mode.
 
-## Send a quiz to a friend
-
 ## Editing while disconnected
 
 After downloading a shared-server quiz, you can edit questions, hints, flags and prerequisites, move topics or import questions without a connection. Changes queue on this device and upload with normal sync. If another device changed the same question, Settings shows both versions and asks which to keep; nothing is overwritten automatically. New questions and corrected learning content enter shared-server study after syncing, while published cards remain available offline. Device-only workspaces can study new content immediately. Export pending edits and review history in Settings for a personal backup; [CLI replay and conflict handling](docs/PORTABLE.md#pending-question-edits-and-conflicts) use the same validation.
@@ -65,102 +272,6 @@ To move your own learning between devices, export with **Include my learning pro
 
 **Back up your files.** Clearing app/site data removes local quizzes and progress. A questions-only file does not contain your progress; export with progress when you want a personal backup.
 
-## Make a quiz from your notes
-
-Recall takes an ordinary JSON file. You can write it yourself, ask any chat assistant to create it, or give an agent with terminal access the CLI instructions below. **There is no AI service inside Recall:** generation happens in the tool you choose, then Recall validates and stores the result. You do not need an agent harness, API key or terminal to import a quiz.
-
-### The question format
-
-Save this example as `bank.json`, or use it as a template when prompting an assistant:
-
-```json
-{
-  "schemaVersion": 1,
-  "deck": "Queues practice",
-  "description": "Definitions before applications",
-  "questions": [
-    {
-      "id": "queue-fifo",
-      "topic": "Queues",
-      "concept": "FIFO ordering",
-      "skill": "recall",
-      "question": "What removal order defines a FIFO queue?",
-      "answer": "First in, first out",
-      "options": ["First in, first out", "Last in, first out", "Highest priority first", "Random order"],
-      "correct": ["First in, first out"],
-      "acceptedAnswers": ["First in, first out", "Oldest item first"],
-      "hint": "Think about people waiting in a line.",
-      "explanation": "The earliest item added is the earliest removed.",
-      "difficulty": 1,
-      "tags": ["definition"],
-      "depends_on": []
-    },
-    {
-      "id": "queue-first-removal",
-      "topic": "Queues",
-      "concept": "FIFO ordering",
-      "skill": "application",
-      "question": "A, then B, then C enter an empty FIFO queue. Which item leaves first?",
-      "answer": "A",
-      "acceptedAnswers": ["A"],
-      "explanation": "A arrived earliest.",
-      "difficulty": 2,
-      "tags": ["scenario"],
-      "depends_on": ["queue-fifo"]
-    }
-  ]
-}
-```
-
-The minimum is `deck` plus `questions`, with an `id`, `question` and `answer` for every record. Keep IDs stable when revising a quiz. `topic` organizes the library; `depends_on` controls unlocking and requires **every** listed prerequisite. Difficulty runs from 1 to 5. An optional `hint` should suggest a starting point without revealing the answer.
-
-One record is one learning objective: Recall can show it as choices, written recall and a flashcard, sharing progress across formats. Authored `options` provide better distractors; otherwise Learn reuses other bank answers for introductory recognition. `correct` contains exact option strings: one means single choice, several mean select-all. Use `acceptedAnswers` for short, exact aliases; for open prose omit it and let the learner compare with the model answer and self-assess. Use `requiredParts` for separately required short parts, or `variants` for alternate formats of the same objective. See the [authoring guide](docs/QUESTION_BANK.md) and [complete JSON Schema](docs/question-bank.schema.json).
-
-### With a chat assistant, without terminal access
-
-Paste your notes and the example above into your preferred assistant, then use this prompt:
-
-> Turn these notes into a Recall JSON question bank using the supplied structure. Use only the source material; ask before guessing about ambiguous facts. Start with 15–25 useful objectives, with clear definitions, distinctions and short applications. Give each objective a stable, meaningful ID, topic, concept, skill (recall or application), question, answer, explanation and difficulty from 1–5. Use depends_on for foundations that must be learned first; include every referenced ID and avoid cycles. Avoid near-duplicate objectives: use variants for alternate formats. Add optional short hints that give a starting point without giving the answer away. Where useful, supply plausible but incorrect distractors and exact correct option strings. Use acceptedAnswers only for short, objectively checkable answers; leave open prose for model-answer self-assessment. Return valid JSON, without Markdown fences, suitable for saving as bank.json. For updates, preserve IDs, hints, flags and dependency links from my existing export unless we deliberately change them.
-
-Open **Question library → Import**. Choose the saved JSON file, or paste the complete JSON into **Question bank JSON**. Choose **Preview import**, inspect the proposed changes, then **Apply import**. Matching IDs update existing questions rather than creating copies. Leave **Replace this deck** off when adding questions; turn it on only for a complete replacement bank. Replacement archives omitted cards rather than permanently deleting them. A missing prerequisite or a cycle prevents the import from applying.
-
-For later revisions, export the current bank and give it back to the assistant alongside your new notes. Review its changes before importing. You can also use **New question**, edit a question directly, or **Flag & skip** a questionable card with a note for later review. No CLI is required for this workflow.
-
-### With an agent harness or terminal
-
-An agent harness is simply an assistant that can read files and run commands in your checkout. Give it your notes and this instruction:
-
-> Read AGENTS.md and docs/QUESTION_BANK.md. Inspect the current bank, prerequisite status and coverage audit before making changes. Generate or revise a bank in the ignored private/ directory using stable IDs, keeping existing hints, review flags and dependencies. Validate it, preview the import and report additions, edits and proposed archives. Do not reset learning or generate redundant objectives. Use replacement only if I explicitly requested a complete replacement. Keep my material and connection settings out of Git.
-
-The CLI requires a source checkout and `npm ci`; the Windows/Android downloads do not install a terminal CLI. **File-only commands work without PostgreSQL or a server:**
-
-```sh
-npm run recall -- validate private/bank.json
-npm run recall -- pack private/bank.json -o private/quiz.recall.json
-```
-
-For a device-only workspace, import that resulting file through the UI. The CLI does not directly edit your browser's IndexedDB. For a configured PostgreSQL database or your own Recall server, use:
-
-```sh
-# Inspect before authoring. --silent makes JSON stdout suitable for scripts.
-npm run --silent recall -- questions "My quiz" --json
-npm run recall -- export "My quiz" -o private/current-bank.json
-npm run recall -- audit "My quiz"
-npm run recall -- prerequisites "My quiz"
-
-# Add/update; omitted IDs remain.
-npm run recall -- import private/bank.json --dry-run --json
-npm run recall -- import private/bank.json --json
-
-# Complete replacement: inspect proposed archives first.
-npm run recall -- import private/bank.json --replace --dry-run --json
-npm run recall -- import private/bank.json --replace --json
-
-# Or target your own HTTP server explicitly; no direct database access needed.
-npm run --silent recall -- --server https://recall.example.net questions "My quiz" --json
-```
-
-By default the CLI uses `RECALL_SERVER_URL` if configured, otherwise the local `DATABASE_URL`. Check the destination before writing. Use `--deck "My quiz"` on import when the JSON's deck name differs from the intended destination. Exporting questions keeps dependencies, hints and review notes; add `--portable` for a shareable `.recall.json` file, and `--progress` only when intentionally including personal learning data.
 
 ## Learn
 
@@ -279,3 +390,39 @@ Learn also adds delayed memory checks of older mastered questions, at recall lev
 For written practice, **Answer in my head** (or Enter in an empty answer box) reveals the model without typing. Compare your mental response and explicitly choose Again, Hard, Good or Easy; revealing alone never earns credit. This is self-assessed recall, including for questions that also support automatic text checking. Test mode keeps answers hidden until completion. CLI/API users can send `mental: true` with the usual `version`, `revision` and `response` to `reveal`, then submit an explicit rating using the returned session version.
 
 Two-way recall is optional per question: `reversible: true` requires an authored `reverse` object with `question` and `answer`, plus optional aliases/parts/rubric/explanation/hint. See [examples/reversible.json](examples/reversible.json) and the [authoring guide](docs/QUESTION_BANK.md#two-way-recall). The question editor exposes the same fields. Both directions share an ID and progress; reversible mastery requires successful unaided recall each way. Old banks remain compatible. Enabling/changing reverse content resets only the edited objective's learning through normal semantic-revision rules. Feedback now shows your submitted answer alongside the model; mental recall is labeled honestly without inventing text.
+
+### Optional: with an agent harness or terminal
+
+An agent harness is simply an assistant that can read files and run commands in your checkout. Give it your notes and this instruction:
+
+> Read AGENTS.md and docs/QUESTION_BANK.md. Inspect the current bank, prerequisite status and coverage audit before making changes. Generate or revise a bank in the ignored private/ directory using stable IDs, keeping existing hints, review flags and dependencies. Validate it, preview the import and report additions, edits and proposed archives. Do not reset learning or generate redundant objectives. Use replacement only if I explicitly requested a complete replacement. Keep my material and connection settings out of Git.
+
+The CLI requires a source checkout and `npm ci`; the Windows/Android downloads do not install a terminal CLI. **File-only commands work without PostgreSQL or a server:**
+
+```sh
+npm run recall -- validate private/bank.json
+npm run recall -- pack private/bank.json -o private/quiz.recall.json
+```
+
+For a device-only workspace, import that resulting file through the UI. The CLI does not directly edit your browser's IndexedDB. For a configured PostgreSQL database or your own Recall server, use:
+
+```sh
+# Inspect before authoring. --silent makes JSON stdout suitable for scripts.
+npm run --silent recall -- questions "My quiz" --json
+npm run recall -- export "My quiz" -o private/current-bank.json
+npm run recall -- audit "My quiz"
+npm run recall -- prerequisites "My quiz"
+
+# Add/update; omitted IDs remain.
+npm run recall -- import private/bank.json --dry-run --json
+npm run recall -- import private/bank.json --json
+
+# Complete replacement: inspect proposed archives first.
+npm run recall -- import private/bank.json --replace --dry-run --json
+npm run recall -- import private/bank.json --replace --json
+
+# Or target your own HTTP server explicitly; no direct database access needed.
+npm run --silent recall -- --server https://recall.example.net questions "My quiz" --json
+```
+
+By default the CLI uses `RECALL_SERVER_URL` if configured, otherwise the local `DATABASE_URL`. Check the destination before writing. Use `--deck "My quiz"` on import when the JSON's deck name differs from the intended destination. Exporting questions keeps dependencies, hints and review notes; add `--portable` for a shareable `.recall.json` file, and `--progress` only when intentionally including personal learning data.
