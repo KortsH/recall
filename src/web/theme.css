@@ -271,6 +271,9 @@
 :root[data-theme="dark"] :is(.feedback-status.incorrect, .rating.again) {
   color: #f2b8aa;
 }
+:root[data-theme="dark"] .feedback-status.incorrect {
+  background: #452d32;
+}
 :root[data-theme="dark"]
   :is(.rating, .rating.good, .rating.easy, .rating.hard, .rating.again) {
   background: #2c2736;

@@ -345,11 +345,37 @@
 .answer-comparison p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 150px;
-  overflow: auto;
   font-size: 15px;
   line-height: 1.55;
   margin: 8px 0 0;
+}
+.answer-comparison.model-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+.answer-comparison.model-only .model-answer p {
+  max-width: 100ch;
+}
+.choice-connection {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.choice-connection > span {
+  color: var(--muted);
+}
+.choice-connection ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
+}
+.choice-connection li {
+  overflow-wrap: anywhere;
+}
+.choice-connection summary {
+  cursor: pointer;
+  margin-top: 6px;
+  color: var(--muted);
 }
 .reversal-editor {
   border: 1px solid var(--line);
@@ -370,8 +396,5 @@
   .answer-comparison {
     grid-template-columns: 1fr;
     gap: 8px;
-  }
-  .answer-comparison p {
-    max-height: 110px;
   }
 }

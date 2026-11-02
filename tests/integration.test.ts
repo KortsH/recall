@@ -65,6 +65,101 @@ async function fresh() {
   return result.deckId;
 }
 
+test("wrong-choice context is shared by live/offline answers, rebuilt on sync and hidden during Test", async () => {
+  const make = () =>
+    parseBank({
+      deck: "Choice context " + randomUUID(),
+      questions: [
+        {
+          id: "stop",
+          topic: "Target",
+          question: "Which traffic-light color means stop?",
+          answer: "Red",
+        },
+        {
+          id: "go",
+          topic: "Source",
+          question: "Which traffic-light color means go?",
+          answer: "Green",
+        },
+      ],
+    });
+  const deckId = (await store.importBank(make())).deckId;
+  const remote = remoteBackend(base);
+  const live = await store.createSession(deckId, {
+    mode: "learn",
+    topic: "Target",
+    count: 1,
+  });
+  const result = await remote.answer(live.id, {
+    version: live.version,
+    revision: live.card!.revision,
+    response: ["Green"],
+  });
+  assert.equal(
+    result.feedback?.confusedWith?.[0].questions[0].questionId,
+    "go",
+  );
+  assert.equal(result.feedback?.answer, "Red");
+  const second = (await store.importBank(make())).deckId,
+    items = await store.items(second);
+  const local = newSession(second, items, {
+    mode: "learn",
+    topic: "Target",
+    count: 1,
+  });
+  const item = items.find((i) => i.question.id === "stop")!;
+  advanceSession(
+    local,
+    item,
+    { version: 0, revision: 1, response: ["Green"] },
+    items,
+  );
+  local.answers[0].confusedWith = [
+    {
+      answer: "Green",
+      questions: [
+        {
+          questionId: "fake",
+          variantId: "written",
+          question: "Forged relationship",
+          topic: "Fake",
+        },
+      ],
+    },
+  ];
+  const synced = await syncOfflineSession(store, local);
+  assert.deepEqual(
+    synced.session.answers[0].confusedWith,
+    result.feedback!.confusedWith,
+  );
+  const progress = (await store.question(second, "stop")).progress;
+  await syncOfflineSession(store, local);
+  assert.deepEqual((await store.question(second, "stop")).progress, progress);
+  const exam = await store.createSession(deckId, { mode: "test", count: 2 });
+  // Test may project either authored written or introductory choice. Override the disposable queue to cover choice secrecy.
+  const saved = await store.loadSession(exam.id);
+  saved.queue[0] = {
+    questionId: "stop",
+    variantId: "learn-choice",
+    format: "multiple_choice",
+    retry: 0,
+    choiceOptions: ["Red", "Green"],
+  };
+  await pool.query("UPDATE sessions SET data=$2 WHERE id=$1", [
+    saved.id,
+    saved,
+  ]);
+  const tested = await remote.answer(exam.id, {
+    version: exam.version,
+    revision: (await store.question(deckId, "stop")).revision,
+    response: ["Green"],
+  });
+  assert.equal(tested.feedback, null);
+  assert.equal(tested.session.result, null);
+  assert.ok(!JSON.stringify(tested).includes("confusedWith"));
+});
+
 test("offline authoring is atomic, detects same-revision metadata conflicts and replays receipts without repeated resets", async () => {
   const id = await fresh(),
     original = await store.items(id),

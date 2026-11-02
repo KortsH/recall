@@ -16,6 +16,8 @@ Requested for **1 November 2026**. The personal-use preview is complete. Formal 
 
 ## Other follow-up
 
+- [x] Wrong-choice feedback names matching source questions, correct/mental answers show one model panel, and long answers use the available page space without nested scrolling. Shared live/offline feedback and Test secrecy are preserved.
+
 - [x] Beginner-first README with a paste-only online-LLM workflow, complete JSON field/default reference, and a downloadable guided sample. The public walkthrough previews ordinary questions, reversals, grading, hints, matching, prerequisites, metadata and sharing without changing real study progress.
 
 - [x] Bundled English/Estonian interface catalogs, live device-local language selection, Android setup translations and contributor translation checks/documentation.

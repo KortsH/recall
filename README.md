@@ -2,7 +2,7 @@
 
 A free, open-source exam study tool. Start with multiple choice, build active recall, and share quizzes as files. Use it on your device without an account or subscription; connecting your own server is optional.
 
-[Try the guided sample](https://kortsh.github.io/recall/#guide) · [Open Recall](https://kortsh.github.io/recall/) · [Windows download](https://github.com/KortsH/recall/releases/download/v0.8.1-preview.1/Recall-Setup.exe) · [Android download](https://github.com/KortsH/recall/releases/download/v0.8.1-preview.1/Recall-Android.apk) · [Release details](https://github.com/KortsH/recall/releases/tag/v0.8.1-preview.1)
+[Try the guided sample](https://kortsh.github.io/recall/#guide) · [Open Recall](https://kortsh.github.io/recall/) · [Windows download](https://github.com/KortsH/recall/releases/download/v0.8.2-preview.1/Recall-Setup.exe) · [Android download](https://github.com/KortsH/recall/releases/download/v0.8.2-preview.1/Recall-Android.apk) · [Release details](https://github.com/KortsH/recall/releases/tag/v0.8.2-preview.1)
 
 ## Start here — no coding required
 
@@ -289,6 +289,8 @@ Three consecutive successes, including two active recalls, establish initial mas
 `depends_on` lists all prerequisites a question requires. Learn unlocks dependent questions dynamically as foundations are mastered. A prerequisite becoming due does not relock its children; losing mastery can. Topic tabs organize material independently of prerequisites. Drag A onto B to make A depend on B, or drop onto a topic heading to move it. The editor's searchable prerequisite picker works on phones and with the keyboard.
 
 Use **Something off? Edit question** after an answer. Semantic corrections reset that objective's progress; explanation, topic and dependency changes preserve it. Exact aliases and explicit multi-part grading are supported; prose uses a model answer and self-assessment. There is no AI grader or in-app generation service.
+
+Correct answers show the model once. Incorrect answers show your response beside the model; when a wrong choice is another card's exact answer, feedback also names that card's question so you can see the distinction. Unknown distractors get no invented connection. **Answer in my head** shows only the model for self-assessment. Long answers expand naturally instead of scrolling inside a small answer box. These displays also work offline and in session review; Test keeps feedback hidden until you finish.
 
 Optional hints appear on open recall cards when you request them. Hint use is recorded as assisted practice: a correct assisted answer does not increase the unaided streak or recall count, and cannot establish mastery or unlock prerequisites. Test mode offers no hints. Incorrect assisted answers still count as mistakes.
 

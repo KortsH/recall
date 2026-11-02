@@ -10,6 +10,7 @@ import { resolveVariant, recallDirection } from "./questions.ts";
 import { prerequisiteStatus } from "./prerequisites.ts";
 import type { Item, Session, Attempt } from "./types.ts";
 import { insertRetentionCheck } from "./retention.ts";
+import { choiceConnections } from "./feedback.ts";
 
 export interface AnswerInput {
   version: number;
@@ -337,6 +338,8 @@ export function advanceSession(
     mental,
   );
   if (entry.retentionCheck) attempt.retentionCheck = true;
+  const connections = choiceConnections(attempt, context ?? [item]);
+  if (connections) attempt.confusedWith = connections;
   const progress =
     attempt.correct === null
       ? item.progress

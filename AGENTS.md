@@ -53,6 +53,7 @@ Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --f
 - `--server URL` or `RECALL_SERVER_URL` selects HTTP; otherwise the CLI uses PostgreSQL directly. Do not expose PostgreSQL to the internet for agents or mobile clients.
 - Downloaded clients pick up changes on explicit refresh. Sync progress before replacing downloads. Offline evidence for edited/archived questions is retained but excluded from mastery.
 - MC success alone cannot establish mastery. Self-assessment must stay explicit.
+- Feedback shows the model once for correct/mental answers, and compares submitted/model answers when incorrect (or while a typed self-assessment is still ungraded). Do not cap model answers with nested scrollbars. Wrong-choice connections come only from exact answers in the same deck via src/core/feedback.ts; do not invent semantic matches. Derive connections again during offline replay and keep them out of unfinished Test views.
 - Corrections reset affected mastery and invalidate obsolete results. Preserve progress for explanation-only changes.
 - Keep submitted answers atomic and idempotent through session-version checks and row locks.
 - Do not add executable question templates. Formats are declarative data.

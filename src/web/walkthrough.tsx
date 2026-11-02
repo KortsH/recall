@@ -19,7 +19,8 @@ import { resolveVariant, recallDirection } from "../core/questions.ts";
 import { prerequisiteStatus } from "../core/prerequisites.ts";
 import type { Attempt, Item } from "../core/types.ts";
 import { emptyProgress } from "../core/types.ts";
-import { SubmittedAnswer } from "./answers.tsx";
+import { AnswerComparison } from "./answers.tsx";
+import { choiceConnections } from "../core/feedback.ts";
 import { saveJson } from "./files.ts";
 import {
   newWalkthroughItems,
@@ -363,6 +364,8 @@ function QuestionPreview({
       mental,
     );
     answered.current = true;
+    const connections = choiceConnections(attempt, items);
+    if (connections) attempt.confusedWith = connections;
     setFeedback(attempt);
     if (attempt.correct !== null)
       onProgress({
@@ -474,16 +477,13 @@ function QuestionPreview({
               {feedback.correct ? tr("guide.correct") : tr("guide.incorrect")}
             </p>
           )}
-          <div className="answer-comparison">
-            <SubmittedAnswer
-              value={feedback ? feedback.response : original.current}
-              mental={mental}
-            />
-            <div className="model-answer">
-              <span className="eyebrow">{tr("app.model_answer")}</span>
-              <p>{v.answer}</p>
-            </div>
-          </div>
+          <AnswerComparison
+            value={feedback ? feedback.response : original.current}
+            mental={mental}
+            answer={v.answer}
+            connections={feedback?.confusedWith}
+            correct={feedback?.correct}
+          />
           {(v.explanation ?? item.question.explanation) && (
             <p>{v.explanation ?? item.question.explanation}</p>
           )}

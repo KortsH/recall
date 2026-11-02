@@ -34,7 +34,7 @@ import {
   type ThemePreference,
 } from "./theme.ts";
 import { ReadAloud } from "./speech.tsx";
-import { SubmittedAnswer, responseText } from "./answers.tsx";
+import { AnswerComparison } from "./answers.tsx";
 import { resolveVariant } from "../core/questions.ts";
 import { Dictation } from "./dictation.tsx";
 import "./dictation.css";
@@ -2267,16 +2267,13 @@ function App() {
                     )}
                   </p>
                 )}
-                <div className="answer-comparison">
-                  <SubmittedAnswer
-                    value={feedback.response}
-                    mental={feedback.mentalRecall}
-                  />
-                  <div className="model-answer">
-                    <span>{tr("app.model_answer")}</span>
-                    <p>{feedback.answer}</p>
-                  </div>
-                </div>
+                <AnswerComparison
+                  value={feedback.response}
+                  mental={feedback.mentalRecall}
+                  answer={feedback.answer}
+                  connections={feedback.confusedWith}
+                  correct={feedback.correct}
+                />
                 {feedback.explanation && (
                   <p className="explanation">{feedback.explanation}</p>
                 )}
@@ -2649,18 +2646,11 @@ function App() {
                           "app.compare_your_answer_with_the_model",
                         )}
                       >
-                        <div className="answer-comparison">
-                          <SubmittedAnswer
-                            value={session.revealed?.response ?? actualResponse}
-                            mental={reveal.mental}
-                          />
-                          <div className="model-answer">
-                            <span className="eyebrow">
-                              {tr("app.model_answer")}
-                            </span>
-                            <p className="reveal-model">{reveal.answer}</p>
-                          </div>
-                        </div>
+                        <AnswerComparison
+                          value={session.revealed?.response ?? actualResponse}
+                          mental={reveal.mental}
+                          answer={reveal.answer}
+                        />
                         <ReadAloud
                           text={reveal.answer}
                           label={tr("app.read_model_answer")}
@@ -3044,15 +3034,13 @@ function Results({
             <ChevronDown size={16} />
           </summary>
           <div className="result-answer-body">
-            <span className="eyebrow">{tr("results.your_answer")}</span>
-            <p>
-              {responseText(a.response) ||
-                (a.mentalRecall
-                  ? tr("study.answered_mentally")
-                  : tr("study.no_written_answer"))}
-            </p>
-            <span className="eyebrow">{tr("app.model_answer")}</span>
-            <p>{a.answer}</p>
+            <AnswerComparison
+              value={a.response}
+              mental={a.mentalRecall}
+              answer={a.answer}
+              connections={a.confusedWith}
+              correct={a.correct}
+            />
             <p className="explanation">{a.explanation}</p>
             {a.rubric && (
               <ul className="result-rubric">

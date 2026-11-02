@@ -715,6 +715,9 @@
   "updates.show": "View update",
   "updates.release": "Recall {{version}} is available",
   "updates.install": "Download and install the update when you are ready. Your quizzes and progress stay on this device.",
+  "study.answer_belongs_to": "That answer belongs to:",
+  "study.more_connections_one": "{{count}} more matching question",
+  "study.more_connections_other": "{{count}} more matching questions",
   "updates.download": "View download",
   "updates.installed": "Installed app: {{version}}",
   "updates.events": "Checks on opening, returning to the app and reconnecting — no polling timer. Installed apps check public GitHub releases; no quiz data is sent. Updates never interrupt or reload your study session automatically."

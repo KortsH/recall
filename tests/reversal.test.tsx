@@ -229,11 +229,7 @@ test("submitted-answer display is compact readable text for prose, choices and m
   );
   assert.ok(prose.includes("A &lt; B"));
   assert.ok(prose.includes("Your answer"));
-  assert.ok(
-    renderToStaticMarkup(<SubmittedAnswer value="" mental />).includes(
-      "Answered in your head",
-    ),
-  );
+  assert.equal(renderToStaticMarkup(<SubmittedAnswer value="" mental />), "");
   assert.ok(
     renderToStaticMarkup(<SubmittedAnswer value="" />).includes(
       "No written answer",

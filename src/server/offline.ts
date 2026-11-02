@@ -6,6 +6,7 @@ import { updateProgress } from "../core/engine.ts";
 import type { Session, Attempt } from "../core/types.ts";
 import { emptyProgress } from "../core/types.ts";
 import { recallDirection } from "../core/questions.ts";
+import { choiceConnections } from "../core/feedback.ts";
 
 /** Merge append-only attempt evidence. Never trust a client's claimed correctness. */
 export async function syncOfflineSession(store: Store, input: Session) {
@@ -102,6 +103,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
         attempt = { ...old.data, invalidated: old.invalidated || stale };
       else if (stale || item.question.flag) {
         attempt = { ...submitted, correct: null, invalidated: true };
+        delete attempt.confusedWith;
         rejected.push(item.question.id);
       } else {
         if (input.mode === "test" && !input.finished && submitted.rating)
@@ -119,6 +121,8 @@ export async function syncOfflineSession(store: Store, input: Session) {
           submitted.mentalRecall === true,
         );
         if (entry.retentionCheck) attempt.retentionCheck = true;
+        const connections = choiceConnections(attempt, all);
+        if (connections) attempt.confusedWith = connections;
         if (attempt.correct !== null) {
           item.progress = updateProgress(
             item.progress,

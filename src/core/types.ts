@@ -111,6 +111,15 @@ export interface Session {
   revealed?: { cursor: number; response: unknown; mental?: boolean };
 }
 export interface Attempt {
+  confusedWith?: {
+    answer: string;
+    questions: {
+      questionId: string;
+      variantId: string;
+      question: string;
+      topic: string;
+    }[];
+  }[];
   mentalRecall?: boolean;
   retentionCheck?: boolean;
   hintUsed?: boolean;

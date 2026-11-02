@@ -715,6 +715,9 @@
   "updates.show": "Vaata uuendust",
   "updates.release": "Recall {{version}} on saadaval",
   "updates.install": "Laadi uuendus alla ja paigalda sobival ajal. Viktoriinid ja õpitulemused jäävad sellesse seadmesse.",
+  "study.answer_belongs_to": "See vastus kuulub küsimusele:",
+  "study.more_connections_one": "Veel {{count}} sobiv küsimus",
+  "study.more_connections_other": "Veel {{count}} sobivat küsimust",
   "updates.download": "Vaata allalaadimist",
   "updates.installed": "Paigaldatud rakendus: {{version}}",
   "updates.events": "Uuendusi kontrollitakse avamisel, rakendusse naasmisel ja ühenduse taastumisel — ilma perioodilise päringuta. Paigaldatud rakendused kontrollivad avalikke GitHubi väljalaskeid; viktoriiniandmeid ei saadeta. Uuendus ei katkesta õppimist ega laadi lehte automaatselt uuesti."
