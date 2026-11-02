@@ -10,7 +10,11 @@ Settings → **Use downloaded study mode** downloads the complete bank and progr
 
 **Sync progress & refresh quizzes** uploads pending evidence before downloading current questions and progress. New questions are deliberately not polled. Refresh each device to see changes from the other. Live-server mode remains available in Settings.
 
-Initial download and editing/importing need a connection. Visit successfully online before relying on offline startup. Clearing site storage can remove unsynced attempts. Concurrent devices merge evidence rather than replacing progress. Corrected revisions exclude obsolete answers from mastery.
+The initial download needs a connection. After that, question edits, new questions, imports, hints/flags, prerequisite changes and topic organization save locally while disconnected. Sync uploads immutable edit batches in order; a full before/after comparison detects conflicts even for metadata changes that keep the same grading revision. Settings shows both versions and requires explicit choices. Successful batch receipts make retrying a lost acknowledgement safe. No batch partly commits.
+
+New or corrected learning content stays visible in the library as **Awaiting sync** and enters server-backed study after the server acknowledges its revision. This prevents unpublished answers from earning shared mastery under a guessed revision. Existing published questions remain available offline. Device-only workspaces can study newly authored content immediately because there is no server revision to await.
+
+Visit successfully online before relying on offline startup. Clearing site storage can remove unsynced attempts and edits. Concurrent devices merge study evidence rather than replacing progress. Corrected revisions exclude obsolete answers from mastery. The workspace upgrade copies existing learning/session data locally and retains the older storage snapshot; versioned storage keys prevent old app tabs from overwriting the new edit queue.
 
 ## Phone app
 
@@ -44,4 +48,12 @@ Publish the app only to loopback, behind HTTPS and private network access. Add a
 
 Deck JSON export includes questions and prerequisites. A PostgreSQL `pg_dump -Fc` also includes progress, sessions, attempts and archived records. Restore to an empty dedicated database with `pg_restore --no-owner --no-acl` and a compatible PostgreSQL client. Back up before migration or bulk replacement.
 
-Keep live PostgreSQL on reliable application storage. A tested secondary drive can hold backup copies. `deploy/backup-home.sh` checks the archive and verifies a SHA-256 copy; its private configuration supplies the expected mount UUID. Perform a disposable restore before treating a backup as verified. Off-site backups remain separate work.
+Keep live PostgreSQL on reliable application storage. A tested secondary drive can hold backup copies. `deploy/backup-home.sh` checks the archive, restores it into an isolated temporary database by default, and verifies a SHA-256 copy on the configured disk. A mount/UUID check prevents writing to the underlying application disk when that drive is missing. Only recognized Recall archives are pruned, after all checks succeed; at least two rollback points remain. The current archive is always retained.
+
+Copy `deploy/backup.conf.example` to a private root-owned `/etc/recall-backup.conf` (mode 600), and set your container/role, directories and expected mount UUID. `BACKUP_RETENTION_COUNT` defaults to 30 per disk; `VERIFY_RESTORE=true` requires the backup role to create/drop its isolated `recall_verify_*` database. Application and backup paths must be distinct absolute paths. Do not put this private configuration into Git.
+
+Install `backup-home.sh` as `/usr/local/sbin/recall-backup.sh`, `backup-status.sh` as `/usr/local/sbin/recall-backup-status.sh`, and the supplied service/timer/alert units into `/etc/systemd/system/`. Run `systemctl daemon-reload`, then enable the timer. `systemctl start recall-backup.service` performs a manual backup. A missing disk now fails visibly rather than skipping the service silently.
+
+`status.json` records the last run, failed stage, most recent success and restore-verification result. The failure trap preserves previous verified archives, cleans its temporary database and reports to the service journal. `recall-backup-alert.service` also emits a journal error. An optional absolute executable `BACKUP_ALERT_HOOK` receives the failed stage and status-file path for an owner's own notifier; no notification service or credentials are built in.
+
+Run `sudo /usr/local/sbin/recall-backup-status.sh` for machine-readable health and a nonzero exit on failed, absent or stale backups. `MAX_BACKUP_AGE_HOURS` defaults to 36. The daily timer and these local checks are sufficient for the personal deployment; off-site storage and paid signing/certification are outside the current project scope. Two disks in one machine are still not an off-site copy.

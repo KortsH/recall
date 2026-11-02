@@ -82,6 +82,27 @@ Recovery never imports questions or changes connection settings. The destination
 
 Device-only workspaces use **Export with my progress** instead. Recovery files are a separate format and are intentionally rejected by ordinary quiz import.
 
+## Pending question edits and conflicts
+
+In a downloaded server workspace, edits and imports work without a connection. Each saved action stores an immutable batch containing stable question IDs, the downloaded original, and the desired full question (including hints, flags and dependencies). Topic moves and replacements use the same queue. Replacements archive omitted questions. Newly created decks keep their local stable deck ID when published; a conflicting server deck name requires a new name or an explicit discard, never an automatic merge.
+
+Sync happens with normal progress sync, including finish/Save & leave and explicit refresh. Every batch is checked against the current server bank before any writes. Conflicts in Settings show the original, local and server versions, including changed metadata. Choose for each conflict, save choices, then sync again. A newer intervening server change requires another review. Dependency graphs are validated against the complete prospective active bank. Choosing a version alone makes no network request.
+
+New questions and semantic corrections wait for an acknowledged server revision before entering server-backed study. They stay editable and shareable in the library. Metadata-only changes preserve progress; semantic corrections reset the affected objective when published. A server receipt makes interrupted uploads idempotent. Pending answers remain separate and are regraded normally after edit publication; obsolete content never gains mastery.
+
+**Settings → Offline question edits → Export pending edits and review history** creates a personal `.edits.json` backup without uploading or clearing anything. It contains pending before/after versions and resolved-conflict history; normal quiz export remains the format for sharing the current bank. Keep pending study answers using the separate recovery export too. Both files omit connection configuration.
+
+```sh
+# File-only validation/inspection.
+npm run recall -- edits-inspect Recall-pending.edits.json
+# Preview the next unapplied batch; no writes. Later batches depend on earlier ones.
+npm run recall -- --server https://recall.example.test edits-replay Recall-pending.edits.json
+# Apply in order, stop at the first conflict, and report completed batch IDs.
+npm run recall -- --server https://recall.example.test edits-replay Recall-pending.edits.json --apply
+```
+
+Replay never rewrites the file. Repeating it uses server receipts instead of duplicating edits or resetting progress again. The destination must be the intended original server; stable deck IDs are not remapped to similarly named decks. Agents can inspect reported `base`, `local`, and `server` values and produce an explicitly reviewed replacement batch with a new request UUID. Reusing a request ID with different content is rejected. JSON field names stay English protocol identifiers. The core parser and `/api/authoring?dryRun=1` use the same validation as the UI.
+
 ## Start a deck again
 
 Choose **Reset learning** below the study controls or in the study session. The confirmation names the selected deck and offers a progress-file backup. **Reset to zero** clears that deck's mastery, counters and review dates and ends its saved sessions. Questions, IDs, revisions and prerequisites remain unchanged; Learn starts at recognition again. Other decks are unaffected. Reset is available offline in a device-only workspace; a shared-server reset requires a connection and applies to that shared deck on every device.

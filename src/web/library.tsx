@@ -355,13 +355,15 @@ export function QuestionLibrary({
                       <span className="row-topic">
                         {i.question.id}
                         <span>·</span>
-                        {i.question.flag
-                          ? tr("library.flagged")
-                          : !state.unlocked
-                            ? tr("common.locked")
-                            : i.progress.mastered
-                              ? tr("common.mastered")
-                              : tr("common.available")}
+                        {i.revision < 0
+                          ? tr("edits.unpublished")
+                          : i.question.flag
+                            ? tr("library.flagged")
+                            : !state.unlocked
+                              ? tr("common.locked")
+                              : i.progress.mastered
+                                ? tr("common.mastered")
+                                : tr("common.available")}
                         <span>·</span>
                         {tr("library.level")}
                         {i.question.difficulty}

@@ -13,7 +13,7 @@ using System.Threading;
 using System.Windows.Forms;
 
 internal static class RecallLauncher {
-    const string Version="0.5.0-preview.1";
+    const string Version="0.6.0-preview.1";
     static TcpListener listener;
     static Control dispatch;
     static NotifyIcon tray;

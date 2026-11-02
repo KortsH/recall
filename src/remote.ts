@@ -23,6 +23,7 @@ export type Backend = Pick<
   | "updateDeck"
   | "recoverSession"
   | "resetLearning"
+  | "applyAuthoring"
 >;
 export function remoteBackend(base: string): Backend {
   const root = new URL(base);
@@ -42,6 +43,8 @@ export function remoteBackend(base: string): Backend {
   };
   const enc = encodeURIComponent;
   return {
+    applyAuthoring: (batch, options = {}) =>
+      call("/authoring" + (options.dryRun ? "?dryRun=1" : ""), batch),
     resetLearning: (id, input) =>
       call(`/decks/${enc(id)}/reset-learning`, input ?? {}),
     recoverSession: (session) => call("/sync", session),

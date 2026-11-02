@@ -2,7 +2,7 @@
 
 A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.5.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.5.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.5.0-preview.1)
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.6.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.6.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.6.0-preview.1)
 
 ## Install and use
 
@@ -43,6 +43,10 @@ Open [the browser app](https://kortsh.github.io/recall/). Import a file and star
 Each browser/profile, phone app and Windows app keeps its own workspace. Use portable files to transfer quizzes or your own progress between them. There is no automatic cross-device sync in device-only mode.
 
 ## Send a quiz to a friend
+
+## Editing while disconnected
+
+After downloading a shared-server quiz, you can edit questions, hints, flags and prerequisites, move topics or import questions without a connection. Changes queue on this device and upload with normal sync. If another device changed the same question, Settings shows both versions and asks which to keep; nothing is overwritten automatically. New questions and corrected learning content enter shared-server study after syncing, while published cards remain available offline. Device-only workspaces can study new content immediately. Export pending edits and review history in Settings for a personal backup; [CLI replay and conflict handling](docs/PORTABLE.md#pending-question-edits-and-conflicts) use the same validation.
 
 ## Interface languages
 
@@ -258,7 +262,7 @@ npm run check               # Public-source guard + unit/integration tests + bui
 npm run test:installer      # Windows only; build installer first
 ```
 
-Integration tests need a dedicated test PostgreSQL server with CREATEDB access. They create/drop uniquely named databases and never truncate the user's database. CI also builds and exercises the Windows installer. Physical phone testing, release signing and other remaining work are in [the roadmap](docs/FUTURE.md).
+Integration tests need a dedicated test PostgreSQL server with CREATEDB access. They create/drop uniquely named databases and never truncate the user's database. CI also builds and exercises the Windows installer. The [roadmap](docs/FUTURE.md) records optional follow-up and the personal-project scope; publisher signing and formal device certification are not required for these previews.
 
 MIT licensed.
 

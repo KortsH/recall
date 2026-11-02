@@ -26,6 +26,20 @@ import { createRecovery } from "../core/recovery.ts";
 import { auditQuestions } from "../core/audit.ts";
 import { resetPreview, resetItems, closeResetSession } from "../core/reset.ts";
 import { planOrganization } from "../core/organization.ts";
+import {
+  canonical,
+  questionVersion,
+  parseAuthoring,
+  resolveAuthoring,
+  type AuthoringBatch,
+  type AuthoringResult,
+  type DeckContent,
+} from "../core/authoring.ts";
+
+interface DraftBatch {
+  request: AuthoringBatch;
+  revisions: Record<string, number>;
+}
 
 interface Snapshot {
   downloadedAt: string;
@@ -35,6 +49,11 @@ interface Snapshot {
   sessions: Record<string, Session>;
 }
 interface State extends Snapshot {
+  storageVersion?: number;
+  edits?: DraftBatch[];
+  editConflict?: { batchId: string; result: AuthoringResult };
+  editHistory?: unknown[];
+  draftRevision?: number;
   dirty: Record<string, boolean>;
   resetConflicts?: string[];
 }
@@ -54,7 +73,9 @@ export const personalMode = () =>
 export function selectWorkspace(personal: boolean) {
   localStorage.setItem("recall-workspace", personal ? "personal" : "server");
 }
-const workspaceKey = () => (personalMode() ? "personal" : "workspace");
+// Preserve the old snapshot for recovery; older app tabs must never overwrite the new outbox.
+const legacyWorkspaceKey = () => (personalMode() ? "personal" : "workspace");
+const workspaceKey = () => (personalMode() ? "personal-v2" : "workspace-v2");
 export const downloadedMode = () =>
   localStorage.getItem("recall-storage") !== "live";
 export function setDownloadedMode(enabled: boolean) {
@@ -65,7 +86,14 @@ export const downloadStatus = () => ({
   personal: personalMode(),
   enabled: personalMode() || downloadedMode(),
   downloadedAt: state?.downloadedAt,
-  pending: !personalMode() && state ? Object.keys(state.dirty).length : 0,
+  pending:
+    !personalMode() && state
+      ? Object.keys(state.dirty).length + (state.edits?.length ?? 0)
+      : 0,
+  pendingSessions:
+    !personalMode() && state ? Object.keys(state.dirty).length : 0,
+  pendingEdits: !personalMode() ? (state?.edits?.length ?? 0) : 0,
+  editConflict: state?.editConflict,
   error: lastError,
   resetConflicts: state?.resetConflicts ?? [],
 });
@@ -74,17 +102,27 @@ export async function serverApi<T>(
   body?: unknown,
   method?: string,
 ): Promise<T> {
-  const r = await fetch("/api" + path, {
-    method: method ?? (body ? "POST" : "GET"),
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await r.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  let r: Response, data: any;
+  try {
+    r = await fetch("/api" + path, {
+      method: method ?? (body ? "POST" : "GET"),
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    data = await r.json();
+  } catch (error) {
+    throw Object.assign(error as Error, { code: "SERVER_UNAVAILABLE" });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!r.ok)
     throw Object.assign(
       new Error(data.error ?? tr("cache.server_request_failed")),
       {
-        code: data.code,
+        code: r.status >= 500 ? "SERVER_UNAVAILABLE" : data.code,
       },
     );
   return data;
@@ -109,8 +147,25 @@ async function persist() {
   try {
     await new Promise<void>((resolve, reject) => {
       const t = db.transaction("state", "readwrite");
-      t.objectStore("state").put(state, workspaceKey());
-      t.oncomplete = () => resolve();
+      const expected = state?.storageVersion ?? 0;
+      const read = t.objectStore("state").get(workspaceKey());
+      read.onsuccess = () => {
+        if ((read.result?.storageVersion ?? 0) !== expected) {
+          t.abort();
+          state = undefined;
+          reject(new Error(tr("edits.anotherTab")));
+          return;
+        }
+        t.objectStore("state").put(
+          { ...state, storageVersion: expected + 1 },
+          workspaceKey(),
+        );
+      };
+      t.oncomplete = () => {
+        if (state) state.storageVersion = expected + 1;
+        resolve();
+      };
+      t.onabort = () => reject(t.error ?? new Error(tr("edits.storageFailed")));
       t.onerror = () => reject(t.error);
     });
   } finally {
@@ -126,7 +181,20 @@ async function readStoredState() {
         .transaction("state")
         .objectStore("state")
         .get(workspaceKey());
-      r.onsuccess = () => resolve(r.result);
+      r.onsuccess = () => {
+        if (r.result) {
+          resolve(r.result);
+          return;
+        }
+        const legacy = r
+          .transaction!.objectStore("state")
+          .get(legacyWorkspaceKey());
+        legacy.onsuccess = () =>
+          resolve(
+            legacy.result ? { ...legacy.result, storageVersion: 0 } : undefined,
+          );
+        legacy.onerror = () => reject(legacy.error);
+      };
       r.onerror = () => reject(r.error);
     });
   } finally {
@@ -148,7 +216,7 @@ async function load() {
       : await serverApi<Snapshot>("/snapshot");
     state = { ...snapshot, dirty: {} };
     await persist();
-  }
+  } else window.dispatchEvent(new Event("recall-cache"));
   return state;
 }
 function stats(items: Item[]): DeckSummary["stats"] {
@@ -222,7 +290,7 @@ function decks(s: State) {
   return s.decks.map((d) => ({ ...d, stats: stats(s.items[d.id] ?? []) }));
 }
 function view(s: State, session: Session) {
-  const items = s.items[session.deckId] ?? [];
+  const items = studyItems(s, session.deckId);
   prepareSession(session, items);
   if (!session.finished) {
     session.queue = [
@@ -237,8 +305,187 @@ function view(s: State, session: Session) {
   }
   return sessionView(session, items);
 }
+// Unpublished semantic corrections never earn shared mastery under a guessed server revision.
+// They remain editable/exportable in the library and become studyable once acknowledged.
+function studyItems(s: State, deckId: string) {
+  return (s.items[deckId] ?? []).filter((i) => i.revision > 0);
+}
+async function stageEdits(
+  s: State,
+  deckId: string,
+  before: Item[],
+  after: Item[],
+  deck?: AuthoringBatch["deck"],
+) {
+  const changes: AuthoringBatch["changes"] = [];
+  const revisions: Record<string, number> = {};
+  for (const item of after) {
+    const old = before.find((i) => i.question.id === item.question.id);
+    if (canonical(questionVersion(old)) === canonical(questionVersion(item)))
+      continue;
+    if (
+      !old ||
+      semanticContent(old.question) !== semanticContent(item.question)
+    ) {
+      s.draftRevision = (s.draftRevision ?? 0) - 1;
+      item.revision = s.draftRevision;
+      item.progress = emptyProgress();
+      revisions[item.question.id] = item.revision;
+    } else item.revision = old.revision;
+    changes.push({
+      id: item.question.id,
+      base: questionVersion(old),
+      value: questionVersion(item)!,
+    });
+  }
+  if (!changes.length && !deck) return;
+  const request = parseAuthoring({
+    format: "recall-edits",
+    version: 1,
+    id: crypto.randomUUID(),
+    deckId,
+    ...(deck ? { deck } : {}),
+    changes,
+  });
+  s.edits = [...(s.edits ?? []), { request, revisions }];
+  s.items[deckId] = after;
+  await persist();
+}
+async function syncEdits(s: State) {
+  for (const draft of [...(s.edits ?? [])]) {
+    const result = await serverApi<AuthoringResult>(
+      "/authoring",
+      draft.request,
+    );
+    if (!result.applied) {
+      s.editConflict = { batchId: draft.request.id, result };
+      await persist();
+      throw new Error(tr("edits.conflictNotice"));
+    }
+    for (const item of s.items[draft.request.deckId] ?? []) {
+      const acknowledged = result.items.find(
+        (i) => i.question.id === item.question.id,
+      );
+      if (
+        acknowledged &&
+        item.revision < 0 &&
+        semanticContent(item.question) ===
+          semanticContent(acknowledged.question)
+      )
+        item.revision = acknowledged.revision;
+    }
+    s.edits = s.edits!.filter((e) => e.request.id !== draft.request.id);
+    if (s.editConflict?.batchId === draft.request.id) delete s.editConflict;
+    await persist();
+  }
+}
+export const exportPendingEdits = () =>
+  serial(async () => {
+    const s = await load();
+    return {
+      format: "recall-edit-backup",
+      version: 1,
+      createdAt: new Date().toISOString(),
+      batches: (s.edits ?? []).map((e) => e.request),
+      history: s.editHistory ?? [],
+    };
+  });
+/** Review has no network side effects. Explicit choices are retried only on the next Sync. */
+export const resolveEditConflict = (
+  batchId: string,
+  choices: Record<string, "local" | "server">,
+  deckName?: string,
+) =>
+  serial(async () => {
+    const s = await load(),
+      draft = s.edits?.find((e) => e.request.id === batchId);
+    if (!draft || s.editConflict?.batchId !== batchId)
+      throw new Error(tr("edits.conflictChanged"));
+    const conflict = s.editConflict.result;
+    const request = resolveAuthoring(
+      draft.request,
+      conflict.conflicts,
+      choices,
+      deckName,
+    );
+    if (request) {
+      const graph = new Map(
+        conflict.items.map((i) => [i.question.id, questionVersion(i)!]),
+      );
+      for (const c of request.changes) graph.set(c.id, c.value);
+      try {
+        validatePrerequisites(
+          [...graph.values()].filter((v) => !v.archived).map((v) => v.question),
+        );
+      } catch {
+        throw new Error(tr("edits.graphConflict"));
+      }
+    }
+    s.editHistory = [
+      ...(s.editHistory ?? []),
+      {
+        request: draft.request,
+        conflicts: conflict.conflicts,
+        choices,
+        resolvedAt: new Date().toISOString(),
+      },
+    ];
+    s.edits = s.edits!.flatMap((e) =>
+      e !== draft ? [e] : request ? [{ ...e, request }] : [],
+    );
+    const id = draft.request.deckId;
+    const discardDeck = conflict.conflicts.some(
+      (c) =>
+        c.kind === "deck" &&
+        choices[`deck:${c.id}`] === "server" &&
+        (!c.server || c.reason === "name-taken"),
+    );
+    if (discardDeck) {
+      s.editHistory.push({
+        discarded: s.edits
+          .filter((e) => e.request.deckId === id)
+          .map((e) => e.request),
+      });
+      s.edits = s.edits.filter((e) => e.request.deckId !== id);
+      s.decks = s.decks.filter((d) => d.id !== id);
+    }
+    const rebuilt = new Map(
+      conflict.items.map((i) => [i.question.id, structuredClone(i)]),
+    );
+    for (const pending of s.edits.filter((e) => e.request.deckId === id))
+      for (const change of pending.request.changes) {
+        const old = rebuilt.get(change.id),
+          local = s.items[id]?.find((i) => i.question.id === change.id);
+        const semanticChanged =
+          !old ||
+          semanticContent(old.question) !==
+            semanticContent(change.value.question);
+        rebuilt.set(change.id, {
+          ...change.value,
+          revision: semanticChanged
+            ? (pending.revisions[change.id] ?? -1)
+            : old.revision,
+          progress:
+            local &&
+            canonical(local.question) === canonical(change.value.question)
+              ? local.progress
+              : semanticChanged
+                ? emptyProgress()
+                : old.progress,
+        });
+      }
+    s.items[id] = [...rebuilt.values()];
+    if (request?.deck)
+      Object.assign(
+        s.decks.find((d) => d.id === id)!,
+        request.deck.value,
+      );
+    delete s.editConflict;
+    await persist();
+  });
 async function syncInternal(s: State) {
   if (personalMode()) return;
+  await syncEdits(s);
   for (const id of Object.keys(s.dirty)) {
     const current = s.sessions[id];
     let result;
@@ -291,7 +538,10 @@ export const syncDownloads = () =>
         lastError = "";
       await persist();
     } catch (e) {
-      lastError = `Progress is saved on this device. Sync pending: ${(e as Error).message}`;
+      lastError =
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message;
       window.dispatchEvent(new Event("recall-cache"));
       throw e;
     }
@@ -306,6 +556,7 @@ export const refreshDownloads = () =>
     await syncInternal(s);
     const snapshot = await serverApi<Snapshot>("/snapshot");
     state = {
+      ...s,
       ...snapshot,
       sessions: Object.fromEntries(
         Object.entries({ ...s.sessions, ...snapshot.sessions }).filter(
@@ -323,6 +574,7 @@ export const discardResetEvidence = () =>
     if (personalMode())
       throw new Error(tr("cache.this_recovery_action_is_for_server_downloads"));
     const s = await load();
+    if (s.edits?.length) throw new Error(tr("edits.resolveBeforeResetDiscard"));
     const snapshot = await serverApi<Snapshot>("/snapshot");
     for (const id of s.resetConflicts ?? []) {
       const latest = snapshot.decks.find((d) => d.id === id);
@@ -400,7 +652,7 @@ export async function api<T>(
     const verb = method ?? (body ? "POST" : "GET");
     let result: any;
     if (p === "/decks" && verb === "GET") return decks(s) as T;
-    if (personalMode() && p === "/import" && verb === "POST") {
+    if (p === "/import" && verb === "POST") {
       const parsed = parsePortable(body);
       const current = s.decks.find((d) => d.name === parsed.bank.deck);
       const plan = await importPersonal(
@@ -409,12 +661,19 @@ export async function api<T>(
         {
           replace: url.searchParams.get("replace") === "1",
           topic: url.searchParams.get("topic") ?? undefined,
-          restoreProgress: url.searchParams.get("progress") === "replace",
+          restoreProgress:
+            personalMode() && url.searchParams.get("progress") === "replace",
         },
       );
       if (url.searchParams.get("dryRun") === "1")
         return { ...plan.counts, deckId: current?.id ?? "", dryRun: true } as T;
-      const id = current?.id ?? `personal-${crypto.randomUUID()}`;
+      const id =
+        current?.id ??
+        `${personalMode() ? "personal" : "offline"}-${crypto.randomUUID()}`;
+      const before = structuredClone(current ? s.items[id] : []);
+      const beforeDeck: DeckContent | null = current
+        ? { name: current.name, description: current.description }
+        : null;
       if (!current)
         s.decks.push({
           id,
@@ -426,7 +685,22 @@ export async function api<T>(
       else if (plan.bank.description)
         current.description = plan.bank.description;
       s.items[id] = plan.items;
-      await persist();
+      if (personalMode()) await persist();
+      else {
+        const value = {
+          name: plan.bank.deck,
+          description: plan.bank.description || current?.description || "",
+        };
+        await stageEdits(
+          s,
+          id,
+          before,
+          plan.items,
+          canonical(value) !== canonical(beforeDeck)
+            ? { base: beforeDeck, value }
+            : undefined,
+        );
+      }
       return { ...plan.counts, deckId: id, dryRun: false } as T;
     }
     const d = p.match(/^\/decks\/([^/]+)(?:\/(.*))?$/);
@@ -438,6 +712,8 @@ export async function api<T>(
         throw new Error(tr("cache.deck_not_downloaded_refresh_quizzes"));
       if (!rest && verb === "GET") return deck as T;
       if (rest === "reset-learning" && verb === "POST") {
+        if (!personalMode() && s.edits?.some((e) => e.request.deckId === id))
+          throw new Error(tr("edits.syncBeforeReset"));
         const sessions = Object.values(s.sessions).filter(
           (x) => x.deckId === id,
         );
@@ -478,8 +754,9 @@ export async function api<T>(
         await persist();
         return result as T;
       }
-      if (personalMode() && !rest && verb === "PATCH") {
+      if (!rest && verb === "PATCH") {
         const target = s.decks.find((d) => d.id === id)!;
+        const base = { name: target.name, description: target.description };
         if (body.name !== undefined) {
           if (
             !body.name.trim() ||
@@ -490,18 +767,19 @@ export async function api<T>(
         }
         if (body.description !== undefined)
           target.description = String(body.description);
-        await persist();
+        if (personalMode()) await persist();
+        else
+          await stageEdits(s, id, s.items[id], structuredClone(s.items[id]), {
+            base,
+            value: { name: target.name, description: target.description },
+          });
         return { ...target, stats: stats(s.items[id]) } as T;
       }
       if (rest === "questions" && verb === "GET")
         return (s.items[id] ?? []).filter((i) => !i.archived) as T;
       if (rest === "organize" && verb === "POST") {
-        if (!personalMode()) {
-          await syncInternal(s);
-          result = await serverApi(path, body, verb);
-          if (body.apply === true)
-            s.items[id] = await serverApi<Item[]>(`/decks/${id}/questions`);
-        } else {
+        const before = structuredClone(s.items[id]);
+        {
           const plan = planOrganization(s.items[id], body);
           result = plan as T;
           if (!plan.dryRun) {
@@ -519,7 +797,9 @@ export async function api<T>(
             );
           }
         }
-        await persist();
+        if (personalMode()) await persist();
+        else if (body.apply === true)
+          await stageEdits(s, id, before, s.items[id]);
         return result;
       }
       if (rest === "export" && verb === "GET")
@@ -558,7 +838,12 @@ export async function api<T>(
             createdAt: x.createdAt,
           })) as T;
       if (rest === "sessions" && verb === "POST") {
-        const session = newSession(id, s.items[id], body);
+        if (
+          !studyItems(s, id).some((i) => !i.archived) &&
+          s.edits?.some((e) => e.request.deckId === id)
+        )
+          throw new Error(tr("edits.publishFirst"));
+        const session = newSession(id, studyItems(s, id), body);
         session.learningEpoch = deck.learning_epoch ?? 0;
         s.sessions[session.id] = session;
         if (!personalMode()) s.dirty[session.id] = true;
@@ -573,7 +858,7 @@ export async function api<T>(
         if (!item) throw new Error(tr("cache.question_not_downloaded"));
         if (verb === "GET") return structuredClone(item) as T;
         if (verb === "PUT") {
-          if (personalMode()) {
+          {
             if (item.revision !== body.revision)
               throw new Error(
                 tr("cache.question_changed_reload_before_saving"),
@@ -588,18 +873,12 @@ export async function api<T>(
               deck: deck.name,
               questions: [question],
             });
-            s.items[id] = plan.items;
-            await persist();
+            if (personalMode()) {
+              s.items[id] = plan.items;
+              await persist();
+            } else await stageEdits(s, id, s.items[id], plan.items);
             return { kind: "updated", reset: !!plan.counts.reviewReset } as T;
           }
-          await syncInternal(s);
-          result = await serverApi(path, body, verb);
-          const updated = await serverApi<Item>(
-            `/decks/${id}/questions/${encodeURIComponent(item.question.id)}`,
-          );
-          Object.assign(item, updated);
-          await persist();
-          return result;
         }
       }
     }
@@ -611,7 +890,7 @@ export async function api<T>(
           tr("cache.session_is_not_downloaded_refresh_quizzes_first"),
         );
       const rest = m[2] ?? "";
-      const items = s.items[session.deckId] ?? [];
+      const items = studyItems(s, session.deckId);
       if (
         verb !== "GET" &&
         (session.learningReset ||
@@ -748,6 +1027,7 @@ export async function api<T>(
     result = await serverApi(path, body, method);
     const snapshot = await serverApi<Snapshot>("/snapshot");
     state = {
+      ...s,
       ...snapshot,
       sessions: Object.fromEntries(
         Object.entries({ ...s.sessions, ...snapshot.sessions }).filter(

@@ -1,0 +1,6 @@
+[Unit]
+Description=Report a Recall database backup failure
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/logger --priority daemon.err --tag recall-backup Recall backup failed. Inspect systemctl status recall-backup.service and run recall-backup-status.sh before clearing or replacing any data.

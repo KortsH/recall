@@ -14,6 +14,12 @@ import { syncOfflineSession } from "../src/server/offline.ts";
 import { remoteBackend } from "../src/remote.ts";
 import { createRecovery } from "../src/core/recovery.ts";
 import { request } from "node:http";
+import {
+  parseAuthoring,
+  questionVersion,
+  resolveAuthoring,
+  type AuthoringBatch,
+} from "../src/core/authoring.ts";
 
 // Isolated real PostgreSQL database. Never clear or reuse a user's development database.
 const name = "recall_test_" + randomUUID().replaceAll("-", "");
@@ -58,6 +64,276 @@ async function fresh() {
   });
   return result.deckId;
 }
+
+test("offline authoring is atomic, detects same-revision metadata conflicts and replays receipts without repeated resets", async () => {
+  const id = await fresh(),
+    original = await store.items(id),
+    remote = remoteBackend(base);
+  const make = (
+    question = { ...original[0].question, hint: "Local hint" },
+  ): AuthoringBatch => ({
+    format: "recall-edits",
+    version: 1,
+    id: randomUUID(),
+    deckId: id,
+    changes: [
+      {
+        id: question.id,
+        base: questionVersion(original[0]),
+        value: { question, archived: false },
+      },
+      {
+        id: original[1].question.id,
+        base: questionVersion(original[1]),
+        value: {
+          question: { ...original[1].question, topic: "Moved" },
+          archived: false,
+        },
+      },
+    ],
+  });
+  const draft = make();
+  await store.editQuestion(
+    id,
+    original[0].question.id,
+    { ...original[0].question, hint: "Remote hint" },
+    original[0].revision,
+  );
+  const conflict = await remote.applyAuthoring(draft);
+  assert.equal(conflict.applied, false);
+  assert.equal(conflict.conflicts.length, 1);
+  assert.equal(
+    (await store.question(id, original[0].question.id)).revision,
+    original[0].revision,
+  );
+  assert.equal(
+    (await store.question(id, original[1].question.id)).question.topic,
+    original[1].question.topic,
+    "other batch members must not partly commit",
+  );
+  const resolved = resolveAuthoring(draft, conflict.conflicts, {
+    [`question:${original[0].question.id}`]: "local",
+  })!;
+  const preview = await remote.applyAuthoring(resolved, { dryRun: true });
+  assert.equal(preview.applied, false);
+  assert.deepEqual(preview.conflicts, []);
+  assert.equal(
+    (await store.question(id, original[0].question.id)).question.hint,
+    "Remote hint",
+  );
+  const [one, two] = await Promise.all([
+    remote.applyAuthoring(resolved),
+    remote.applyAuthoring(resolved),
+  ]);
+  assert.ok(one.applied && two.applied);
+  assert.equal(
+    (await store.question(id, original[0].question.id)).question.hint,
+    "Local hint",
+  );
+  assert.equal(
+    (
+      await pool.query(
+        "SELECT count(*) FROM authoring_receipts WHERE deck_id=$1",
+        [id],
+      )
+    ).rows[0].count,
+    "1",
+  );
+  await assert.rejects(
+    remote.applyAuthoring({ ...resolved, changes: [resolved.changes[0]] }),
+    /identity/,
+  );
+  const current = await store.question(id, original[0].question.id);
+  const correction = parseAuthoring({
+    format: "recall-edits",
+    version: 1,
+    id: randomUUID(),
+    deckId: id,
+    changes: [
+      {
+        id: current.question.id,
+        base: questionVersion(current),
+        value: {
+          question: {
+            ...current.question,
+            question: "A corrected synthetic prompt",
+          },
+          archived: false,
+        },
+      },
+    ],
+  });
+  await remote.applyAuthoring(correction);
+  await remote.applyAuthoring(correction);
+  assert.equal(
+    (await store.question(id, current.question.id)).revision,
+    current.revision + 1,
+  );
+  const graphItem = await store.question(id, current.question.id);
+  const invalid = {
+    ...correction,
+    id: randomUUID(),
+    changes: [
+      {
+        id: graphItem.question.id,
+        base: questionVersion(graphItem),
+        value: {
+          question: { ...graphItem.question, depends_on: ["missing"] },
+          archived: false,
+        },
+      },
+    ],
+  };
+  assert.equal(
+    (await remote.applyAuthoring(invalid)).conflicts[0].reason,
+    "graph",
+  );
+  assert.deepEqual(
+    (await store.question(id, current.question.id)).question,
+    graphItem.question,
+  );
+});
+
+test("new offline decks handle name collisions explicitly and edit backup CLI previews without writes", async () => {
+  const name = "Offline " + randomUUID(),
+    questions = bank.questions.slice(0, 2);
+  const draft: AuthoringBatch = {
+    format: "recall-edits",
+    version: 1,
+    id: randomUUID(),
+    deckId: "offline-" + randomUUID(),
+    deck: {
+      base: null,
+      value: { name, description: "Synthetic offline import" },
+    },
+    changes: questions.map((question) => ({
+      id: question.id,
+      base: null,
+      value: { question, archived: false },
+    })),
+  };
+  const folder = await mkdtemp(join(tmpdir(), "recall-edit-backup-")),
+    file = join(folder, "pending.edits.json");
+  try {
+    const backup = {
+      format: "recall-edit-backup",
+      version: 1,
+      createdAt: new Date().toISOString(),
+      batches: [draft],
+      history: [],
+    };
+    await writeFile(file, JSON.stringify(backup));
+    const cli = async (args: string[]) => {
+      const child = spawn(
+        process.execPath,
+        ["--import", "tsx", "src/cli.ts", "--server", base, ...args],
+        { stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
+      );
+      let stdout = "",
+        stderr = "";
+      child.stdout.on("data", (d) => (stdout += d));
+      child.stderr.on("data", (d) => (stderr += d));
+      const code = await new Promise<number | null>((r) =>
+        child.on("close", r),
+      );
+      assert.equal(code, 0, stderr + stdout);
+      return JSON.parse(stdout);
+    };
+    assert.equal((await cli(["edits-inspect", file])).batches.length, 1);
+    assert.equal((await cli(["edits-replay", file])).dryRun, true);
+    await assert.rejects(store.deck(draft.deckId), /not found/);
+    const applied = await cli(["edits-replay", file, "--apply"]);
+    assert.equal(applied.remaining, 0);
+    assert.equal((await cli(["edits-replay", file, "--apply"])).remaining, 0);
+    assert.equal((await store.items(draft.deckId)).length, 2);
+    assert.equal(await readFile(file, "utf8"), JSON.stringify(backup));
+    const collision = {
+      ...draft,
+      id: randomUUID(),
+      deckId: "offline-" + randomUUID(),
+    };
+    const result = await store.applyAuthoring(collision);
+    assert.equal(result.conflicts[0].reason, "name-taken");
+    assert.equal(
+      resolveAuthoring(collision, result.conflicts, {
+        [`deck:${collision.deckId}`]: "server",
+      }),
+      null,
+    );
+    const renamed = resolveAuthoring(
+      collision,
+      result.conflicts,
+      { [`deck:${collision.deckId}`]: "local" },
+      name + " renamed",
+    )!;
+    assert.ok((await store.applyAuthoring(renamed)).applied);
+    assert.equal((await store.deck(renamed.deckId)).name, name + " renamed");
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("authoring metadata preserves pending study credit while corrected content invalidates old evidence", async () => {
+  const id = await fresh(),
+    item = (await store.items(id))[0];
+  const session = newSession(id, [item], { mode: "cram", count: 1 });
+  const view = await store.getSession(session.id).catch(() => null);
+  assert.equal(view, null);
+  advanceSession(
+    session,
+    item,
+    { version: session.version, revision: item.revision, response: "A" },
+    [item],
+  );
+  const metadata: AuthoringBatch = {
+    format: "recall-edits",
+    version: 1,
+    id: randomUUID(),
+    deckId: id,
+    changes: [
+      {
+        id: item.question.id,
+        base: questionVersion((await store.items(id))[0]),
+        value: {
+          question: { ...item.question, hint: "A non-answer cue" },
+          archived: false,
+        },
+      },
+    ],
+  };
+  await store.applyAuthoring(metadata);
+  await syncOfflineSession(store, session);
+  await syncOfflineSession(store, session);
+  assert.equal(
+    (await store.question(id, item.question.id)).progress.attempts,
+    1,
+  );
+  const current = await store.question(id, item.question.id);
+  const correction = {
+    ...metadata,
+    id: randomUUID(),
+    changes: [
+      {
+        id: current.question.id,
+        base: questionVersion(current),
+        value: {
+          question: {
+            ...current.question,
+            question: "Updated learning prompt",
+          },
+          archived: false,
+        },
+      },
+    ],
+  };
+  await store.applyAuthoring(correction);
+  const stale = await syncOfflineSession(store, session);
+  assert.equal(
+    (await store.question(id, item.question.id)).progress.attempts,
+    0,
+  );
+  assert.equal(stale.session.answers[0].invalidated, true);
+});
 test("HTTP hints and offline evidence preserve assistance without double mastery credit", async () => {
   const imported = await store.importBank(
       parseBank({

@@ -9,6 +9,7 @@ import { readBank } from "./core/bank.ts";
 import { remoteBackend, type Backend } from "./remote.ts";
 import { auditQuestions } from "./core/audit.ts";
 import { parseRecovery } from "./core/recovery.ts";
+import { parseEditBackup } from "./core/authoring.ts";
 import { UNASSIGNED_TOPIC, type TopicMove } from "./core/organization.ts";
 import {
   parsePortable,
@@ -24,7 +25,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.5.0-preview.1");
+  .version("0.6.0-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",
@@ -45,6 +46,63 @@ async function connect() {
   return store;
 }
 const print = (value: unknown) => console.log(JSON.stringify(value, null, 2));
+async function readEditBackup(file: string) {
+  const raw = await readFile(file, "utf8");
+  if (Buffer.byteLength(raw) > 5 * 1024 * 1024)
+    throw new Error("Edit backup exceeds 5 MB");
+  return parseEditBackup(JSON.parse(raw.replace(/^\uFEFF/, "")));
+}
+program
+  .command("edits-inspect <file>")
+  .description("Validate a pending-question-edit backup without a server")
+  .action(async (file) => {
+    const backup = await readEditBackup(file);
+    print({
+      batches: backup.batches.map((b) => ({
+        id: b.id,
+        deckId: b.deckId,
+        questions: b.changes.map((c) => c.id),
+        changesDeck: !!b.deck,
+      })),
+      reviewHistory: backup.history?.length ?? 0,
+    });
+  });
+program
+  .command("edits-replay <file>")
+  .description(
+    "Preview the next pending edit batch, or replay in order with --apply; conflicts never overwrite automatically",
+  )
+  .option("--apply", "Apply batches until the first conflict")
+  .action(async (file, options) => {
+    const backup = await readEditBackup(file),
+      backend = await connect(),
+      completed: string[] = [];
+    for (const batch of backup.batches) {
+      const result = await backend.applyAuthoring(batch, {
+        dryRun: !options.apply,
+      });
+      if (result.applied) {
+        completed.push(batch.id);
+        continue;
+      }
+      print({
+        dryRun: !options.apply,
+        completed,
+        nextBatch: batch.id,
+        conflicts: result.conflicts,
+        remaining: backup.batches.length - completed.length,
+        fileUnchanged: true,
+      });
+      if (result.conflicts.length) process.exitCode = 1;
+      return;
+    }
+    print({
+      dryRun: !options.apply,
+      completed,
+      remaining: 0,
+      fileUnchanged: true,
+    });
+  });
 program
   .command("recovery-inspect <file>")
   .description(

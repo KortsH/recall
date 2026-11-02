@@ -11,6 +11,12 @@ import {
   validatePrerequisites,
 } from "../core/prerequisites.ts";
 import { randomUUID, createHash } from "node:crypto";
+import {
+  canonical,
+  parseAuthoring,
+  planAuthoring,
+  type AuthoringResult,
+} from "../core/authoring.ts";
 import type pg from "pg";
 import { contentHash, parseBank, resolveVariant } from "../core/bank.ts";
 import {
@@ -78,6 +84,104 @@ export interface DeckSummary {
 }
 export class Store {
   constructor(public pool: pg.Pool) {}
+  async applyAuthoring(
+    input: unknown,
+    options: { dryRun?: boolean } = {},
+  ): Promise<AuthoringResult> {
+    const batch = parseAuthoring(input);
+    const hash = createHash("sha256").update(canonical(batch)).digest("hex");
+    return transaction(this.pool, async (db) => {
+      if (batch.deck?.base === null)
+        await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+          batch.deck.value.name,
+        ]);
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        "recall-deck:" + batch.deckId,
+      ]);
+      const receipt = (
+        await db.query("SELECT * FROM authoring_receipts WHERE id=$1", [
+          batch.id,
+        ])
+      ).rows[0];
+      if (receipt) {
+        if (receipt.request_hash !== hash)
+          throw new AppError(
+            "Authoring request identity cannot be reused",
+            409,
+          );
+        return receipt.result;
+      }
+      const row = (
+        await db.query(
+          "SELECT name,description FROM decks WHERE id=$1 FOR UPDATE",
+          [batch.deckId],
+        )
+      ).rows[0];
+      const items = row ? await this.items(batch.deckId, db, true) : [];
+      const conflicts = planAuthoring(batch, items, row ?? null);
+      if (conflicts.length) return { applied: false, conflicts, items };
+      if (!row) {
+        if (!batch.deck) throw new AppError("Destination deck is missing", 409);
+        const collision = (
+          await db.query(
+            "SELECT id,name,description FROM decks WHERE name=$1",
+            [batch.deck.value.name],
+          )
+        ).rows[0];
+        if (collision)
+          return {
+            applied: false,
+            conflicts: [
+              {
+                kind: "deck",
+                id: batch.deckId,
+                reason: "name-taken",
+                base: null,
+                local: batch.deck.value,
+                server: {
+                  name: collision.name,
+                  description: collision.description,
+                },
+              },
+            ],
+            items,
+          };
+      }
+      if (options.dryRun) return { applied: false, conflicts: [], items };
+      if (!row) {
+        await db.query(
+          "INSERT INTO decks(id,name,description) VALUES($1,$2,$3)",
+          [batch.deckId, batch.deck!.value.name, batch.deck!.value.description],
+        );
+      } else if (batch.deck)
+        await db.query("UPDATE decks SET name=$2,description=$3 WHERE id=$1", [
+          batch.deckId,
+          batch.deck.value.name,
+          batch.deck.value.description,
+        ]);
+      for (const change of batch.changes) {
+        await this.saveQuestion(db, batch.deckId, change.value.question);
+        if (change.value.archived)
+          await db.query(
+            "UPDATE questions SET archived_at=now() WHERE deck_id=$1 AND id=$2 AND archived_at IS NULL",
+            [batch.deckId, change.id],
+          );
+      }
+      const changed = new Set(batch.changes.map((c) => c.id));
+      const result: AuthoringResult = {
+        applied: true,
+        conflicts: [],
+        items: (await this.items(batch.deckId, db, true)).filter((i) =>
+          changed.has(i.question.id),
+        ),
+      };
+      await db.query(
+        "INSERT INTO authoring_receipts(id,deck_id,request_hash,result) VALUES($1,$2,$3,$4)",
+        [batch.id, batch.deckId, hash, result],
+      );
+      return result;
+    });
+  }
   async recoverSession(input: Session) {
     const { syncOfflineSession } = await import("./offline.ts");
     return syncOfflineSession(this, input);

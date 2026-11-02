@@ -8,7 +8,7 @@ Import through the JSON file picker, or Open with Recall for supported JSON cont
 
 TLS validation is normal; mixed content, file:// access, third-party cookies and WebView debugging are disabled. App data is excluded from Android cloud backup. Keep Android System WebView current for native file export. Clear app data only after exporting personal backups.
 
-Native reload/workspace changes first request a saved-state acknowledgement from the active main frame. The web app preserves the current answer/reveal draft and waits for local writes without fetching a server. Pending sessions require an explicit keep/switch/recovery choice; switching retains their original origin's IndexedDB. A per-request token prevents stale or replayed acknowledgements from navigating another view. A busy editor/save blocks the change. Unsupported older pages time out to a warning with an explicit override; no automatic switch occurs. Incoming JSON attachments use this check when a study view is already open. These protocol paths have browser/unit checks; physical Android lifecycle and picker testing remains outstanding.
+Native reload/workspace changes first request a saved-state acknowledgement from the active main frame. The web app preserves the current answer/reveal draft and waits for local writes without fetching a server. Pending sessions require an explicit keep/switch/recovery choice; switching retains their original origin's IndexedDB. A per-request token prevents stale or replayed acknowledgements from navigating another view. A busy editor/save blocks the change. Unsupported older pages time out to a warning with an explicit override; no automatic switch occurs. Incoming JSON attachments use this check when a study view is already open. These protocol paths have browser/unit checks; physical Android lifecycle and picker certification is outside the personal-project scope.
 
 ## Build
 
@@ -21,4 +21,6 @@ cd mobile/android
 
 Gradle's pre-build step bundles the web UI into generated assets using Node. It does not contact a quiz server or include private banks. The debug APK is under `app/build/outputs/apk/debug/`. Development tools are not required to install the published APK.
 
-The current APK is a preview signed with the development certificate. Physical-device verification and stable release signing remain open. iPhone uses the browser app through Safari's Add to Home Screen; native iOS is future work. Portable files transfer quizzes and optional progress between all clients without a central server.
+The current APK is a preview signed with the development certificate. Formal device certification and publisher signing are not planned for this personal project. The existing preview certificate is retained for upgrades. iPhone uses Safari's Add to Home Screen; native iOS is outside the current scope. Portable files transfer quizzes and optional progress between all clients without a central server.
+
+Downloaded server workspaces also queue offline edits and imports. Conflicts show the original, local and server versions before publication; new/corrected learning content becomes studyable after the server acknowledges its revision. Pending edit backups are separate from pending study recovery files. See docs/PORTABLE.md in the repository.

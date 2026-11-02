@@ -70,6 +70,14 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
       }
       if (path === "/api/decks" && method === "GET")
         return json(res, 200, await store.decks());
+      if (path === "/api/authoring" && method === "POST")
+        return json(
+          res,
+          200,
+          await store.applyAuthoring(await body(req), {
+            dryRun: url.searchParams.get("dryRun") === "1",
+          }),
+        );
       if (path === "/api/sync" && method === "POST")
         return json(res, 200, await syncOfflineSession(store, await body(req)));
       if (path === "/api/snapshot" && method === "GET") {

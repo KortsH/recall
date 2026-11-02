@@ -1,0 +1,13 @@
+# Install as /etc/recall-backup.conf, owned by root and mode 600.
+PG_CONTAINER=your_postgres_container
+PG_ADMIN=your_backup_database_role
+PG_DATABASE=recall
+LOCAL_BACKUP_DIR=/srv/recall/backups
+BACKUP_MOUNT=/mnt/recall-backups
+BACKUP_UUID=replace-with-your-filesystem-uuid
+# Keep at least two rollback points on each disk. Prune only after verification.
+BACKUP_RETENTION_COUNT=30
+VERIFY_RESTORE=true
+MAX_BACKUP_AGE_HOURS=36
+# Optional private executable: receives the failed stage and status-file path.
+# BACKUP_ALERT_HOOK=/usr/local/sbin/my-backup-notification

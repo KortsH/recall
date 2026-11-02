@@ -1,3 +1,5 @@
+import { OfflineEdits } from "./edits.tsx";
+import "./edits.css";
 import { ErrorMessage } from "./error.tsx";
 import {
   tr,
@@ -178,6 +180,7 @@ function App() {
   const [decks, setDecks] = useState<Deck[]>([]),
     [deckId, setDeckId] = useState(""),
     [section, setSection] = useState("overview");
+  const [reviewEdits, setReviewEdits] = useState(false);
   const [session, setSession] = useState<SessionView | null>(null),
     [recent, setRecent] = useState<any[]>([]);
   const [topic, setTopic] = useState(""),
@@ -337,6 +340,15 @@ function App() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [session?.id, session?.cursor, !!feedback, section]);
   useEffect(() => {
+    if (section !== "settings" || !(reviewEdits || cache.editConflict)) return;
+    const target = document.getElementById(
+      cache.editConflict ? "edit-conflict-review" : "offline-edits",
+    );
+    target?.scrollIntoView({ block: "start" });
+    target?.focus({ preventScroll: true });
+    if (reviewEdits) setReviewEdits(false);
+  }, [section, cache.editConflict?.batchId, reviewEdits]);
+  useEffect(() => {
     setTopic("");
   }, [deckId]);
   useEffect(() => {
@@ -370,7 +382,11 @@ function App() {
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message,
+      );
     } finally {
       setBusy(false);
     }
@@ -405,7 +421,11 @@ function App() {
     try {
       preserveDraft();
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message,
+      );
       return;
     }
     if (downloadedMode()) void syncDownloads().catch(() => {});
@@ -418,7 +438,11 @@ function App() {
     try {
       preserveDraft();
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message,
+      );
       return;
     }
     void run(async () => {
@@ -725,7 +749,11 @@ function App() {
       setNotice(message);
       return true;
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message,
+      );
       return false;
     } finally {
       setBusy(false);
@@ -780,7 +808,11 @@ function App() {
       setNotice(message);
       return true;
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message,
+      );
       return false;
     } finally {
       setBusy(false);
@@ -1070,6 +1102,28 @@ function App() {
             </button>
           </div>
         )}
+        {!cache.personal &&
+          cache.pendingEdits > 0 &&
+          section !== "settings" && (
+            <div className="cache-status" role="status">
+              {tr("edits.pending", { count: cache.pendingEdits })}{" "}
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    preserveDraft();
+                    await flushDeviceState();
+                    setSession(null);
+                    setSection("settings");
+                    setReviewEdits(true);
+                  })
+                }
+              >
+                {tr("edits.review")}
+              </button>
+            </div>
+          )}
         {cache.error && (
           <div className="cache-status" role="status">
             {<ErrorMessage message={cache.error} />}
@@ -1882,9 +1936,9 @@ function App() {
                             ),
                           })
                         : tr("app.no_quiz_download_yet")}{" "}
-                      {cache.pending
+                      {cache.pendingSessions
                         ? tr("app.session_s_waiting_to_sync", {
-                            pending: cache.pending,
+                            pending: cache.pendingSessions,
                           })
                         : tr("app.progress_is_synced")}
                     </p>
@@ -1906,7 +1960,7 @@ function App() {
                     </button>
                     <button
                       className="button secondary"
-                      disabled={busy || !cache.pending}
+                      disabled={busy || !cache.pendingSessions}
                       onClick={() =>
                         void run(async () => {
                           const recovery = await exportPendingRecovery();
@@ -1945,6 +1999,15 @@ function App() {
                       )}
                     </p>
                   </div>
+                )}
+                {!cache.personal && (
+                  <OfflineEdits
+                    status={cache}
+                    busy={busy}
+                    run={(fn) => void run(fn)}
+                    changed={refresh}
+                    notice={setNotice}
+                  />
                 )}
                 <div className="settings-card">
                   <h2>{tr("app.workspace")}</h2>
@@ -3341,7 +3404,11 @@ function Editor({
         }).bank.questions[0],
       );
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message,
+      );
     }
   };
   return (
@@ -3763,7 +3830,11 @@ function ImportDialog({
       );
       if (!preview) setPreview(result);
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error & { code?: string }).code === "SERVER_UNAVAILABLE"
+          ? tr("edits.syncUnavailable")
+          : (e as Error).message,
+      );
     }
   };
   return (

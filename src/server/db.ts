@@ -47,6 +47,7 @@ export async function migrate(pool: pg.Pool) {
       CREATE INDEX IF NOT EXISTS attempts_question_idx ON attempts(deck_id,question_id);
       ALTER TABLE questions ADD COLUMN IF NOT EXISTS archived_at timestamptz;
       CREATE TABLE IF NOT EXISTS offline_events (id text PRIMARY KEY, data jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+      CREATE TABLE IF NOT EXISTS authoring_receipts (id uuid PRIMARY KEY, deck_id text NOT NULL REFERENCES decks(id) ON DELETE CASCADE, request_hash text NOT NULL, result jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
     `);
   });
 }
