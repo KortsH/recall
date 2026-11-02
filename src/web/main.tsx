@@ -535,6 +535,32 @@ function App() {
       answerPendingRef.current = false;
     });
   };
+  const revealMental = () => {
+    if (
+      answerPendingRef.current ||
+      busy ||
+      !session ||
+      !card ||
+      card.format !== "written" ||
+      session.mode === "test" ||
+      reveal ||
+      feedback
+    )
+      return;
+    answerPendingRef.current = true;
+    void run(async () => {
+      const r = await api<Reveal>(`/sessions/${session.id}/reveal`, {
+        version: session.version,
+        revision: card.revision,
+        response: actualResponse,
+        mental: true,
+      });
+      setReveal(r);
+      setSession({ ...session, version: r.version });
+    }).finally(() => {
+      answerPendingRef.current = false;
+    });
+  };
   const chooseOption = (option: string) => {
     if (busy || answerPendingRef.current || feedback || reveal || !card) return;
     optionRefs.current[card.options?.indexOf(option) ?? -1]?.focus({
@@ -2246,13 +2272,15 @@ function App() {
                     <div className="card-topline">
                       <span className="topic-tag">{card.topic}</span>
                       <span className="format-label">
-                        {card.format === "written"
-                          ? tr("app.active_recall")
-                          : card.format === "flashcard"
-                            ? tr("app.recall_reflect")
-                            : card.format === "matching"
-                              ? tr("app.make_the_connection")
-                              : tr("app.recognition")}
+                        {card.retentionCheck
+                          ? tr("app.memory_check")
+                          : card.format === "written"
+                            ? tr("app.active_recall")
+                            : card.format === "flashcard"
+                              ? tr("app.recall_reflect")
+                              : card.format === "matching"
+                                ? tr("app.make_the_connection")
+                                : tr("app.recognition")}
                       </span>
                       <button
                         className="icon-button question-flag-button"
@@ -2526,13 +2554,26 @@ function App() {
                                   !e.nativeEvent.isComposing
                                 ) {
                                   e.preventDefault();
-                                  if (canAnswer && !busy) submit();
+                                  if (!busy) {
+                                    if (canAnswer) submit();
+                                    else revealMental();
+                                  }
                                 }
                               }}
                               placeholder={tr(
                                 "app.recall_it_in_your_own_words",
                               )}
                             />
+                            {session.mode !== "test" && (
+                              <button
+                                className="button subtle mental-recall"
+                                disabled={busy}
+                                title={tr("app.mental_recall_help")}
+                                onClick={revealMental}
+                              >
+                                {tr("app.answer_in_my_head")}
+                              </button>
+                            )}
                             <p>
                               {card.selfGrade
                                 ? tr(
@@ -2559,6 +2600,11 @@ function App() {
                         <span className="eyebrow">
                           {tr("app.model_answer")}
                         </span>
+                        {reveal.mental && (
+                          <p className="explanation">
+                            {tr("app.mental_recall_help")}
+                          </p>
+                        )}
                         <p className="reveal-model">{reveal.answer}</p>
                         <ReadAloud
                           text={reveal.answer}

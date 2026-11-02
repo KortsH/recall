@@ -9,6 +9,7 @@ import {
 import { resolveVariant } from "./questions.ts";
 import { prerequisiteStatus } from "./prerequisites.ts";
 import type { Item, Session, Attempt } from "./types.ts";
+import { insertRetentionCheck } from "./retention.ts";
 
 export interface AnswerInput {
   version: number;
@@ -160,8 +161,21 @@ export function prepareSession(s: Session, items: Item[]) {
       current && items.find((i) => i.question.id === current.questionId);
     if (item && !s.finished) {
       const expected = learningEntry(item, items, current.retry);
+      if (
+        current.retentionCheck &&
+        item.progress.mastered &&
+        !["written", "flashcard"].includes(expected.format)
+      ) {
+        expected.variantId = "written";
+        expected.format = "written";
+      }
       if (expected.variantId !== current.variantId) {
-        s.queue[s.cursor] = expected;
+        s.queue[s.cursor] = {
+          ...expected,
+          ...(current.retentionCheck && item.progress.mastered
+            ? { retentionCheck: true }
+            : {}),
+        };
         delete s.revealed;
         delete s.hinted;
       }
@@ -176,9 +190,14 @@ export function evaluateAttempt(
   test: boolean,
   at = new Date().toISOString(),
   hintUsed = false,
+  mentalRecall = false,
 ): Attempt {
   const v = resolveVariant(item.question, variantId);
-  let correct = grade(v, response);
+  if (mentalRecall && (v.type !== "written" || test))
+    throw new Error(
+      "Mental recall is available only for written practice outside Test",
+    );
+  let correct = mentalRecall ? null : grade(v, response);
   const selfAssessed = correct === null;
   if (selfAssessed && (!test || rating !== undefined)) {
     if (!["again", "hard", "good", "easy"].includes(rating ?? ""))
@@ -186,6 +205,7 @@ export function evaluateAttempt(
     correct = rating !== "again";
   }
   return {
+    ...(mentalRecall ? { mentalRecall: true } : {}),
     ...(hintUsed ? { hintUsed: true } : {}),
     questionId: item.question.id,
     variantId: v.id,
@@ -202,6 +222,51 @@ export function evaluateAttempt(
     topic: item.question.topic,
     skill: v.skill ?? item.question.skill ?? "recall",
     at,
+  };
+}
+export function revealAnswer(
+  s: Session,
+  item: Item,
+  input: {
+    version: number;
+    revision: number;
+    response: unknown;
+    mental?: boolean;
+  },
+) {
+  if (s.finished || s.learningReset || s.version !== input.version)
+    throw new Error("Session changed. Reload to continue.");
+  if (s.mode === "test") throw new Error("Answers are revealed after the test");
+  const entry = s.queue[s.cursor];
+  if (
+    !entry ||
+    entry.questionId !== item.question.id ||
+    item.archived ||
+    item.question.flag ||
+    item.revision !== input.revision
+  )
+    throw new Error("Question changed. Refresh this deck.");
+  if (input.mental !== undefined && typeof input.mental !== "boolean")
+    throw new Error("mental must be a boolean");
+  const v = resolveVariant(item.question, entry.variantId),
+    mental = input.mental === true;
+  if (
+    mental
+      ? v.type !== "written"
+      : v.type !== "flashcard" &&
+        !(v.type === "written" && !v.acceptedAnswers && !v.requiredParts)
+  )
+    throw new Error("Submit this answer for automatic checking");
+  s.revealed = {
+    cursor: s.cursor,
+    response: input.response,
+    ...(mental ? { mental: true } : {}),
+  };
+  return {
+    answer: v.answer,
+    explanation: v.explanation ?? item.question.explanation,
+    rubric: v.rubric ?? item.question.rubric ?? [],
+    ...(mental ? { mental: true } : {}),
   };
 }
 /** Record assistance before revealing a cue. It is not a model-answer reveal. */
@@ -251,7 +316,8 @@ export function advanceSession(
   if (!entry || entry.questionId !== item.question.id)
     throw new Error("Question does not match the current card");
   const v = resolveVariant(item.question, entry.variantId);
-  const needsSelf = grade(v, input.response) === null;
+  const mental = s.revealed?.cursor === s.cursor && s.revealed.mental === true;
+  const needsSelf = mental || grade(v, input.response) === null;
   if (needsSelf && s.mode !== "test" && s.revealed?.cursor !== s.cursor)
     throw new Error("Reveal the model answer before self-assessing");
   const response =
@@ -264,7 +330,9 @@ export function advanceSession(
     s.mode === "test",
     undefined,
     s.hinted?.cursor === s.cursor && s.hinted.revision === item.revision,
+    mental,
   );
+  if (entry.retentionCheck) attempt.retentionCheck = true;
   const progress =
     attempt.correct === null
       ? item.progress
@@ -290,6 +358,17 @@ export function advanceSession(
     s.queue = enqueueRetry(s.queue, s.cursor, entry, { ...item, progress });
   s.answers.push(attempt);
   s.cursor++;
+  if (entry.retentionCheck && attempt.correct === false) {
+    s.retention ??= {
+      version: 1,
+      used: 1,
+      misses: 0,
+      nextAt: s.cursor,
+      seen: [item.question.id],
+    };
+    s.retention.misses++;
+    s.retention.nextAt = s.cursor;
+  }
   delete s.revealed;
   delete s.hinted;
   if (context) {
@@ -298,6 +377,7 @@ export function advanceSession(
     );
     pruneLocked(s, updated);
     if (s.mode === "learn" && s.learning) nextLearningSet(s, updated);
+    insertRetentionCheck(s, updated);
     if (s.mode === "cram" && s.targetCount) {
       const seen = new Set(s.queue.map((e) => e.questionId));
       const remaining = updated.filter(

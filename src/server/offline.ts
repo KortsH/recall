@@ -90,6 +90,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
         old &&
         (old.data.questionId !== submitted.questionId ||
           !!old.data.hintUsed !== !!submitted.hintUsed ||
+          !!old.data.mentalRecall !== !!submitted.mentalRecall ||
           JSON.stringify(old.data.response) !==
             JSON.stringify(submitted.response))
       )
@@ -114,7 +115,9 @@ export async function syncOfflineSession(store: Store, input: Session) {
             ? submitted.at
             : new Date().toISOString(),
           submitted.hintUsed === true || prior?.hinted?.cursor === index,
+          submitted.mentalRecall === true,
         );
+        if (entry.retentionCheck) attempt.retentionCheck = true;
         if (attempt.correct !== null) {
           item.progress = updateProgress(
             item.progress,

@@ -326,6 +326,7 @@ export function publicCard(
     return a;
   };
   return {
+    ...(entry.retentionCheck ? { retentionCheck: true } : {}),
     questionId: item.question.id,
     variantId: v.id,
     revision: item.revision,

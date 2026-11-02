@@ -583,5 +583,8 @@
   "edits.field.rubric": "Self-assessment guide",
   "edits.field.variants": "Question variants",
   "edits.field.skill": "Learning skill",
-  "edits.field.flag": "Review flag and note"
+  "edits.field.flag": "Review flag and note",
+  "app.answer_in_my_head": "Answer in my head",
+  "app.mental_recall_help": "Compare the answer you thought of with the model, then grade yourself honestly. No credit is given until you choose a rating.",
+  "app.memory_check": "Memory check"
 }

@@ -816,7 +816,10 @@ program
   );
 program
   .command("reveal <id>")
-  .requiredOption("--file <file>", "JSON: version, revision, response")
+  .requiredOption(
+    "--file <file>",
+    "JSON: version, revision, response; optional mental:true for written self-assessment",
+  )
   .action(async (id, o) =>
     print(
       await (

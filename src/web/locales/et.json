@@ -583,5 +583,8 @@
   "edits.field.rubric": "Enesehindamise juhend",
   "edits.field.variants": "Küsimuse variandid",
   "edits.field.skill": "Õpioskus",
-  "edits.field.flag": "Ülevaatuse märge ja märkus"
+  "edits.field.flag": "Ülevaatuse märge ja märkus",
+  "app.answer_in_my_head": "Vastan mõttes",
+  "app.mental_recall_help": "Võrdle mõttes antud vastust näidisvastusega ja hinda end ausalt. Tulemus läheb kirja alles pärast hinnangu valimist.",
+  "app.memory_check": "Mälukontroll"
 }

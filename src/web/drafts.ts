@@ -17,6 +17,7 @@ export interface AnswerDraft {
   selected: string[];
   pairs: Record<string, string>;
   reveal?: {
+    mental?: boolean;
     version: number;
     answer: string;
     explanation: string;
@@ -74,6 +75,8 @@ export function readAnswerDraft(
     if (
       d.reveal &&
       (d.version !== session.version ||
+        (d.reveal.mental !== undefined &&
+          typeof d.reveal.mental !== "boolean") ||
         typeof d.reveal.answer !== "string" ||
         typeof d.reveal.explanation !== "string" ||
         !Array.isArray(d.reveal.rubric) ||

@@ -4,6 +4,7 @@ import {
   newSession,
   prepareSession,
   requestHint,
+  revealAnswer,
 } from "../core/study.ts";
 import {
   prerequisiteStatus,
@@ -708,7 +709,12 @@ export class Store {
   }
   async reveal(
     id: string,
-    input: { version: number; response: unknown; revision: number },
+    input: {
+      version: number;
+      response: unknown;
+      revision: number;
+      mental?: boolean;
+    },
   ) {
     return transaction(this.pool, async (db) => {
       const s = await this.loadSession(id, db, true);
@@ -724,22 +730,11 @@ export class Store {
       );
       if (item.question.flag || item.revision !== input.revision)
         throw new AppError("Question changed. Reload this card.", 409);
-      const v = requireValue(
-        resolveVariant(item.question, entry.variantId),
-        "Variant not found",
-      );
-      if (
-        v.type !== "flashcard" &&
-        !(v.type === "written" && !v.acceptedAnswers && !v.requiredParts)
-      )
-        throw new AppError("Submit this answer for automatic checking");
-      s.revealed = { cursor: s.cursor, response: input.response };
+      const shown = revealAnswer(s, item, input);
       await this.saveSession(s, db);
       return {
+        ...shown,
         version: s.version,
-        answer: v.answer,
-        explanation: v.explanation ?? item.question.explanation,
-        rubric: v.rubric ?? item.question.rubric ?? [],
       };
     });
   }

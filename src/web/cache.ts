@@ -18,6 +18,7 @@ import {
   sessionView,
   prepareSession,
   requestHint,
+  revealAnswer,
 } from "../core/study.ts";
 import { prerequisiteStatus } from "../core/prerequisites.ts";
 import { resolveVariant } from "../core/questions.ts";
@@ -926,15 +927,12 @@ export async function api<T>(
           item = items.find((i) => i.question.id === entry.questionId)!;
         if (session.version !== body.version || item.revision !== body.revision)
           throw new Error(tr("cache.session_changed_reload_to_continue"));
-        const v = resolveVariant(item.question, entry.variantId);
-        session.revealed = { cursor: session.cursor, response: body.response };
+        const shown = revealAnswer(session, item, body);
         session.version++;
         await persist();
         return {
+          ...shown,
           version: session.version,
-          answer: v.answer,
-          explanation: v.explanation ?? item.question.explanation,
-          rubric: v.rubric ?? item.question.rubric ?? [],
         } as T;
       }
       if (rest === "answer") {

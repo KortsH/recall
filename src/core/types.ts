@@ -64,6 +64,7 @@ export interface Item {
   progress: Progress;
 }
 export interface QueueEntry {
+  retentionCheck?: boolean;
   choiceOptions?: string[];
   concept?: string;
   questionId: string;
@@ -72,6 +73,13 @@ export interface QueueEntry {
   retry: number;
 }
 export interface Session {
+  retention?: {
+    version: 1;
+    used: number;
+    misses: number;
+    nextAt: number;
+    seen: string[];
+  };
   hinted?: { cursor: number; revision: number; text: string };
   learningEpoch?: number;
   learningReset?: boolean;
@@ -89,9 +97,11 @@ export interface Session {
   deadline: string | null;
   finished: boolean;
   version: number;
-  revealed?: { cursor: number; response: unknown };
+  revealed?: { cursor: number; response: unknown; mental?: boolean };
 }
 export interface Attempt {
+  mentalRecall?: boolean;
+  retentionCheck?: boolean;
   hintUsed?: boolean;
   invalidated?: boolean;
   skill?: "recall" | "application";
@@ -111,6 +121,7 @@ export interface Attempt {
   at: string;
 }
 export interface PublicCard {
+  retentionCheck?: boolean;
   hasHint?: boolean;
   questionId: string;
   variantId: string;

@@ -1350,3 +1350,65 @@ test("deck reset is explicit and atomic, preserves content/history, and blocks o
   assert.equal(run(true).dryRun, false);
   assert.equal((await store.deck(deckId)).learning_epoch, 3);
 });
+
+test("written mental recall is explicit, preserves the original blank response and replays offline only once", async () => {
+  const id = (
+    await store.importBank(
+      parseBank({
+        deck: "Mental recall " + randomUUID(),
+        questions: [
+          {
+            id: "mental",
+            question: "Recall the colour",
+            answer: "Blue",
+            acceptedAnswers: ["Blue"],
+          },
+        ],
+      }),
+    )
+  ).deckId;
+  const remote = remoteBackend(base);
+  let s = await store.createSession(id, { mode: "cram", count: 1 });
+  assert.equal(s.card!.format, "written");
+  const before = (await store.items(id))[0].progress;
+  const shown = await remote.reveal(s.id, {
+    version: s.version,
+    revision: 1,
+    response: "",
+    mental: true,
+  });
+  assert.equal(shown.mental, true);
+  assert.deepEqual((await store.items(id))[0].progress, before);
+  await assert.rejects(
+    store.answer(s.id, { version: shown.version, revision: 1, response: "" }),
+    /Choose Again/,
+  );
+  const result = await store.answer(s.id, {
+    version: shown.version,
+    revision: 1,
+    response: "Blue",
+    rating: "good",
+  });
+  assert.equal(result.feedback!.response, "");
+  assert.equal(result.feedback!.mentalRecall, true);
+  assert.equal(result.feedback!.selfAssessed, true);
+  const items = await store.items(id),
+    offline = newSession(id, items, { mode: "cram", count: 1 });
+  const item = items[0];
+  offline.revealed = { cursor: 0, response: "", mental: true };
+  advanceSession(
+    offline,
+    item,
+    { version: 0, revision: 1, response: "", rating: "again" },
+    items,
+  );
+  await syncOfflineSession(store, offline);
+  const after = (await store.items(id))[0].progress;
+  assert.equal(after.mastered, false);
+  await syncOfflineSession(store, offline);
+  assert.deepEqual((await store.items(id))[0].progress, after);
+  const invalid = structuredClone(offline);
+  invalid.id = randomUUID();
+  invalid.mode = "test";
+  await assert.rejects(syncOfflineSession(store, invalid), /outside Test/);
+});
