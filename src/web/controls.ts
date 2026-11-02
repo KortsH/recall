@@ -1,3 +1,4 @@
+import { tr } from "./i18n.ts";
 export interface StudyControls {
   autoSubmitSingle: boolean;
   continueMode: "key" | "any" | "button";
@@ -24,11 +25,11 @@ export const validContinueKey = (key: string) =>
   key.length > 0 && key.length <= 32 && !excluded.has(key);
 export function keyLabel(key: string) {
   return key === " "
-    ? "Space"
+    ? tr("key.space")
     : key === "ArrowRight"
-      ? "Right arrow"
+      ? tr("key.right")
       : key === "ArrowLeft"
-        ? "Left arrow"
+        ? tr("key.left")
         : key.length === 1
           ? key.toUpperCase()
           : key;

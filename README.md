@@ -2,7 +2,7 @@
 
 A focused exam learning tool. Import a quiz, learn through recognition and active recall, and share it as a file. Use it entirely on your own device, or connect to your own server. No account or subscription.
 
-[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.4.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.4.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.4.0-preview.1)
+[Open the browser app](https://kortsh.github.io/recall/) · [Download for Windows](https://github.com/KortsH/recall/releases/download/v0.5.0-preview.1/Recall-Setup.exe) · [Download for Android](https://github.com/KortsH/recall/releases/download/v0.5.0-preview.1/Recall-Android.apk) · [Release details and checksums](https://github.com/KortsH/recall/releases/tag/v0.5.0-preview.1)
 
 ## Install and use
 
@@ -41,6 +41,14 @@ Before reloading or changing an active workspace, Android asks the page to save 
 Open [the browser app](https://kortsh.github.io/recall/). Import a file and start studying. All questions and progress stay in local browser storage; Recall does not upload your quiz to GitHub Pages. An initial visit downloads the application assets. Use your browser's install option, or Safari's **Add to Home Screen** on iPhone, for the PWA. Native iOS and native macOS/Linux installers are not available yet.
 
 Each browser/profile, phone app and Windows app keeps its own workspace. Use portable files to transfer quizzes or your own progress between them. There is no automatic cross-device sync in device-only mode.
+
+## Send a quiz to a friend
+
+## Interface languages
+
+Use **Settings → Language** to choose **English** or **Eesti (Estonian)**. The choice applies immediately and is remembered on this device, including offline use. On first launch, a supported browser language is selected automatically. Questions, answers, topics and learning progress remain unchanged; you can import Estonian schoolwork and study it with an Estonian interface. Desktop, browser and Android share the same translation catalogs.
+
+Want to contribute another language? Copy the English JSON catalog, translate its values and set the language's native name. Recall discovers it automatically in Settings. See the [translation guide](docs/TRANSLATING.md) for placeholders, plurals, Android behavior and checks. Application text belongs in these catalogs, while JSON field names, CLI commands and question IDs remain stable.
 
 ## Send a quiz to a friend
 

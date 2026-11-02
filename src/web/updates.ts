@@ -1,3 +1,4 @@
+import { tr } from "./i18n.ts";
 export type UpdateState = {
   available: boolean;
   supported: boolean;
@@ -48,8 +49,7 @@ export async function checkAppUpdates() {
     await registration.update();
   } catch {
     emit({
-      error:
-        "Could not check for an app update. Your current app and learning data are kept.",
+      error: tr("updates.could_not_check_for_an_app_update_your_current"),
     });
   } finally {
     emit({ checking: false });

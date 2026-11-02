@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { once } from "node:events";
 import { request } from "node:http";
+import { createServer } from "node:net";
 
 test(
   "one-command setup verifies checksums before running the installer",
@@ -45,7 +46,7 @@ test(
     assert.ok(
       (
         await stat(
-          join(destination, "versions", "0.4.0-preview.1", "Recall.exe"),
+          join(destination, "versions", "0.5.0-preview.1", "Recall.exe"),
         )
       ).size > 0,
     );
@@ -69,7 +70,15 @@ test(
   async () => {
     const folder = await mkdtemp(join(tmpdir(), "recall-installer-test-"));
     const setup = resolve("build/windows/Recall-Setup.exe"),
-      exe = join(folder, "versions", "0.4.0-preview.1", "Recall.exe");
+      exe = join(folder, "versions", "0.5.0-preview.1", "Recall.exe");
+    const reservation = createServer();
+    await new Promise<void>((resolve) =>
+      reservation.listen(0, "127.0.0.1", resolve),
+    );
+    const port = (reservation.address() as import("node:net").AddressInfo).port;
+    await new Promise<void>((resolve, reject) =>
+      reservation.close((error) => (error ? reject(error) : resolve())),
+    );
     const install = () =>
       execFileSync(
         setup,
@@ -101,7 +110,7 @@ test(
         "--data-dir",
         folder,
         "--port",
-        "4323",
+        String(port),
         "--no-browser",
         "--no-tray",
         "--quiet",
@@ -120,7 +129,7 @@ test(
     ) =>
       new Promise<{ status: number; body: string }>((resolve, reject) => {
         const req = request(
-          { hostname: "127.0.0.1", port: 4323, path, headers, method },
+          { hostname: "127.0.0.1", port, path, headers, method },
           (res) => {
             let body = "";
             res.on("data", (c) => (body += c));
@@ -134,7 +143,11 @@ test(
       let ready = false;
       for (let n = 0; n < 40; n++) {
         try {
-          if ((await call("/__recall/health")).status === 200) {
+          const health = await call("/__recall/health");
+          if (
+            health.status === 200 &&
+            JSON.parse(health.body).app === "RecallPersonal"
+          ) {
             ready = true;
             break;
           }

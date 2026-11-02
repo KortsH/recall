@@ -1,3 +1,4 @@
+import { tr } from "./i18n.ts";
 import { parseBank, semanticContent } from "../core/schema.ts";
 import {
   parsePortable,
@@ -80,9 +81,12 @@ export async function serverApi<T>(
   });
   const data = await r.json();
   if (!r.ok)
-    throw Object.assign(new Error(data.error ?? "Server request failed"), {
-      code: data.code,
-    });
+    throw Object.assign(
+      new Error(data.error ?? tr("cache.server_request_failed")),
+      {
+        code: data.code,
+      },
+    );
   return data;
 }
 async function database() {
@@ -93,7 +97,9 @@ async function database() {
     r.onerror = () =>
       reject(
         new Error(
-          "Device storage is unavailable. Use a normal browser profile with site storage enabled.",
+          tr(
+            "cache.device_storage_is_unavailable_use_a_normal_browser_profile",
+          ),
         ),
       );
   });
@@ -269,9 +275,7 @@ async function syncInternal(s: State) {
           item.progress =
             p.revision === item.revision ? p.progress : emptyProgress();
       }
-    if (result.rejected.length)
-      lastError =
-        "Some questions changed on the server. Refresh downloaded quizzes to update them.";
+    if (result.rejected.length) lastError = tr("cache.serverQuestionsChanged");
     await persist();
   }
 }
@@ -317,7 +321,7 @@ export const refreshDownloads = () =>
 export const discardResetEvidence = () =>
   serial(async () => {
     if (personalMode())
-      throw new Error("This recovery action is for server downloads");
+      throw new Error(tr("cache.this_recovery_action_is_for_server_downloads"));
     const s = await load();
     const snapshot = await serverApi<Snapshot>("/snapshot");
     for (const id of s.resetConflicts ?? []) {
@@ -329,7 +333,7 @@ export const discardResetEvidence = () =>
         (latest.learning_epoch ?? 0) <= (local.learning_epoch ?? 0)
       )
         throw new Error(
-          "The server reset could not be verified; pending answers were kept",
+          tr("cache.the_server_reset_could_not_be_verified_pending_answers"),
         );
     }
     for (const id of s.resetConflicts ?? []) {
@@ -354,14 +358,13 @@ export const discardResetEvidence = () =>
 export const exportPendingRecovery = (deckId?: string) =>
   serial(async () => {
     if (personalMode())
-      throw new Error(
-        "Use a quiz export with progress for a device-only workspace",
-      );
+      throw new Error(tr("cache.use_a_quiz_export_with_progress_for_a_device"));
     const s = await load();
     const sessions = Object.keys(s.dirty)
       .map((id) => s.sessions[id])
       .filter((session) => session && (!deckId || session.deckId === deckId));
-    if (!sessions.length) throw new Error("No pending sessions to export");
+    if (!sessions.length)
+      throw new Error(tr("cache.no_pending_sessions_to_export"));
     return createRecovery(
       s.decks.map((d) => ({
         id: d.id,
@@ -431,7 +434,8 @@ export async function api<T>(
       const id = decodeURIComponent(d[1]),
         rest = d[2] ?? "";
       const deck = decks(s).find((d) => d.id === id);
-      if (!deck) throw new Error("Deck not downloaded. Refresh quizzes.");
+      if (!deck)
+        throw new Error(tr("cache.deck_not_downloaded_refresh_quizzes"));
       if (!rest && verb === "GET") return deck as T;
       if (rest === "reset-learning" && verb === "POST") {
         const sessions = Object.values(s.sessions).filter(
@@ -450,7 +454,9 @@ export async function api<T>(
             body?.confirm === true &&
             body.expectedEpoch !== preview.expectedEpoch
           )
-            throw new Error("Learning changed. Preview the reset again.");
+            throw new Error(
+              tr("cache.learning_changed_preview_the_reset_again"),
+            );
           result =
             body?.confirm === true
               ? {
@@ -479,7 +485,7 @@ export async function api<T>(
             !body.name.trim() ||
             s.decks.some((d) => d.id !== id && d.name === body.name.trim())
           )
-            throw new Error("Choose a unique nonempty deck name");
+            throw new Error(tr("cache.choose_a_unique_nonempty_deck_name"));
           target.name = body.name.trim();
         }
         if (body.description !== undefined)
@@ -564,18 +570,20 @@ export async function api<T>(
         const item = s.items[id].find(
           (i) => i.question.id === decodeURIComponent(q[1]),
         );
-        if (!item) throw new Error("Question not downloaded");
+        if (!item) throw new Error(tr("cache.question_not_downloaded"));
         if (verb === "GET") return structuredClone(item) as T;
         if (verb === "PUT") {
           if (personalMode()) {
             if (item.revision !== body.revision)
-              throw new Error("Question changed. Reload before saving.");
+              throw new Error(
+                tr("cache.question_changed_reload_before_saving"),
+              );
             const question = parseBank({
               deck: deck.name,
               questions: [body.question],
             }).questions[0];
             if (question.id !== item.question.id)
-              throw new Error("Question IDs cannot change");
+              throw new Error(tr("cache.question_ids_cannot_change"));
             const plan = await importPersonal(s.items[id], {
               deck: deck.name,
               questions: [question],
@@ -599,7 +607,9 @@ export async function api<T>(
     if (m) {
       const session = s.sessions[m[1]];
       if (!session)
-        throw new Error("Session is not downloaded. Refresh quizzes first.");
+        throw new Error(
+          tr("cache.session_is_not_downloaded_refresh_quizzes_first"),
+        );
       const rest = m[2] ?? "";
       const items = s.items[session.deckId] ?? [];
       if (
@@ -608,7 +618,7 @@ export async function api<T>(
           (session.learningEpoch ?? 0) !==
             (s.decks.find((d) => d.id === session.deckId)?.learning_epoch ?? 0))
       )
-        throw new Error("Learning was reset. Start a new session.");
+        throw new Error(tr("cache.learning_was_reset_start_a_new_session"));
       if (!rest && verb === "GET") {
         const wasFinished = session.finished;
         result = view(s, session);
@@ -623,7 +633,7 @@ export async function api<T>(
         const item = items.find(
           (i) => i.question.id === session.queue[session.cursor]?.questionId,
         );
-        if (!item) throw new Error("Question not available");
+        if (!item) throw new Error(tr("cache.question_not_available"));
         const hint = requestHint(session, item, body);
         session.version++;
         if (!personalMode()) s.dirty[session.id] = true;
@@ -632,11 +642,11 @@ export async function api<T>(
       }
       if (rest === "reveal") {
         if (session.mode === "test")
-          throw new Error("Answers are revealed after the test");
+          throw new Error(tr("cache.answers_are_revealed_after_the_test"));
         const entry = session.queue[session.cursor],
           item = items.find((i) => i.question.id === entry.questionId)!;
         if (session.version !== body.version || item.revision !== body.revision)
-          throw new Error("Session changed. Reload to continue.");
+          throw new Error(tr("cache.session_changed_reload_to_continue"));
         const v = resolveVariant(item.question, entry.variantId);
         session.revealed = { cursor: session.cursor, response: body.response };
         session.version++;
@@ -657,7 +667,9 @@ export async function api<T>(
           const entry = session.queue[session.cursor],
             item = items.find((i) => i.question.id === entry.questionId);
           if (!item)
-            throw new Error("Question was removed. Refresh this session.");
+            throw new Error(
+              tr("cache.question_was_removed_refresh_this_session"),
+            );
           if (
             !(
               session.ignorePrerequisites &&
@@ -667,7 +679,9 @@ export async function api<T>(
               ?.unlocked
           )
             throw new Error(
-              "Master the prerequisite questions first. Start a new session.",
+              tr(
+                "cache.master_the_prerequisite_questions_first_start_a_new_session",
+              ),
             );
           const { attempt, progress } = advanceSession(
             session,
@@ -687,7 +701,7 @@ export async function api<T>(
         }
       } else if (rest === "finish") {
         if (session.version !== body.version)
-          throw new Error("Session changed");
+          throw new Error(tr("cache.session_changed"));
         session.finished = true;
         session.version++;
         result = view(s, session);
@@ -699,12 +713,12 @@ export async function api<T>(
           !a ||
           a.correct !== null
         )
-          throw new Error("This answer cannot be self-assessed");
+          throw new Error(tr("cache.this_answer_cannot_be_self_assessed"));
         if (!["again", "hard", "good", "easy"].includes(body.rating))
-          throw new Error("Unknown rating");
+          throw new Error(tr("cache.unknown_rating"));
         const item = items.find((i) => i.question.id === a.questionId);
         if (!item || item.revision !== a.revision)
-          throw new Error("Question changed");
+          throw new Error(tr("cache.question_changed"));
         a.correct = body.rating !== "again";
         a.rating = body.rating;
         item.progress = updateProgress(
@@ -718,7 +732,7 @@ export async function api<T>(
         );
         session.version++;
         result = view(s, session);
-      } else throw new Error("Unsupported downloaded-session action");
+      } else throw new Error(tr("cache.unsupported_downloaded_session_action"));
       if (!personalMode()) s.dirty[session.id] = true;
       await persist();
       if (session.finished)
@@ -726,7 +740,9 @@ export async function api<T>(
       return result as T;
     }
     if (personalMode())
-      throw new Error("This action is unavailable in the device workspace");
+      throw new Error(
+        tr("cache.this_action_is_unavailable_in_the_device_workspace"),
+      );
     // Bank management is an explicit online action; ordinary studying never enters this path.
     await syncInternal(s);
     result = await serverApi(path, body, method);

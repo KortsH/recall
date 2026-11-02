@@ -1,3 +1,12 @@
+import { ErrorMessage } from "./error.tsx";
+import {
+  tr,
+  useLanguage,
+  setLanguage,
+  availableLanguages,
+  getLanguage,
+  type MessageKey,
+} from "./i18n.ts";
 import {
   defaultStudyControls,
   loadStudyControls,
@@ -101,34 +110,44 @@ const sessionKey = () =>
   personalMode() ? "recall-session-personal" : "recall-session";
 type Feedback = Attempt & { rubric?: string[] };
 type Reveal = Awaited<ReturnType<Store["reveal"]>>;
-const fmt = (s: string) => s.replaceAll("_", " ");
-const modes = [
+const fmt = (s: string) =>
+  ["learn", "cram", "flashcards", "test"].includes(s)
+    ? tr(`mode.${s}` as MessageKey)
+    : s;
+const getModes = () => [
   {
     id: "learn",
-    title: "Learn",
-    copy: "Build understanding, one question at a time.",
+    title: tr("mode.learn"),
+    copy: tr("main.build_understanding_one_question_at_a_time"),
     icon: BookOpen,
   },
   {
     id: "cram",
-    title: "Cram",
-    copy: "Focus on weak spots. Keep everything fresh.",
+    title: tr("mode.cram"),
+    copy: tr("main.focus_on_weak_spots_keep_everything_fresh"),
     icon: Flame,
   },
   {
     id: "flashcards",
-    title: "Flashcards",
-    copy: "Take a breath. Recall it in your own words.",
+    title: tr("mode.flashcards"),
+    copy: tr("main.take_a_breath_recall_it_in_your_own_words"),
     icon: Layers,
   },
   {
     id: "test",
-    title: "Test yourself",
-    copy: "No hints. See what you really remember.",
+    title: tr("main.test_yourself"),
+    copy: tr("main.no_hints_see_what_you_really_remember"),
     icon: GraduationCap,
   },
 ];
 function App() {
+  const language = useLanguage();
+  const modes = getModes();
+  useEffect(() => {
+    window.RecallFiles?.postMessage(
+      JSON.stringify({ action: "language", language }),
+    );
+  }, [language]);
   const [theme, setTheme] = useState<ThemePreference>(loadTheme);
   const [resolvedTheme, setResolvedTheme] = useState(
     () => document.documentElement.dataset.theme ?? "light",
@@ -218,12 +237,10 @@ function App() {
   function preserveDraft() {
     const current = leaveState.current;
     if (current.busy || answerPendingRef.current)
-      throw new Error(
-        "Wait for the current answer or save to finish, then try again.",
-      );
+      throw new Error(tr("main.wait_for_the_current_answer_or_save_to_finish"));
     if (current.editing)
       throw new Error(
-        "Finish or close the open editor or dialog before leaving this workspace.",
+        tr("main.finish_or_close_the_open_editor_or_dialog_before"),
       );
     if (current.session?.card && !current.feedback)
       saveAnswerDraft(personalMode(), current.session, {
@@ -257,7 +274,9 @@ function App() {
       setSession(null);
       setSection("settings");
       setNotice(
-        "Export unsynced progress here before switching workspaces. Pending answers stay on this server’s workspace.",
+        tr(
+          "app.export_unsynced_progress_here_before_switching_workspaces_pending_answers",
+        ),
       );
     };
     window.addEventListener("recall-prepare-leave", prepare);
@@ -428,9 +447,7 @@ function App() {
         "Recall-before-reset.recall.json",
         await exportPortable(bank, current, true),
       );
-      setNotice(
-        "Progress backup prepared. Keep the file if you may want to restore this learning on a device.",
-      );
+      setNotice(tr("app.progress_backup_prepared_keep_the_file_if_you_may"));
     });
   const applyReset = () =>
     void run(async () => {
@@ -447,9 +464,7 @@ function App() {
       setItems(await api<Item[]>(`/decks/${deckId}/questions`));
       setRecent(await api<any[]>(`/decks/${deckId}/sessions`));
       setSection("overview");
-      setNotice(
-        "Learning reset to zero. Start Learn to begin with multiple choice.",
-      );
+      setNotice(tr("app.learning_reset_to_zero_start_learn_to_begin_with"));
     });
   const card = session?.card;
   const actualResponse = card?.options
@@ -651,12 +666,12 @@ function App() {
     void run(async () => {
       if (!editor) return;
       if (editor.revision === 0) {
-        if (!deck) throw new Error("Choose a quiz first");
+        if (!deck) throw new Error(tr("app.choose_a_quiz_first"));
         await api("/import", { deck: deck.name, questions: [question] });
         setEditor(null);
         setItems(await api<Item[]>(`/decks/${deckId}/questions`));
         await refresh();
-        setNotice("Question added to this quiz.");
+        setNotice(tr("app.question_added_to_this_quiz"));
         return;
       }
       const result = await api<{ reset: boolean }>(
@@ -667,8 +682,10 @@ function App() {
       setEditor(null);
       setNotice(
         result.reset
-          ? "Question corrected. Previous progress for this objective was reset."
-          : "Question updated.",
+          ? tr(
+              "app.question_corrected_previous_progress_for_this_objective_was_reset",
+            )
+          : tr("app.question_updated"),
       );
       setItems(await api<Item[]>(`/decks/${deckId}/questions`));
       if (session)
@@ -677,7 +694,7 @@ function App() {
         setFeedback({
           ...feedback,
           explanation: result.reset
-            ? "This question has been edited. Its previous attempt is excluded from progress."
+            ? tr("study.editedAttempt")
             : (question.variants.find((v) => v.id === feedback.variantId)
                 ?.explanation ?? question.explanation),
         });
@@ -748,8 +765,8 @@ function App() {
       await refresh();
       setNotice(
         flag
-          ? "Flagged for review and skipped. Your note is saved in the deck."
-          : "Flag removed. Normal learning rules restored.",
+          ? tr("app.flagged_for_review_and_skipped_your_note_is_saved")
+          : tr("app.flag_removed_normal_learning_rules_restored"),
       );
     });
   const moveQuestions = async (moves: TopicMove[], message: string) => {
@@ -792,9 +809,7 @@ function App() {
         bundle,
       );
       setShareOpen(false);
-      setNotice(
-        "Export prepared. Save the file, then send it through Files, WhatsApp or another app.",
-      );
+      setNotice(tr("app.export_prepared_save_the_file_then_send_it_through"));
     });
   const importBank = async (
     input: unknown,
@@ -802,7 +817,7 @@ function App() {
     restoreProgress: boolean,
     dryRun: boolean,
   ) => {
-    if (busy) throw new Error("Another action is running");
+    if (busy) throw new Error(tr("app.another_action_is_running"));
     setBusy(true);
     setError("");
     try {
@@ -823,7 +838,12 @@ function App() {
         setDeckId(result.deckId);
         setItems(await api<Item[]>(`/decks/${result.deckId}/questions`));
         setNotice(
-          `${result.created} added · ${result.updated} updated · ${result.unchanged} unchanged · ${result.archived} archived`,
+          tr("app.added_updated_unchanged_archived", {
+            created: result.created,
+            updated: result.updated,
+            unchanged: result.unchanged,
+            archived: result.archived,
+          }),
         );
       }
       return result;
@@ -857,16 +877,17 @@ function App() {
           </span>
         </a>
         <div className="workspace-label">
-          YOUR STUDY SPACE <span>LOCAL</span>
+          {tr("app.your_study_space")}
+          <span>{tr("app.local")}</span>
         </div>
-        <nav aria-label="Main navigation">
+        <nav aria-label={tr("app.main_navigation")}>
           {[
-            { id: "overview", icon: BookOpen, label: "Overview" },
-            { id: "library", icon: Layers, label: "Question library" },
+            { id: "overview", icon: BookOpen, label: tr("app.overview") },
+            { id: "library", icon: Layers, label: tr("app.question_library") },
             {
               id: "progress",
               icon: ChartNoAxesCombined,
-              label: "Your progress",
+              label: tr("app.your_progress"),
             },
           ].map((n) => (
             <button
@@ -887,9 +908,9 @@ function App() {
         </nav>
         <div className="side-decks">
           <div className="side-label">
-            YOUR DECKS
+            {tr("app.your_decks")}
             <button
-              aria-label="Import a deck"
+              aria-label={tr("app.import_a_deck")}
               onClick={() => setImportOpen(true)}
             >
               <Plus size={15} />
@@ -912,24 +933,29 @@ function App() {
             </button>
           ))}
           {!decks.length && (
-            <p className="side-empty">Your next subject starts here.</p>
+            <p className="side-empty">
+              {tr("app.your_next_subject_starts_here")}
+            </p>
           )}
         </div>
         <div className="sidebar-bottom">
           <div className="side-note">
-            <span className="status-dot" /> A little practice. A lasting memory.
-            <p>Private, local, and entirely yours.</p>
+            <span className="status-dot" />{" "}
+            {tr("app.a_little_practice_a_lasting_memory")}
+            <p>{tr("app.private_local_and_entirely_yours")}</p>
           </div>
           <button
             className="profile"
             onClick={() => {
               setSession(null);
               setSection("settings");
+              setMobileNav(false);
             }}
           >
             <span className="avatar">Y</span>
             <span>
-              Your workspace<small>Made for learning</small>
+              {tr("app.your_workspace")}
+              <small>{tr("app.made_for_learning")}</small>
             </span>
             <Settings2 size={16} />
           </button>
@@ -939,36 +965,41 @@ function App() {
         <header className="topbar">
           <button
             className="mobile-menu icon-button"
-            aria-label="Toggle navigation"
+            aria-label={tr("app.toggle_navigation")}
             onClick={() => setMobileNav(!mobileNav)}
           >
             <PanelLeftClose size={20} />
           </button>
           <div className="breadcrumb">
-            Your workspace <span>/</span>{" "}
+            {tr("app.your_workspace_2")}
+            <span>/</span>{" "}
             <strong>
               {inStudy
-                ? "Study session"
+                ? tr("app.study_session")
                 : section === "overview"
-                  ? "Overview"
+                  ? tr("app.overview")
                   : section === "library"
-                    ? "Question library"
+                    ? tr("app.question_library")
                     : section === "progress"
-                      ? "Your progress"
-                      : "Settings"}
+                      ? tr("app.your_progress")
+                      : tr("app.settings")}
             </strong>
           </div>
           <div className="local-badge">
             <span className="status-dot" />
             {cache.personal
-              ? "On this device · no server"
+              ? tr("app.on_this_device_no_server")
               : cache.enabled
-                ? `Downloaded on device${cache.pending ? ` · ${cache.pending} to sync` : ""}`
-                : "Live server"}
+                ? tr("app.downloaded_on_device", {
+                    value: cache.pending
+                      ? tr("app.to_sync", { pending: cache.pending })
+                      : "",
+                  })
+                : tr("app.live_server")}
             {!cache.personal && cache.enabled && (
               <button
                 className="icon-button"
-                aria-label="Refresh downloaded quizzes"
+                aria-label={tr("app.refresh_downloaded_quizzes")}
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
@@ -979,7 +1010,9 @@ function App() {
                       setRecent(await api<any[]>(`/decks/${deckId}/sessions`));
                     }
                     setNotice(
-                      "Progress synced and downloaded quizzes refreshed.",
+                      tr(
+                        "app.progress_synced_and_downloaded_quizzes_refreshed",
+                      ),
                     );
                   })
                 }
@@ -991,13 +1024,13 @@ function App() {
               className="icon-button theme-toggle"
               aria-label={
                 resolvedTheme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
+                  ? tr("app.switch_to_light_mode")
+                  : tr("app.switch_to_dark_mode")
               }
               title={
                 resolvedTheme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
+                  ? tr("app.switch_to_light_mode")
+                  : tr("app.switch_to_dark_mode")
               }
               onClick={() =>
                 changeTheme(resolvedTheme === "dark" ? "light" : "dark")
@@ -1014,10 +1047,11 @@ function App() {
         {appUpdate.available && !deferUpdate && (
           <div className="app-update-banner" role="status">
             <div>
-              <strong>An app update is ready.</strong>
+              <strong>{tr("app.an_app_update_is_ready")}</strong>
               <span>
-                Your current question and pending progress stay saved on this
-                device.
+                {tr(
+                  "app.your_current_question_and_pending_progress_stay_saved_on",
+                )}
               </span>
             </div>
             <button
@@ -1025,29 +1059,34 @@ function App() {
               disabled={busy}
               onClick={() => setDeferUpdate(true)}
             >
-              Later
+              {tr("common.later")}
             </button>
             <button
               className="button primary"
               disabled={busy}
               onClick={applyAppUpdate}
             >
-              Save & reload
+              {tr("app.save_reload")}
             </button>
           </div>
         )}
         {cache.error && (
           <div className="cache-status" role="status">
-            {cache.error}
+            {<ErrorMessage message={cache.error} />}
           </div>
         )}
         {error && (
           <div className="error-banner" role="alert">
-            <span>{error}</span>
+            <span>{<ErrorMessage message={error} />}</span>
             {session && (
-              <button onClick={() => resume(session.id)}>Reload session</button>
+              <button onClick={() => resume(session.id)}>
+                {tr("app.reload_session")}
+              </button>
             )}
-            <button aria-label="Dismiss error" onClick={() => setError("")}>
+            <button
+              aria-label={tr("app.dismiss_error")}
+              onClick={() => setError("")}
+            >
               <X size={16} />
             </button>
           </div>
@@ -1066,20 +1105,27 @@ function App() {
               <>
                 <div className="page-heading">
                   <div>
-                    <div className="eyebrow">MAKE IT SECOND NATURE</div>
+                    <div className="eyebrow">
+                      {tr("app.make_it_second_nature")}
+                    </div>
                     <h1>
-                      A little closer to
+                      {tr("app.a_little_closer_to")}
                       <br />
-                      “I know this.”<span className="heading-spark">✦</span>
+                      {tr("app.i_know_this")}
+                      <span className="heading-spark">✦</span>
                     </h1>
-                    <p>Turn what you’re studying into something that stays.</p>
+                    <p>
+                      {tr(
+                        "app.turn_what_you_re_studying_into_something_that_stays",
+                      )}
+                    </p>
                   </div>
                   <button
                     className="button secondary import-button"
                     onClick={() => setImportOpen(true)}
                   >
                     <Plus size={17} />
-                    Add a deck
+                    {tr("app.add_a_deck")}
                   </button>
                 </div>
                 <div className="overview-stats">
@@ -1089,7 +1135,7 @@ function App() {
                     </span>
                     <span>
                       <strong>{total}</strong>
-                      <small>Learning objectives</small>
+                      <small>{tr("app.learning_objectives")}</small>
                     </span>
                   </div>
                   <div>
@@ -1101,7 +1147,7 @@ function App() {
                         {decks.reduce((n, d) => n + d.stats.mastered, 0)}
                         <em> / {total}</em>
                       </strong>
-                      <small>Mastered through recall</small>
+                      <small>{tr("app.mastered_through_recall")}</small>
                     </span>
                   </div>
                   <div>
@@ -1110,28 +1156,29 @@ function App() {
                     </span>
                     <span>
                       <strong>{due}</strong>
-                      <small>Ready for a review</small>
+                      <small>{tr("app.ready_for_a_review")}</small>
                     </span>
                   </div>
                 </div>
                 {deck ? (
                   <>
                     <div className="section-heading">
-                      <h2>Pick up where you left off</h2>
+                      <h2>{tr("app.pick_up_where_you_left_off")}</h2>
                       <span>
-                        {decks.length} {decks.length === 1 ? "deck" : "decks"}{" "}
-                        in your library
+                        {decks.length}{" "}
+                        {decks.length === 1 ? tr("app.deck") : tr("app.decks")}{" "}
+                        {tr("app.in_your_library")}
                       </span>
                     </div>
                     <section className="deck-card" aria-label={deck.name}>
                       <div className="deck-card-top">
                         <span className="subject-pill">
                           <span />
-                          EXAM PREPARATION
+                          {tr("app.exam_preparation")}
                         </span>
                         <button
                           className="icon-button"
-                          aria-label="View question library"
+                          aria-label={tr("app.view_question_library")}
                           onClick={() => setSection("library")}
                         >
                           <MoreHorizontal size={22} />
@@ -1142,17 +1189,21 @@ function App() {
                           <h2>{deck.name}</h2>
                           <p>
                             {deck.description ||
-                              "Your next step toward confident recall."}
+                              tr("app.your_next_step_toward_confident_recall")}
                           </p>
                           <div className="deck-meta">
                             <span>
                               <Layers size={15} />
-                              {deck.stats.total} objectives
+                              {deck.stats.total} {tr("app.objectives")}
                             </span>
                             <i />
-                            <span>{deck.stats.topics.length} topics</span>
+                            <span>
+                              {deck.stats.topics.length} {tr("app.topics")}
+                            </span>
                             <i />
-                            <span>Recognition → recall → application</span>
+                            <span>
+                              {tr("app.recognition_recall_application")}
+                            </span>
                           </div>
                         </div>
                         <div
@@ -1172,7 +1223,7 @@ function App() {
                               )}
                               <small>%</small>
                             </strong>
-                            <span>mastered</span>
+                            <span>{tr("app.mastered")}</span>
                           </div>
                         </div>
                       </div>
@@ -1192,15 +1243,15 @@ function App() {
                         <div className="progress-legend">
                           <span>
                             <i className="legend-mastered" />
-                            {deck.stats.mastered} mastered
+                            {deck.stats.mastered} {tr("app.mastered_2")}
                           </span>
                           <span>
                             <i className="legend-learning" />
-                            {deck.stats.learning} learning
+                            {deck.stats.learning} {tr("app.learning")}
                           </span>
                           <span>
                             <i />
-                            {deck.stats.unseen} unseen
+                            {deck.stats.unseen} {tr("app.unseen")}
                           </span>
                         </div>
                         <button
@@ -1208,15 +1259,17 @@ function App() {
                           disabled={busy}
                           onClick={() => start("learn")}
                         >
-                          Learn this deck
+                          {tr("app.learn_this_deck")}
                           <ArrowRight size={15} />
                         </button>
                       </div>
                     </section>
                     <div className="section-heading mode-heading">
-                      <h2>How do you want to practise?</h2>
+                      <h2>{tr("app.how_do_you_want_to_practise")}</h2>
                       <span>
-                        Different ways in. The same deeper understanding.
+                        {tr(
+                          "app.different_ways_in_the_same_deeper_understanding",
+                        )}
                       </span>
                     </div>
                     <div className="mode-grid">
@@ -1237,7 +1290,9 @@ function App() {
                           <h3>
                             {m.title}
                             {m.id === "learn" && (
-                              <span className="tiny-badge">ADAPTIVE</span>
+                              <span className="tiny-badge">
+                                {tr("app.adaptive")}
+                              </span>
                             )}
                           </h3>
                           <p>{m.copy}</p>
@@ -1246,29 +1301,37 @@ function App() {
                     </div>
                     {mode === "learn" && (
                       <p className="small">
-                        Start with choices, then recall without hints. Learn up
-                        to {learnSize} unlocked questions at a time; the next
-                        set arrives after these are mastered.
+                        {tr(
+                          "app.start_with_choices_then_recall_without_hints_learn_up",
+                        )}
+                        {learnSize}{" "}
+                        {tr(
+                          "app.unlocked_questions_at_a_time_the_next_set_arrives",
+                        )}
                       </p>
                     )}
                     <div className="session-controls">
                       <label>
-                        Topic
+                        {tr("common.topic")}
                         <select
                           value={topic}
                           onChange={(e) => setTopic(e.target.value)}
                         >
-                          <option value="">All topics</option>
+                          <option value="">{tr("common.all_topics")}</option>
                           {deck.stats.topics.map((t) => (
                             <option key={t.topic} value={t.topic}>
                               {t.topic}
-                              {t.locked ? ` · ${t.locked} locked` : ""}
+                              {t.locked
+                                ? tr("app.locked", { locked: t.locked })
+                                : ""}
                             </option>
                           ))}
                         </select>
                       </label>
                       <label>
-                        {mode === "learn" ? "Working set" : "Session size"}
+                        {mode === "learn"
+                          ? tr("app.working_set")
+                          : tr("app.session_size")}
                         <select
                           value={mode === "learn" ? learnSize : count}
                           onChange={(e) =>
@@ -1282,22 +1345,22 @@ function App() {
                             : [5, 10, 20, 50, 100, 200]
                           ).map((n) => (
                             <option value={n} key={n}>
-                              {n} objectives
+                              {n} {tr("app.objectives")}
                             </option>
                           ))}
                         </select>
                       </label>
                       {mode === "test" && (
                         <label>
-                          Time limit
+                          {tr("app.time_limit")}
                           <select
                             value={minutes}
                             onChange={(e) => setMinutes(Number(e.target.value))}
                           >
-                            <option value={0}>Untimed</option>
+                            <option value={0}>{tr("app.untimed")}</option>
                             {[5, 15, 30, 60].map((n) => (
                               <option value={n} key={n}>
-                                {n} minutes
+                                {n} {tr("app.minutes")}
                               </option>
                             ))}
                           </select>
@@ -1312,7 +1375,7 @@ function App() {
                               setIgnorePrerequisites(e.target.checked)
                             }
                           />{" "}
-                          Include locked questions
+                          {tr("app.include_locked_questions")}
                         </label>
                       )}
                       <button
@@ -1321,8 +1384,8 @@ function App() {
                         onClick={() => start()}
                       >
                         {busy
-                          ? "Getting ready…"
-                          : `Start ${mode === "test" ? "test" : mode === "flashcards" ? "flashcards" : mode === "cram" ? "cram session" : "learning"}`}
+                          ? tr("app.getting_ready")
+                          : tr(`study.start.${mode}` as MessageKey)}
                         <ArrowRight size={18} />
                       </button>
                     </div>
@@ -1332,21 +1395,26 @@ function App() {
                       onClick={openReset}
                     >
                       <RotateCcw size={14} />
-                      Reset learning
+                      {tr("common.reset_learning")}
                     </button>
                     <div className="learning-note">
                       <span>✦</span>
                       <p>
-                        <strong>Knowing it is more than recognising it.</strong>{" "}
-                        Learn gradually moves you from choosing an answer to
-                        recalling it yourself.
+                        <strong>
+                          {tr("app.knowing_it_is_more_than_recognising_it")}
+                        </strong>{" "}
+                        {tr(
+                          "app.learn_gradually_moves_you_from_choosing_an_answer_to",
+                        )}
                       </p>
                     </div>
                     {recent.some((s) => !s.finished) && (
                       <div className="resume-panel">
                         <div>
                           <Clock size={18} />
-                          <span>You have a session in progress</span>
+                          <span>
+                            {tr("app.you_have_a_session_in_progress")}
+                          </span>
                         </div>
                         <button
                           className="text-button"
@@ -1354,7 +1422,7 @@ function App() {
                             resume(recent.find((s) => !s.finished).id)
                           }
                         >
-                          Resume session
+                          {tr("app.resume_session")}
                           <ArrowRight size={15} />
                         </button>
                       </div>
@@ -1365,22 +1433,25 @@ function App() {
                     <div className="empty-icon">
                       <Layers size={36} />
                     </div>
-                    <h2>A space for what you’re learning.</h2>
+                    <h2>{tr("app.a_space_for_what_you_re_learning")}</h2>
                     <p>
-                      Import a question bank to create your first deck.
+                      {tr(
+                        "app.import_a_question_bank_to_create_your_first_deck",
+                      )}
                       <br />
-                      You can generate the bank with any assistant, then bring
-                      it here.
+                      {tr(
+                        "app.you_can_generate_the_bank_with_any_assistant_then",
+                      )}
                     </p>
                     <button
                       className="button primary"
                       onClick={() => setImportOpen(true)}
                     >
                       <Upload size={17} />
-                      Import a question bank
+                      {tr("app.import_a_question_bank")}
                     </button>
                     <p className="small">
-                      JSON, CSV and TSV · No AI account needed
+                      {tr("app.json_csv_and_tsv_no_ai_account_needed")}
                     </p>
                   </div>
                 )}
@@ -1389,20 +1460,24 @@ function App() {
             {section === "library" && (
               <>
                 <div className="page-heading compact">
-                  <div className="eyebrow">MAKE THE MATERIAL YOURS</div>
+                  <div className="eyebrow">
+                    {tr("app.make_the_material_yours")}
+                  </div>
                   <h1>
-                    Question library<span className="heading-dot">.</span>
+                    {tr("app.question_library")}
+                    <span className="heading-dot">.</span>
                   </h1>
                   <p>
-                    Good learning starts with good questions. Keep yours
-                    accurate.
+                    {tr(
+                      "app.good_learning_starts_with_good_questions_keep_yours_accurate",
+                    )}
                   </p>
                 </div>
                 <div className="library-toolbar">
                   <label className="search-box">
                     <Search size={18} />
                     <input
-                      placeholder="Search questions or concepts"
+                      placeholder={tr("app.search_questions_or_concepts")}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                     />
@@ -1432,7 +1507,7 @@ function App() {
                     }
                   >
                     <Plus size={16} />
-                    New question
+                    {tr("common.new_question")}
                   </button>
                   <button
                     className="button secondary"
@@ -1440,14 +1515,14 @@ function App() {
                     onClick={exportDeck}
                   >
                     <Upload size={16} />
-                    Export
+                    {tr("common.export")}
                   </button>
                   <button
                     className="button primary"
                     onClick={() => setImportOpen(true)}
                   >
                     <Download size={16} />
-                    Import
+                    {tr("common.import")}
                   </button>
                 </div>
                 <QuestionLibrary
@@ -1467,13 +1542,17 @@ function App() {
             {section === "progress" && (
               <>
                 <div className="page-heading compact">
-                  <div className="eyebrow">KNOW WHERE YOU STAND</div>
+                  <div className="eyebrow">
+                    {tr("app.know_where_you_stand")}
+                  </div>
                   <h1>
-                    Understanding, growing<span className="heading-dot">.</span>
+                    {tr("app.understanding_growing")}
+                    <span className="heading-dot">.</span>
                   </h1>
                   <p>
-                    Mastery needs repeated active recall. A lucky guess doesn’t
-                    count.
+                    {tr(
+                      "app.mastery_needs_repeated_active_recall_a_lucky_guess_doesn",
+                    )}
                   </p>
                 </div>
                 {deck && (
@@ -1484,21 +1563,23 @@ function App() {
                           {deck.stats.mastered}
                           <span> / {deck.stats.total}</span>
                         </strong>
-                        <p>objectives mastered</p>
+                        <p>{tr("app.objectives_mastered")}</p>
                       </div>
                       <div>
                         <strong>{deck.stats.attempts}</strong>
-                        <p>answers practised</p>
+                        <p>{tr("app.answers_practised")}</p>
                       </div>
                       <div>
                         <strong>{deck.stats.due}</strong>
-                        <p>reviews ready</p>
+                        <p>{tr("app.reviews_ready")}</p>
                       </div>
                     </div>
                     <div className="section-heading">
-                      <h2>Topic by topic</h2>
+                      <h2>{tr("app.topic_by_topic")}</h2>
                       <span>
-                        Recognition and self-assessment are recorded separately.
+                        {tr(
+                          "app.recognition_and_self_assessment_are_recorded_separately",
+                        )}
                       </span>
                     </div>
                     <div className="topic-grid">
@@ -1519,8 +1600,11 @@ function App() {
                           </div>
                           <p>
                             {t.accuracy === null
-                              ? "Ready for your first attempt"
-                              : `${t.accuracy}% accuracy · ${t.attempts} attempts`}
+                              ? tr("app.ready_for_your_first_attempt")
+                              : tr("app.accuracy_attempts", {
+                                  accuracy: t.accuracy,
+                                  attempts: t.attempts,
+                                })}
                           </p>
                           <button
                             className="text-button"
@@ -1529,15 +1613,17 @@ function App() {
                               setSection("overview");
                             }}
                           >
-                            Practise topic
+                            {tr("app.practise_topic")}
                             <ArrowRight size={15} />
                           </button>
                         </article>
                       ))}
                     </div>
                     <div className="section-heading">
-                      <h2>A little more attention</h2>
-                      <span>Your most frequently missed questions</span>
+                      <h2>{tr("app.a_little_more_attention")}</h2>
+                      <span>
+                        {tr("app.your_most_frequently_missed_questions")}
+                      </span>
                     </div>
                     <div className="question-list">
                       {deck.stats.weak.map((q) => (
@@ -1549,7 +1635,7 @@ function App() {
                           </div>
                           <button
                             className="icon-button"
-                            aria-label={`Edit ${q.id}`}
+                            aria-label={tr("app.edit", { id: q.id })}
                             onClick={() => edit(q.id)}
                           >
                             <Pencil size={16} />
@@ -1558,23 +1644,29 @@ function App() {
                       ))}
                       {!deck.stats.weak.length && (
                         <p className="quiet empty-line">
-                          No missed questions yet. Start a session to discover
-                          what needs practice.
+                          {tr(
+                            "app.no_missed_questions_yet_start_a_session_to_discover",
+                          )}
                         </p>
                       )}
                     </div>
                     <details className="session-history">
-                      <summary>Recent sessions</summary>
+                      <summary>{tr("app.recent_sessions")}</summary>
                       {recent.map((s) => (
                         <button key={s.id} onClick={() => resume(s.id)}>
                           <span>
                             {fmt(s.mode)} ·{" "}
-                            {new Date(s.createdAt).toLocaleDateString()}
+                            {new Date(s.createdAt).toLocaleDateString(
+                              getLanguage(),
+                            )}
                           </span>
                           <span>
                             {s.finished
-                              ? "View results"
-                              : `${s.cursor}/${s.total} · Resume`}
+                              ? tr("app.view_results")
+                              : tr("app.resume", {
+                                  cursor: s.cursor,
+                                  total: s.total,
+                                })}
                             <ArrowRight size={14} />
                           </span>
                         </button>
@@ -1587,37 +1679,47 @@ function App() {
             {section === "settings" && (
               <>
                 <div className="page-heading compact">
-                  <div className="eyebrow">SIMPLE BY DESIGN</div>
+                  <div className="eyebrow">{tr("app.simple_by_design")}</div>
                   <h1>
-                    Your workspace<span className="heading-dot">.</span>
+                    {tr("app.your_workspace")}
+                    <span className="heading-dot">.</span>
                   </h1>
                   <p>
                     {cache.personal
-                      ? "Your quizzes and progress stay in this browser or app. No account or server is needed."
-                      : "Your server stores shared questions and progress; downloaded mode keeps a copy on this device."}
+                      ? tr(
+                          "app.your_quizzes_and_progress_stay_in_this_browser_or",
+                        )
+                      : tr(
+                          "app.your_server_stores_shared_questions_and_progress_downloaded_mode",
+                        )}
                   </p>
                 </div>
                 <section className="settings-card">
-                  <h2>App updates</h2>
-                  <p>Version {appVersion}</p>
+                  <h2>{tr("app.app_updates")}</h2>
+                  <p>
+                    {tr("app.version")}
+                    {appVersion}
+                  </p>
                   {appUpdate.available ? (
                     <>
                       <p>
-                        A new web app is downloaded. Save & reload preserves
-                        your current answer draft and pending progress.
+                        {tr(
+                          "app.a_new_web_app_is_downloaded_save_reload_preserves",
+                        )}
                       </p>
                       <button
                         className="button primary"
                         disabled={busy}
                         onClick={applyAppUpdate}
                       >
-                        Save & reload app
+                        {tr("app.save_reload_app")}
                       </button>
                     </>
                   ) : (
                     <p>
-                      Your app keeps working while an update downloads. It never
-                      reloads an active study session automatically.
+                      {tr(
+                        "app.your_app_keeps_working_while_an_update_downloads_it",
+                      )}
                     </p>
                   )}
                   {appUpdate.supported && (
@@ -1630,15 +1732,19 @@ function App() {
                       }}
                     >
                       {appUpdate.checking
-                        ? "Checking…"
-                        : "Check for app update"}
+                        ? tr("app.checking")
+                        : tr("app.check_for_app_update")}
                     </button>
                   )}
-                  {appUpdate.error && <p role="alert">{appUpdate.error}</p>}
+                  {appUpdate.error && (
+                    <p role="alert">
+                      {<ErrorMessage message={appUpdate.error} />}
+                    </p>
+                  )}
                   <p>
-                    Windows/Android installations bundle their own interface.
-                    Download a newer installer to update it; your workspace
-                    stays separate from application files.
+                    {tr(
+                      "app.windows_android_installations_bundle_their_own_interface_download_a",
+                    )}
                   </p>
                   <a
                     className="text-button"
@@ -1646,82 +1752,106 @@ function App() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Browse app releases
+                    {tr("app.browse_app_releases")}
                   </a>
                 </section>
                 <section className="settings-card">
-                  <h2>Study controls</h2>
+                  <h2>{tr("common.study_controls")}</h2>
                   <StudyControlsPanel
                     value={controls}
                     onChange={changeControls}
                   />
                 </section>
                 <section className="settings-card">
-                  <h2>Appearance</h2>
+                  <h2>{tr("settings.language")}</h2>
                   <label className="appearance-control">
-                    Theme
+                    {tr("settings.language")}
                     <select
-                      aria-label="Theme"
+                      aria-label={tr("settings.language")}
+                      value={language}
+                      onChange={(e) => {
+                        setNotice("");
+                        setError("");
+                        void setLanguage(e.target.value);
+                      }}
+                    >
+                      {availableLanguages.map((l) => (
+                        <option key={l.code} value={l.code} lang={l.code}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p>{tr("settings.languageDescription")}</p>
+                  <a
+                    className="text-button"
+                    href="https://github.com/KortsH/recall/blob/main/docs/TRANSLATING.md"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {tr("settings.translations")}
+                  </a>
+                </section>
+                <section className="settings-card">
+                  <h2>{tr("app.appearance")}</h2>
+                  <label className="appearance-control">
+                    {tr("app.theme")}
+                    <select
+                      aria-label={tr("app.theme")}
                       value={theme}
                       onChange={(e) =>
                         changeTheme(e.target.value as ThemePreference)
                       }
                     >
-                      <option value="system">Follow system</option>
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
+                      <option value="system">{tr("app.follow_system")}</option>
+                      <option value="light">{tr("app.light")}</option>
+                      <option value="dark">{tr("app.dark")}</option>
                     </select>
                   </label>
                   <p>
-                    Saved on this device. Use the sun/moon button in the header
-                    to switch instantly.
+                    {tr("app.saved_on_this_device_use_the_sun_moon_button")}
                   </p>
                 </section>
                 <section className="settings-card">
-                  <h2>Read aloud & dictation</h2>
+                  <h2>{tr("app.read_aloud_dictation")}</h2>
                   <p>
-                    Use Read aloud on a question or revealed answer. Recall uses
-                    locally installed speech voices when your browser provides
-                    them; it never reads an answer before it is revealed.
+                    {tr("app.use_read_aloud_on_a_question_or_revealed_answer")}
                   </p>
                   <p>
-                    For dictation, focus the answer field and use your device’s
-                    keyboard microphone or operating-system dictation.
-                    Recognition accuracy and offline availability depend on that
-                    service. Browser-integrated dictation is planned.
+                    {tr(
+                      "app.for_dictation_focus_the_answer_field_and_use_your",
+                    )}
                   </p>
                 </section>
                 {cache.personal && (
                   <div className="settings-card">
-                    <h2>Learn here. Share anywhere.</h2>
+                    <h2>{tr("app.learn_here_share_anywhere")}</h2>
                     <p>
-                      Import a .recall.json or ordinary question-bank JSON file.
-                      Study, edit and organize without a server. Export a quiz
-                      for your friend, or include progress to move your own
-                      learning to another device.
+                      {tr(
+                        "app.import_a_recall_json_or_ordinary_question_bank_json",
+                      )}
                     </p>
                     <p className="small">
-                      Your browser and phone keep separate copies. Clearing
-                      app/site data removes local quizzes and progress, so keep
-                      exported backup files.
+                      {tr(
+                        "app.your_browser_and_phone_keep_separate_copies_clearing_app",
+                      )}
                     </p>
                     <button
                       className="button primary"
                       onClick={() => setImportOpen(true)}
                     >
                       <Upload size={16} />
-                      Import a quiz file
+                      {tr("app.import_a_quiz_file")}
                     </button>
                   </div>
                 )}
                 {!cache.personal && (
                   <div className="settings-card">
-                    <h2>Keep quizzes on this device</h2>
+                    <h2>{tr("app.keep_quizzes_on_this_device")}</h2>
                     <p>
-                      Download the full quiz and study without contacting the
-                      server for each answer. Progress saves here immediately,
-                      then syncs when you finish, leave, or refresh. New
-                      questions arrive only when you refresh.
+                      {tr(
+                        "app.download_the_full_quiz_and_study_without_contacting_the",
+                      )}
                     </p>
                     <label className="storage-choice">
                       <input
@@ -1736,21 +1866,27 @@ function App() {
                             await refresh();
                             setNotice(
                               enabled
-                                ? "Downloaded study mode enabled."
-                                : "Live-server mode enabled.",
+                                ? tr("app.downloaded_study_mode_enabled")
+                                : tr("app.live_server_mode_enabled"),
                             );
                           })
                         }
                       />
-                      Use downloaded study mode
+                      {tr("app.use_downloaded_study_mode")}
                     </label>
                     <p className="small">
                       {cache.downloadedAt
-                        ? `Last downloaded: ${new Date(cache.downloadedAt).toLocaleString()}`
-                        : "No quiz download yet."}{" "}
+                        ? tr("app.last_downloaded", {
+                            date: new Date(cache.downloadedAt).toLocaleString(
+                              getLanguage(),
+                            ),
+                          })
+                        : tr("app.no_quiz_download_yet")}{" "}
                       {cache.pending
-                        ? `${cache.pending} session(s) waiting to sync.`
-                        : "Progress is synced."}
+                        ? tr("app.session_s_waiting_to_sync", {
+                            pending: cache.pending,
+                          })
+                        : tr("app.progress_is_synced")}
                     </p>
                     <button
                       className="button secondary"
@@ -1759,12 +1895,14 @@ function App() {
                         void run(async () => {
                           await refreshDownloads();
                           await refresh();
-                          setNotice("Downloaded quizzes are up to date.");
+                          setNotice(
+                            tr("app.downloaded_quizzes_are_up_to_date"),
+                          );
                         })
                       }
                     >
                       <RotateCcw size={16} />
-                      Sync progress & refresh quizzes
+                      {tr("app.sync_progress_refresh_quizzes")}
                     </button>
                     <button
                       className="button secondary"
@@ -1777,13 +1915,15 @@ function App() {
                             recovery,
                           );
                           setNotice(
-                            "Private recovery export prepared. It includes pending answers; keep it safe and use the recovery CLI to replay it.",
+                            tr(
+                              "app.private_recovery_export_prepared_it_includes_pending_answers_keep",
+                            ),
                           );
                         })
                       }
                     >
                       <Download size={16} />
-                      Export unsynced progress
+                      {tr("app.export_unsynced_progress")}
                     </button>
                     {cache.resetConflicts.length > 0 && (
                       <button
@@ -1791,28 +1931,31 @@ function App() {
                         disabled={busy}
                         onClick={() => setDiscardResetOpen(true)}
                       >
-                        Discard outdated answers & reload decks
+                        {tr("app.discard_outdated_answers_reload_decks")}
                       </button>
                     )}
                     <p className="small">
-                      If the server stays unavailable, export pending evidence
-                      before clearing storage or changing devices. This private
-                      recovery file includes typed answers. It is separate from
-                      a quiz-sharing file; export does not clear the outbox.
+                      {tr(
+                        "app.if_the_server_stays_unavailable_export_pending_evidence_before",
+                      )}
                     </p>
                     <p className="small">
-                      Phone and computer keep their own downloads. Refresh
-                      either device to pick up progress from the other. Clearing
-                      browser storage removes unsynced local attempts.
+                      {tr(
+                        "app.phone_and_computer_keep_their_own_downloads_refresh_either",
+                      )}
                     </p>
                   </div>
                 )}
                 <div className="settings-card">
-                  <h2>Workspace</h2>
+                  <h2>{tr("app.workspace")}</h2>
                   <p>
                     {cache.personal
-                      ? "Device-only storage is independent of any server workspace. To use a shared server, open its HTTPS address in your browser, or select it in the Android connection screen."
-                      : "You can also use an independent device-only workspace. Your existing server downloads and pending progress are kept separately."}
+                      ? tr(
+                          "app.device_only_storage_is_independent_of_any_server_workspace",
+                        )
+                      : tr(
+                          "app.you_can_also_use_an_independent_device_only_workspace",
+                        )}
                   </p>
                   {!import.meta.env.VITE_RECALL_STANDALONE && (
                     <button
@@ -1827,46 +1970,43 @@ function App() {
                       }
                     >
                       {cache.personal
-                        ? "Return to server workspace"
-                        : "Use a device-only workspace"}
+                        ? tr("app.return_to_server_workspace")
+                        : tr("app.use_a_device_only_workspace")}
                     </button>
                   )}
                 </div>
                 <div className="settings-card">
-                  <h2>Bring your own questions</h2>
+                  <h2>{tr("app.bring_your_own_questions")}</h2>
                   <p>
-                    Use any assistant to prepare a structured bank, then import
-                    it here or through the CLI. Recall has no AI integration or
-                    subscription.
+                    {tr(
+                      "app.use_any_assistant_to_prepare_a_structured_bank_then",
+                    )}
                   </p>
                   <button
                     className="button primary"
                     onClick={() => setImportOpen(true)}
                   >
                     <Upload size={16} />
-                    Import a bank
+                    {tr("app.import_a_bank")}
                   </button>
                 </div>
                 <div className="settings-card">
-                  <h2>How mastery works</h2>
+                  <h2>{tr("app.how_mastery_works")}</h2>
                   <p>
-                    Three consecutive successes, including at least two written
-                    or self-rated recalls, establish initial mastery. Questions
-                    return for later review. Mistakes reset the streak; editing
-                    the material resets the affected objective.
+                    {tr(
+                      "app.three_consecutive_successes_including_at_least_two_written_or",
+                    )}
                   </p>
                   <p>
-                    Free-form answers use a model answer and your honest
-                    self-assessment. Structured answers use explicit accepted
-                    answers, never a fuzzy guess.
+                    {tr("app.free_form_answers_use_a_model_answer_and_your")}
                   </p>
                 </div>
               </>
             )}
             <footer>
               <span className="footer-brand">recall.</span>
-              <span>Learn it for real.</span>
-              <span>Small steps. Stronger recall.</span>
+              <span>{tr("app.learn_it_for_real")}</span>
+              <span>{tr("app.small_steps_stronger_recall")}</span>
             </footer>
           </div>
         )}
@@ -1875,12 +2015,12 @@ function App() {
             <div className="study-top">
               <button className="text-button" onClick={leave}>
                 <ArrowLeft size={16} />
-                Save & leave
+                {tr("app.save_leave")}
               </button>
               <button
                 className="icon-button"
-                aria-label="Study controls"
-                title="Study controls"
+                aria-label={tr("common.study_controls")}
+                title={tr("common.study_controls")}
                 onClick={() => setControlsOpen(true)}
               >
                 <Settings2 size={18} />
@@ -1893,16 +2033,23 @@ function App() {
                 <div className="study-progress-label">
                   <span>
                     {session.learning
-                      ? `Set ${session.learning.round} · ${session.learning.mastered} of ${session.learning.total} mastered`
+                      ? tr("app.set_of_mastered", {
+                          round: session.learning.round,
+                          mastered: session.learning.mastered,
+                          total: session.learning.total,
+                        })
                       : feedback
-                        ? "A little stronger already"
+                        ? tr("app.a_little_stronger_already")
                         : session.mode === "test"
-                          ? "Take your time. Trust what you know."
-                          : "One question. A little deeper."}
+                          ? tr("app.take_your_time_trust_what_you_know")
+                          : tr("app.one_question_a_little_deeper")}
                   </span>
                   <span>
                     {session.learning
-                      ? `${session.learning.deckMastered} / ${session.learning.deckTotal} learned`
+                      ? tr("app.learned", {
+                          deckMastered: session.learning.deckMastered,
+                          deckTotal: session.learning.deckTotal,
+                        })
                       : `${Math.min(session.cursor + (feedback ? 0 : 1), session.total)} / ${session.total}`}
                     {session.deadline && (
                       <>
@@ -1948,23 +2095,29 @@ function App() {
                   )}
                   <span>
                     {feedback.correct
-                      ? "That’s it."
-                      : "Let’s make this one stick."}
+                      ? tr("app.that_s_it")
+                      : tr("app.let_s_make_this_one_stick")}
                   </span>
-                  {feedback.selfAssessed && <small>SELF-ASSESSED</small>}
-                  {feedback.hintUsed && <small>HINT USED</small>}
+                  {feedback.selfAssessed && (
+                    <small>{tr("app.self_assessed")}</small>
+                  )}
+                  {feedback.hintUsed && <small>{tr("app.hint_used")}</small>}
                 </div>
                 <div className="eyebrow">{feedback.topic}</div>
                 <h2>{feedback.question}</h2>
-                <ReadAloud text={feedback.answer} label="Read model answer" />
+                <ReadAloud
+                  text={feedback.answer}
+                  label={tr("app.read_model_answer")}
+                />
                 {feedback.hintUsed && (
                   <p className="assisted-note">
-                    Assisted practice. This answer does not increase unaided
-                    recall or unlock prerequisites.
+                    {tr(
+                      "app.assisted_practice_this_answer_does_not_increase_unaided_recall",
+                    )}
                   </p>
                 )}
                 <div className="model-answer">
-                  <span>MODEL ANSWER</span>
+                  <span>{tr("app.model_answer")}</span>
                   <p>{feedback.answer}</p>
                 </div>
                 {feedback.explanation && (
@@ -1976,7 +2129,7 @@ function App() {
                     onClick={() => edit(feedback.questionId)}
                   >
                     <Pencil size={14} />
-                    Something off? Edit question
+                    {tr("app.something_off_edit_question")}
                   </button>
                   <button
                     className="text-button quiet"
@@ -1984,7 +2137,7 @@ function App() {
                     onClick={() => openFlag(feedback.questionId)}
                   >
                     <Flag size={14} />
-                    Flag for review
+                    {tr("app.flag_for_review")}
                   </button>
                   <button
                     className="button primary"
@@ -1992,9 +2145,11 @@ function App() {
                     onClick={next}
                     ref={continueRef}
                   >
-                    {session.finished ? "See session results" : "Continue"}
+                    {session.finished
+                      ? tr("app.see_session_results")
+                      : tr("common.continue")}
                     {controls.continueMode === "any"
-                      ? " · Any key"
+                      ? tr("app.any_key")
                       : controls.continueMode === "key"
                         ? ` · ${keyLabel(controls.continueKey)}`
                         : ""}
@@ -2029,17 +2184,17 @@ function App() {
                       <span className="topic-tag">{card.topic}</span>
                       <span className="format-label">
                         {card.format === "written"
-                          ? "ACTIVE RECALL"
+                          ? tr("app.active_recall")
                           : card.format === "flashcard"
-                            ? "RECALL & REFLECT"
+                            ? tr("app.recall_reflect")
                             : card.format === "matching"
-                              ? "MAKE THE CONNECTION"
-                              : "RECOGNITION"}
+                              ? tr("app.make_the_connection")
+                              : tr("app.recognition")}
                       </span>
                       <button
                         className="icon-button question-flag-button"
-                        aria-label="Flag and skip question"
-                        title="Flag and skip this question"
+                        aria-label={tr("app.flag_and_skip_question")}
+                        title={tr("app.flag_and_skip_this_question")}
                         disabled={busy}
                         onClick={() => openFlag(card.questionId)}
                       >
@@ -2047,19 +2202,23 @@ function App() {
                       </button>
                     </div>
                     <h2>{card.question}</h2>
-                    <ReadAloud text={card.question} label="Read question" />
+                    <ReadAloud
+                      text={card.question}
+                      label={tr("app.read_question")}
+                    />
                     {card.hasHint && session.mode !== "test" && !reveal && (
                       <div className="study-hint">
                         {session.hint ? (
                           <div role="status">
                             <strong>
                               <Lightbulb size={16} />
-                              Hint used
+                              {tr("app.hint_used_2")}
                             </strong>
                             <p>{session.hint}</p>
                             <small>
-                              Assisted practice — try it without a hint next
-                              time to build mastery.
+                              {tr(
+                                "app.assisted_practice_try_it_without_a_hint_next_time",
+                              )}
                             </small>
                           </div>
                         ) : (
@@ -2069,7 +2228,10 @@ function App() {
                             onClick={showHint}
                           >
                             <Lightbulb size={16} />
-                            Show hint <small>Counts as assisted practice</small>
+                            {tr("app.show_hint")}
+                            <small>
+                              {tr("app.counts_as_assisted_practice")}
+                            </small>
                           </button>
                         )}
                       </div>
@@ -2077,8 +2239,12 @@ function App() {
                     {session.learning && !card.options && (
                       <p className="answer-hint">
                         {card.options
-                          ? "Start by recognising the answer. You’ll recall it without options next."
-                          : "Now recall it without the choices. Two successful recalls build mastery."}
+                          ? tr(
+                              "app.start_by_recognising_the_answer_you_ll_recall_it",
+                            )
+                          : tr(
+                              "app.now_recall_it_without_the_choices_two_successful_recalls",
+                            )}
                       </p>
                     )}
                     {!reveal && (
@@ -2087,10 +2253,12 @@ function App() {
                           <>
                             <p className="answer-hint">
                               {card.format === "multiple_select"
-                                ? "Select all correct answers."
+                                ? tr("app.select_all_correct_answers")
                                 : controls.autoSubmitSingle
-                                  ? "Choose one answer — it submits immediately."
-                                  : "Choose one answer, then check it."}
+                                  ? tr(
+                                      "app.choose_one_answer_it_submits_immediately",
+                                    )
+                                  : tr("app.choose_one_answer_then_check_it")}
                             </p>
                             <div
                               ref={optionsRef}
@@ -2132,8 +2300,8 @@ function App() {
                               }
                               aria-label={
                                 card.format === "multiple_select"
-                                  ? "Select all correct answers"
-                                  : "Choose one answer"
+                                  ? tr("app.select_all_correct_answers_2")
+                                  : tr("app.choose_one_answer")
                               }
                             >
                               {card.options.map((option, i) => (
@@ -2241,13 +2409,15 @@ function App() {
                         ) : card.format === "matching" ? (
                           <div className="matching-fields">
                             <p className="answer-hint">
-                              Choose the matching answer for each item.
+                              {tr(
+                                "app.choose_the_matching_answer_for_each_item",
+                              )}
                             </p>
                             {card.left?.map((left) => (
                               <label key={left}>
                                 <span>{left}</span>
                                 <select
-                                  aria-label={`Match ${left}`}
+                                  aria-label={tr("app.match", { value: left })}
                                   value={pairs[left] ?? ""}
                                   onChange={(e) =>
                                     setPairs({
@@ -2256,7 +2426,9 @@ function App() {
                                     })
                                   }
                                 >
-                                  <option value="">Choose a match</option>
+                                  <option value="">
+                                    {tr("app.choose_a_match")}
+                                  </option>
                                   {card.right?.map((right) => (
                                     <option key={right}>{right}</option>
                                   ))}
@@ -2268,15 +2440,15 @@ function App() {
                           <div className="flashcard-front">
                             <Layers size={32} />
                             <p>
-                              Bring the answer to mind.
+                              {tr("app.bring_the_answer_to_mind")}
                               <br />
-                              Then turn the card.
+                              {tr("app.then_turn_the_card")}
                             </p>
                           </div>
                         ) : (
                           <div className="written-answer">
                             <label htmlFor="written-response">
-                              Your answer
+                              {tr("app.your_answer")}
                             </label>
                             <textarea
                               id="written-response"
@@ -2294,12 +2466,18 @@ function App() {
                                   if (canAnswer && !busy) submit();
                                 }
                               }}
-                              placeholder="Recall it in your own words…"
+                              placeholder={tr(
+                                "app.recall_it_in_your_own_words",
+                              )}
                             />
                             <p>
                               {card.selfGrade
-                                ? "You’ll compare with a model answer and assess your recall."
-                                : "For multi-part rules, separate each part with a semicolon. Accepted wording is checked explicitly."}
+                                ? tr(
+                                    "app.you_ll_compare_with_a_model_answer_and_assess",
+                                  )
+                                : tr(
+                                    "app.for_multi_part_rules_separate_each_part_with_a",
+                                  )}
                             </p>
                           </div>
                         )}
@@ -2311,13 +2489,17 @@ function App() {
                         ref={revealRef}
                         tabIndex={-1}
                         role="group"
-                        aria-label="Compare your answer with the model"
+                        aria-label={tr(
+                          "app.compare_your_answer_with_the_model",
+                        )}
                       >
-                        <span className="eyebrow">MODEL ANSWER</span>
+                        <span className="eyebrow">
+                          {tr("app.model_answer")}
+                        </span>
                         <p className="reveal-model">{reveal.answer}</p>
                         <ReadAloud
                           text={reveal.answer}
-                          label="Read model answer"
+                          label={tr("app.read_model_answer")}
                         />
                         <p className="explanation">{reveal.explanation}</p>
                         {reveal.rubric.length > 0 && (
@@ -2327,28 +2509,30 @@ function App() {
                             ))}
                           </ul>
                         )}
-                        <span className="eyebrow">HOW DID YOU DO?</span>
+                        <span className="eyebrow">
+                          {tr("app.how_did_you_do")}
+                        </span>
                         <div className="rating-buttons">
                           {[
                             {
                               id: "again",
-                              name: "Again",
-                              copy: "Couldn’t recall it",
+                              name: tr("common.again"),
+                              copy: tr("app.couldn_t_recall_it"),
                             },
                             {
                               id: "hard",
-                              name: "Hard",
-                              copy: "Got it, with effort",
+                              name: tr("common.hard"),
+                              copy: tr("app.got_it_with_effort"),
                             },
                             {
                               id: "good",
-                              name: "Good",
-                              copy: "Recalled it clearly",
+                              name: tr("common.good"),
+                              copy: tr("app.recalled_it_clearly"),
                             },
                             {
                               id: "easy",
-                              name: "Easy",
-                              copy: "Knew it instantly",
+                              name: tr("common.easy"),
+                              copy: tr("app.knew_it_instantly"),
                             },
                           ].map((r, i) => (
                             <button
@@ -2373,10 +2557,24 @@ function App() {
                           <Keyboard size={15} />
                           {card.format === "multiple_choice" &&
                           controls.autoSubmitSingle
-                            ? `Click an answer or press 1–${Math.min(9, card.options?.length ?? 0)} to submit${(card.options?.length ?? 0) > 9 ? " · Arrow keys for more" : ""}`
+                            ? tr("app.click_an_answer_or_press_1_to_submit", {
+                                max: Math.min(9, card.options?.length ?? 0),
+                                value:
+                                  (card.options?.length ?? 0) > 9
+                                    ? tr("app.arrow_keys_for_more")
+                                    : "",
+                              })
                             : card.options
-                              ? `1–${Math.min(9, card.options.length)} to select${card.options.length > 9 ? " · Arrow keys for more" : ""} · Enter to check`
-                              : "Enter to check · Shift + Enter for a new line"}
+                              ? tr("app.1_to_select_enter_to_check", {
+                                  max: Math.min(9, card.options.length),
+                                  value:
+                                    card.options.length > 9
+                                      ? tr("app.arrow_keys_for_more")
+                                      : "",
+                                })
+                              : tr(
+                                  "app.enter_to_check_shift_enter_for_a_new_line",
+                                )}
                         </span>
                         {(card.format !== "multiple_choice" ||
                           !controls.autoSubmitSingle) && (
@@ -2386,14 +2584,14 @@ function App() {
                             onClick={() => submit()}
                           >
                             {busy
-                              ? "Saving…"
+                              ? tr("app.saving")
                               : card.format === "flashcard"
-                                ? "Reveal answer"
+                                ? tr("app.reveal_answer")
                                 : card.selfGrade && session.mode !== "test"
-                                  ? "Compare answer"
+                                  ? tr("app.compare_answer")
                                   : session.mode === "test"
-                                    ? "Save answer"
-                                    : "Check answer"}
+                                    ? tr("app.save_answer")
+                                    : tr("app.check_answer")}
                             <ArrowRight size={17} />
                           </button>
                         )}
@@ -2403,9 +2601,13 @@ function App() {
                   <div className="study-under">
                     <p>
                       <span className="status-dot" />
-                      {cache.enabled
-                        ? "Saved on this device. Syncs when you finish or leave."
-                        : "Your progress saves after every answer."}
+                      {cache.personal
+                        ? tr("app.savedOnDevice")
+                        : cache.enabled
+                          ? tr(
+                              "app.saved_on_this_device_syncs_when_you_finish_or",
+                            )
+                          : tr("app.your_progress_saves_after_every_answer")}
                     </p>
                     {session.mode === "test" && (
                       <button
@@ -2421,7 +2623,7 @@ function App() {
                           })
                         }
                       >
-                        Finish test early
+                        {tr("app.finish_test_early")}
                       </button>
                     )}
                   </div>
@@ -2453,41 +2655,36 @@ function App() {
       )}
       {resetRequest && (
         <ResetDialog
-          title="Reset learning to zero?"
+          title={tr("app.reset_learning_to_zero")}
           busy={busy}
           onClose={() => setResetRequest(null)}
           onBackup={backupBeforeReset}
           onConfirm={applyReset}
-          confirmLabel="Reset to zero"
+          confirmLabel={tr("app.reset_to_zero")}
         >
           <p>
             <strong>{resetRequest.name}</strong> · {resetRequest.questions}{" "}
-            questions
+            {tr("app.questions")}
           </p>
-          <p>
-            This clears this deck’s mastery, answer counters and review dates,
-            ends its saved sessions, and discards its pending answers. Questions
-            and prerequisite links stay in your library. New learning begins
-            with multiple choice.
-          </p>
+          <p>{tr("app.this_clears_this_deck_s_mastery_answer_counters_and")}</p>
           <p>
             {cache.personal
-              ? "This affects only this device’s personal workspace."
-              : "This resets the shared deck across connected devices. Other devices must reload it; their older pending answers will no longer count."}
+              ? tr("app.this_affects_only_this_device_s_personal_workspace")
+              : tr(
+                  "app.this_resets_the_shared_deck_across_connected_devices_other",
+                )}
           </p>
           <p className="small">
-            Download a progress backup first if you may want to restore your
-            learning later. Progress files can be restored in a device-only
-            workspace.
+            {tr("app.download_a_progress_backup_first_if_you_may_want")}
           </p>
         </ResetDialog>
       )}
       {discardResetOpen && (
         <ResetDialog
-          title="Discard answers from before the reset?"
+          title={tr("app.discard_answers_from_before_the_reset")}
           busy={busy}
           onClose={() => setDiscardResetOpen(false)}
-          confirmLabel="Discard outdated answers"
+          confirmLabel={tr("app.discard_outdated_answers")}
           onBackup={() =>
             void run(async () =>
               saveJson(
@@ -2506,20 +2703,13 @@ function App() {
               await refresh();
               setItems(await api<Item[]>(`/decks/${deckId}/questions`));
               setNotice(
-                "Reset decks reloaded. Other pending answers were kept.",
+                tr("app.reset_decks_reloaded_other_pending_answers_were_kept"),
               );
             })
           }
         >
-          <p>
-            The server has a newer learning reset. These older pending answers
-            cannot count toward that new run.
-          </p>
-          <p>
-            Export a private evidence backup if you want to keep them, then
-            discard only the outdated answers and download those decks again.
-            Pending answers for other decks stay on this device.
-          </p>
+          <p>{tr("app.the_server_has_a_newer_learning_reset_these_older")}</p>
+          <p>{tr("app.export_a_private_evidence_backup_if_you_want_to")}</p>
         </ResetDialog>
       )}
       {shareOpen && (
@@ -2577,49 +2767,56 @@ function Results({
         <div className="result-mark">
           <CheckCheck size={30} />
         </div>
-        <div className="eyebrow">A SESSION WELL SPENT</div>
+        <div className="eyebrow">{tr("results.a_session_well_spent")}</div>
         <h1>
-          It’s starting to stick<span className="heading-dot">.</span>
+          {tr("results.it_s_starting_to_stick")}
+          <span className="heading-dot">.</span>
         </h1>
-        <p>Every attempt makes the next recall a little easier.</p>
+        <p>
+          {tr("results.every_attempt_makes_the_next_recall_a_little_easier")}
+        </p>
         <div className="result-stats">
           <div>
             <strong>
               {r.correct}
               <em>/{r.graded}</em>
             </strong>
-            <span>correct graded answers</span>
+            <span>{tr("results.correct_graded_answers")}</span>
           </div>
           <div>
             <strong>
               {percent}
               <em>%</em>
             </strong>
-            <span>session accuracy</span>
+            <span>{tr("results.session_accuracy")}</span>
           </div>
           <div>
             <strong>{r.pending}</strong>
-            <span>to self-assess</span>
+            <span>{tr("results.to_self_assess")}</span>
           </div>
         </div>
         {r.unanswered > 0 && (
           <p>
-            {r.unanswered} unanswered questions · Unanswered items are excluded
-            from accuracy.
+            {r.unanswered}{" "}
+            {tr(
+              "results.unanswered_questions_unanswered_items_are_excluded_from_accuracy",
+            )}
           </p>
         )}
         {r.answers.some((a) => a.hintUsed && !a.outdated) && (
           <p>
-            {r.answers.filter((a) => a.hintUsed && !a.outdated).length} answers
-            used hints. Assisted answers are excluded from unaided mastery.
+            {r.answers.filter((a) => a.hintUsed && !a.outdated).length}{" "}
+            {tr(
+              "results.answers_used_hints_assisted_answers_are_excluded_from_unaided",
+            )}
           </p>
         )}
         <div className="result-actions">
           <button className="button secondary" onClick={onBack}>
-            Back to your deck
+            {tr("results.back_to_your_deck")}
           </button>
           <button className="button primary" disabled={busy} onClick={onAgain}>
-            Practise again
+            {tr("results.practise_again")}
             <ArrowRight size={17} />
           </button>
         </div>
@@ -2635,8 +2832,10 @@ function Results({
         ))}
       </div>
       <div className="section-heading">
-        <h2>Reflect & remember</h2>
-        <span>Includes repeated attempts during Learn and Cram.</span>
+        <h2>{tr("results.reflect_remember")}</h2>
+        <span>
+          {tr("results.includes_repeated_attempts_during_learn_and_cram")}
+        </span>
       </div>
       {r.answers.map((a, i) => (
         <details
@@ -2658,21 +2857,23 @@ function Results({
               {a.question}
               <small>
                 {a.topic}
-                {a.selfAssessed ? " · Self-assessed" : ""}
-                {a.hintUsed ? " · Hint used" : ""}
-                {a.outdated ? " · Changed question, excluded from score" : ""}
+                {a.selfAssessed ? tr("results.self_assessed") : ""}
+                {a.hintUsed ? tr("results.hint_used") : ""}
+                {a.outdated
+                  ? tr("results.changed_question_excluded_from_score")
+                  : ""}
               </small>
             </span>
             <ChevronDown size={16} />
           </summary>
           <div className="result-answer-body">
-            <span className="eyebrow">YOUR ANSWER</span>
+            <span className="eyebrow">{tr("results.your_answer")}</span>
             <p>
               {typeof a.response === "string"
                 ? a.response
                 : JSON.stringify(a.response)}
             </p>
-            <span className="eyebrow">MODEL ANSWER</span>
+            <span className="eyebrow">{tr("app.model_answer")}</span>
             <p>{a.answer}</p>
             <p className="explanation">{a.explanation}</p>
             {a.rubric && (
@@ -2691,7 +2892,7 @@ function Results({
                     key={r}
                     onClick={() => onRate(a.index, r)}
                   >
-                    {r}
+                    {tr(`results.${r}` as MessageKey)}
                   </button>
                 ))}
               </div>
@@ -2701,7 +2902,7 @@ function Results({
               onClick={() => onEdit(a.questionId)}
             >
               <Pencil size={14} />
-              Correct this question
+              {tr("results.correct_this_question")}
             </button>
           </div>
         </details>
@@ -2761,14 +2962,15 @@ function StudyControlsPanel({
             onChange({ ...value, autoSubmitSingle: e.target.checked })
           }
         />
-        Submit single-choice answers immediately
+        {tr("controls.submit_single_choice_answers_immediately")}
       </label>
       <p className="small quiet">
-        Single choice uses answer buttons. Multiple-answer questions use
-        checkboxes and a Check button so you can finish choosing.
+        {tr(
+          "controls.single_choice_uses_answer_buttons_multiple_answer_questions_use",
+        )}
       </p>
       <label className="field">
-        Continue after feedback
+        {tr("controls.continue_after_feedback")}
         <select
           value={value.continueMode}
           onChange={(e) => {
@@ -2779,14 +2981,14 @@ function StudyControlsPanel({
             });
           }}
         >
-          <option value="key">Use one key</option>
-          <option value="any">Press any key</option>
-          <option value="button">Button only</option>
+          <option value="key">{tr("controls.use_one_key")}</option>
+          <option value="any">{tr("controls.press_any_key")}</option>
+          <option value="button">{tr("controls.button_only")}</option>
         </select>
       </label>
       {value.continueMode === "key" && (
         <div className="continue-key">
-          <span>Continue key</span>
+          <span>{tr("controls.continue_key")}</span>
           <button
             className="button secondary"
             onClick={() => setCapturing(true)}
@@ -2811,15 +3013,15 @@ function StudyControlsPanel({
             }}
           >
             {capturing
-              ? "Press your key…"
-              : keyLabel(value.continueKey) + " · Change"}
+              ? tr("controls.press_your_key")
+              : keyLabel(value.continueKey) + tr("controls.change")}
           </button>
         </div>
       )}
       <p className="small quiet">
-        Number keys choose answers. Enter checks typed or multiple-answer
-        responses; Shift+Enter adds a line. Tab, Escape and modifier shortcuts
-        remain available.
+        {tr(
+          "controls.number_keys_choose_answers_enter_checks_typed_or_multiple",
+        )}
       </p>
       <button
         className="text-button quiet"
@@ -2828,7 +3030,7 @@ function StudyControlsPanel({
           onChange({ ...defaultStudyControls });
         }}
       >
-        Restore default controls
+        {tr("controls.restore_default_controls")}
       </button>
     </div>
   );
@@ -2855,10 +3057,10 @@ function StudyControlsDialog({
         aria-labelledby="study-controls-title"
       >
         <div className="modal-head">
-          <h2 id="study-controls-title">Study controls</h2>
+          <h2 id="study-controls-title">{tr("common.study_controls")}</h2>
           <button
             className="icon-button"
-            aria-label="Close study controls"
+            aria-label={tr("controls.close_study_controls")}
             onClick={onClose}
           >
             <X size={20} />
@@ -2867,10 +3069,10 @@ function StudyControlsDialog({
         <StudyControlsPanel value={value} onChange={onChange} />
         <div className="modal-foot">
           <button className="text-button quiet" onClick={onReset}>
-            Reset learning
+            {tr("common.reset_learning")}
           </button>
           <button className="button primary" onClick={onClose}>
-            Done
+            {tr("common.done")}
           </button>
         </div>
       </div>
@@ -2908,7 +3110,7 @@ function ResetDialog({
           <h2 id="reset-title">{title}</h2>
           <button
             className="icon-button"
-            aria-label="Close reset"
+            aria-label={tr("reset.close_reset")}
             disabled={busy}
             onClick={onClose}
           >
@@ -2918,7 +3120,7 @@ function ResetDialog({
         {children}
         <button className="button secondary" disabled={busy} onClick={onBackup}>
           <Download size={16} />
-          Download progress backup
+          {tr("reset.download_progress_backup")}
         </button>
         <div className="modal-foot">
           <button
@@ -2926,14 +3128,14 @@ function ResetDialog({
             disabled={busy}
             onClick={onClose}
           >
-            Cancel
+            {tr("common.cancel")}
           </button>
           <button
             className="button primary"
             disabled={busy}
             onClick={onConfirm}
           >
-            {busy ? "Working…" : confirmLabel}
+            {busy ? tr("reset.working") : confirmLabel}
           </button>
         </div>
       </div>
@@ -2969,10 +3171,10 @@ function FlagDialog({
         aria-labelledby="flag-title"
       >
         <div className="modal-head">
-          <h2 id="flag-title">Flag question for review</h2>
+          <h2 id="flag-title">{tr("flag.flag_question_for_review")}</h2>
           <button
             className="icon-button"
-            aria-label="Close flag"
+            aria-label={tr("flag.close_flag")}
             disabled={busy}
             onClick={onClose}
           >
@@ -2980,30 +3182,27 @@ function FlagDialog({
           </button>
         </div>
         <p className="flag-prompt">{item.question.question}</p>
-        <p>
-          This question will be skipped in every study mode until you remove its
-          flag. Its existing progress is kept.
-        </p>
+        <p>{tr("flag.this_question_will_be_skipped_in_every_study_mode")}</p>
         <label className="field">
-          Review note
+          {tr("flag.review_note")}
           <textarea
             autoFocus
             rows={3}
             maxLength={20000}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="What is unclear, incorrect, or worth rewriting?"
+            placeholder={tr(
+              "flag.what_is_unclear_incorrect_or_worth_rewriting",
+            )}
           />
         </label>
         {dependents.length > 0 && (
           <>
-            <h3>
-              {dependents.length} follow-up question
-              {dependents.length === 1 ? "" : "s"}
-            </h3>
+            <h3>{tr("flag.followUps", { count: dependents.length })}</h3>
             <p>
-              Review the affected questions below. Hover over a prompt or expand
-              it to see its answer.
+              {tr(
+                "flag.review_the_affected_questions_below_hover_over_a_prompt",
+              )}
             </p>
             <div className="flag-dependents">
               {dependents.map((i) => (
@@ -3013,12 +3212,12 @@ function FlagDialog({
                     <small>
                       {i.question.id}
                       {i.question.depends_on?.includes(item.question.id)
-                        ? " · Direct follow-up"
-                        : " · Further downstream"}
+                        ? tr("flag.direct_follow_up")
+                        : tr("flag.further_downstream")}
                     </small>
                   </summary>
                   <p>
-                    <strong>Model answer</strong>
+                    <strong>{tr("common.model_answer")}</strong>
                     <br />
                     {i.question.answer}
                   </p>
@@ -3026,7 +3225,7 @@ function FlagDialog({
               ))}
             </div>
             <fieldset className="flag-policy">
-              <legend>What should happen to follow-ups?</legend>
+              <legend>{tr("flag.what_should_happen_to_follow_ups")}</legend>
               <label>
                 <input
                   type="radio"
@@ -3035,9 +3234,11 @@ function FlagDialog({
                   onChange={() => setAllow(false)}
                 />
                 <span>
-                  Keep them locked on this prerequisite
+                  {tr("flag.keep_them_locked_on_this_prerequisite")}
                   <small>
-                    Recommended while an incorrect foundation needs fixing.
+                    {tr(
+                      "flag.recommended_while_an_incorrect_foundation_needs_fixing",
+                    )}
                   </small>
                 </span>
               </label>
@@ -3049,12 +3250,11 @@ function FlagDialog({
                   onChange={() => setAllow(true)}
                 />
                 <span>
-                  Bypass this flagged prerequisite
+                  {tr("flag.bypass_this_flagged_prerequisite")}
                   <small>
-                    Follow-ups can appear when their other prerequisites are
-                    met. Downstream questions still require their own
-                    foundations. This does not mark the flagged question
-                    mastered.
+                    {tr(
+                      "flag.follow_ups_can_appear_when_their_other_prerequisites_are",
+                    )}
                   </small>
                 </span>
               </label>
@@ -3062,8 +3262,7 @@ function FlagDialog({
           </>
         )}
         <p className="small">
-          The flag and note travel with question-bank exports, so you or an
-          assistant can review them later.
+          {tr("flag.the_flag_and_note_travel_with_question_bank_exports")}
         </p>
         <div className="modal-foot">
           {item.question.flag && (
@@ -3072,7 +3271,7 @@ function FlagDialog({
               disabled={busy}
               onClick={() => onSave()}
             >
-              Remove flag
+              {tr("flag.remove_flag")}
             </button>
           )}
           <button
@@ -3080,7 +3279,7 @@ function FlagDialog({
             disabled={busy}
             onClick={onClose}
           >
-            Cancel
+            {tr("common.cancel")}
           </button>
           <button
             className="button primary"
@@ -3093,10 +3292,10 @@ function FlagDialog({
             }
           >
             {busy
-              ? "Saving…"
+              ? tr("app.saving")
               : item.question.flag
-                ? "Save flag"
-                : "Flag & skip"}
+                ? tr("flag.save_flag")
+                : tr("flag.flag_skip")}
           </button>
         </div>
       </div>
@@ -3156,22 +3355,25 @@ function Editor({
       >
         <div className="modal-head">
           <div>
-            <div className="eyebrow">KEEP YOUR MATERIAL ACCURATE</div>
+            <div className="eyebrow">
+              {tr("editor.keep_your_material_accurate")}
+            </div>
             <h2 id="editor-title">
-              {item.revision === 0 ? "Add question" : "Edit question"}
+              {item.revision === 0
+                ? tr("editor.add_question")
+                : tr("editor.edit_question")}
             </h2>
           </div>
           <button
             className="icon-button"
-            aria-label="Close editor"
+            aria-label={tr("editor.close_editor")}
             onClick={onClose}
           >
             <X size={20} />
           </button>
         </div>
         <p className="editor-note">
-          Changing the question or answer resets this objective’s progress and
-          excludes old attempts from scores.
+          {tr("editor.changing_the_question_or_answer_resets_this_objective_s")}
         </p>
         <div className="editor-tabs">
           <button
@@ -3184,12 +3386,14 @@ function Editor({
                   setAdvanced(false);
                   setError("");
                 } catch {
-                  setError("Fix the JSON before switching to the form.");
+                  setError(
+                    tr("editor.fix_the_json_before_switching_to_the_form"),
+                  );
                 }
               }
             }}
           >
-            Simple editor
+            {tr("editor.simple_editor")}
           </button>
           <button
             className={advanced ? "active" : ""}
@@ -3204,17 +3408,17 @@ function Editor({
               setAdvanced(true);
             }}
           >
-            All formats · JSON
+            {tr("editor.all_formats_json")}
           </button>
         </div>
         {error && (
           <p role="alert" className="field-error">
-            {error}
+            {<ErrorMessage message={error} />}
           </p>
         )}
         {advanced ? (
           <label className="field">
-            Complete question definition
+            {tr("editor.complete_question_definition")}
             <textarea
               className="code-input"
               rows={20}
@@ -3225,16 +3429,17 @@ function Editor({
         ) : (
           <div className="editor-fields">
             <fieldset className="prerequisite-picker">
-              <legend>Prerequisite questions</legend>
+              <legend>{tr("editor.prerequisite_questions")}</legend>
               <p>
-                Learn these first. Every selected question must be mastered
-                before this one unlocks. Topics are just groups.
+                {tr(
+                  "editor.learn_these_first_every_selected_question_must_be_mastered",
+                )}
               </p>
               <input
-                aria-label="Find prerequisite questions"
+                aria-label={tr("editor.find_prerequisite_questions")}
                 value={parentSearch}
                 onChange={(e) => setParentSearch(e.target.value)}
-                placeholder="Search questions, topics or IDs…"
+                placeholder={tr("editor.search_questions_topics_or_ids")}
               />
               <div className="prerequisite-options">
                 {items
@@ -3283,7 +3488,7 @@ function Editor({
                           <small>
                             {i.question.topic} · {i.question.id}
                             {cycle
-                              ? " · Would create a circular dependency"
+                              ? tr("editor.would_create_a_circular_dependency")
                               : ""}
                           </small>
                         </span>
@@ -3292,20 +3497,22 @@ function Editor({
                   })}
               </div>
               <small>
-                {parents.split(/[,\s]+/).filter(Boolean).length} selected ·
-                Empty selection means available immediately.
+                {parents.split(/[,\s]+/).filter(Boolean).length}{" "}
+                {tr(
+                  "editor.selected_empty_selection_means_available_immediately",
+                )}
               </small>
             </fieldset>
             <div className="field-row">
               <label className="field">
-                Topic
+                {tr("common.topic")}
                 <input
                   value={q.topic}
                   onChange={(e) => field("topic", e.target.value)}
                 />
               </label>
               <label className="field">
-                Concept
+                {tr("editor.concept")}
                 <input
                   value={q.concept}
                   onChange={(e) => field("concept", e.target.value)}
@@ -3313,7 +3520,7 @@ function Editor({
               </label>
             </div>
             <label className="field">
-              Question
+              {tr("common.question")}
               <textarea
                 rows={3}
                 value={q.question}
@@ -3321,7 +3528,7 @@ function Editor({
               />
             </label>
             <label className="field">
-              Model answer
+              {tr("common.model_answer")}
               <textarea
                 rows={3}
                 value={q.answer}
@@ -3329,7 +3536,7 @@ function Editor({
               />
             </label>
             <label className="field">
-              Explanation
+              {tr("common.explanation")}
               <textarea
                 rows={3}
                 value={q.explanation}
@@ -3337,22 +3544,25 @@ function Editor({
               />
             </label>
             <label className="field">
-              Optional hint
+              {tr("editor.optional_hint")}
               <textarea
                 rows={2}
                 value={q.hint ?? ""}
-                placeholder="A cue or a starting point, without giving away the answer"
+                placeholder={tr(
+                  "editor.a_cue_or_a_starting_point_without_giving_away",
+                )}
                 onChange={(e) => field("hint", e.target.value || undefined)}
               />
               <small>
-                Shown only when requested during open recall. Hint-assisted
-                answers do not build unaided mastery. Leave blank for no hint.
+                {tr(
+                  "editor.shown_only_when_requested_during_open_recall_hint_assisted",
+                )}
               </small>
             </label>
             {q.options && (
               <>
                 <label className="field">
-                  Choices · one per line
+                  {tr("editor.choices_one_per_line")}
                   <textarea
                     rows={4}
                     value={q.options.join("\n")}
@@ -3362,7 +3572,7 @@ function Editor({
                   />
                 </label>
                 <label className="field">
-                  Correct choices · one per line
+                  {tr("editor.correct_choices_one_per_line")}
                   <textarea
                     rows={2}
                     value={(q.correct ?? [q.answer]).join("\n")}
@@ -3375,7 +3585,7 @@ function Editor({
             )}
             {q.acceptedAnswers && (
               <label className="field">
-                Accepted written answers · one per line
+                {tr("editor.accepted_written_answers_one_per_line")}
                 <textarea
                   rows={3}
                   value={q.acceptedAnswers.join("\n")}
@@ -3387,7 +3597,7 @@ function Editor({
             )}
             {q.requiredParts && (
               <label className="field">
-                Required parts · one per line, aliases separated by |
+                {tr("editor.required_parts_one_per_line_aliases_separated_by")}
                 <textarea
                   rows={3}
                   value={q.requiredParts.map((p) => p.join(" | ")).join("\n")}
@@ -3403,8 +3613,9 @@ function Editor({
               </label>
             )}
             <p className="small quiet">
-              Edit scenario variants, matching pairs and rubrics in “All
-              formats”.
+              {tr(
+                "editor.edit_scenario_variants_matching_pairs_and_rubrics_in_all",
+              )}
             </p>
           </div>
         )}
@@ -3414,14 +3625,14 @@ function Editor({
             disabled={busy}
             onClick={onClose}
           >
-            Cancel
+            {tr("common.cancel")}
           </button>
           <button className="button primary" disabled={busy} onClick={save}>
             {busy
-              ? "Saving…"
+              ? tr("app.saving")
               : item.revision === 0
-                ? "Add question"
-                : "Save correction"}
+                ? tr("editor.add_question")
+                : tr("editor.save_correction")}
             <Check size={16} />
           </button>
         </div>
@@ -3451,21 +3662,21 @@ function ShareDialog({
       >
         <div className="modal-head">
           <div>
-            <div className="eyebrow">TAKE YOUR LEARNING WITH YOU</div>
-            <h2 id="share-title">Share this quiz</h2>
+            <div className="eyebrow">
+              {tr("share.take_your_learning_with_you")}
+            </div>
+            <h2 id="share-title">{tr("share.share_this_quiz")}</h2>
           </div>
           <button
             className="icon-button"
-            aria-label="Close export"
+            aria-label={tr("share.close_export")}
             onClick={onClose}
           >
             <X size={20} />
           </button>
         </div>
         <p className="quiet">
-          A .recall.json file works on computer and mobile, without a server.
-          Your friend can add questions and send an updated copy back. IDs
-          prevent duplicates; dependencies stay intact.
+          {tr("share.a_recall_json_file_works_on_computer_and_mobile")}
         </p>
         <label className="storage-choice">
           <input
@@ -3473,16 +3684,18 @@ function ShareDialog({
             checked={progress}
             onChange={(e) => setProgress(e.target.checked)}
           />
-          Include my learning progress
+          {tr("share.include_my_learning_progress")}
         </label>
         <p className="small quiet">
           {progress
-            ? "Use this to move your own progress between devices. The recipient can choose whether to restore it."
-            : "Questions only: your friend starts with their own progress. No server addresses, credentials or learning history are included."}
+            ? tr("share.use_this_to_move_your_own_progress_between_devices")
+            : tr(
+                "share.questions_only_your_friend_starts_with_their_own_progress",
+              )}
         </p>
         <div className="modal-foot">
           <button className="button secondary" onClick={onClose}>
-            Cancel
+            {tr("common.cancel")}
           </button>
           <button
             className="button primary"
@@ -3490,7 +3703,7 @@ function ShareDialog({
             onClick={() => onExport(progress)}
           >
             <Download size={16} />
-            {busy ? "Preparing…" : "Save quiz file"}
+            {busy ? tr("share.preparing") : tr("share.save_quiz_file")}
           </button>
         </div>
       </div>
@@ -3530,11 +3743,11 @@ function ImportDialog({
     if (!file) return;
     setError("");
     if (!file.name.endsWith(".json")) {
-      setError("Use the CLI for CSV or TSV imports. This dialog accepts JSON.");
+      setError(tr("import.use_the_cli_for_csv_or_tsv_imports_this"));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("Choose a file smaller than 5 MB.");
+      setError(tr("import.choose_a_file_smaller_than_5_mb"));
       return;
     }
     setRaw(await file.text());
@@ -3564,25 +3777,26 @@ function ImportDialog({
       >
         <div className="modal-head">
           <div>
-            <div className="eyebrow">BRING SOMETHING TO LEARN</div>
-            <h2 id="import-title">Add a question bank</h2>
+            <div className="eyebrow">
+              {tr("import.bring_something_to_learn")}
+            </div>
+            <h2 id="import-title">{tr("import.add_a_question_bank")}</h2>
           </div>
           <button
             className="icon-button"
-            aria-label="Close import"
+            aria-label={tr("import.close_import")}
             onClick={onClose}
           >
             <X size={20} />
           </button>
         </div>
         <p className="quiet">
-          Import a shared .recall.json file or a plain JSON bank. Matching IDs
-          update existing questions. Preview changes before applying them.
+          {tr("import.import_a_shared_recall_json_file_or_a_plain")}
         </p>
         <label className="file-drop">
           <Upload size={25} />
-          <strong>Choose a JSON file</strong>
-          <span>or paste your bank below</span>
+          <strong>{tr("import.choose_a_json_file")}</strong>
+          <span>{tr("import.or_paste_your_bank_below")}</span>
           <input
             type="file"
             accept=".json,application/json"
@@ -3590,15 +3804,13 @@ function ImportDialog({
           />
         </label>
         <label className="field">
-          Question bank JSON
+          {tr("import.question_bank_json")}
           <textarea
             rows={8}
             className="code-input"
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
-            placeholder={
-              '{ "schemaVersion": 1, "deck": "My subject", "questions": [...] }'
-            }
+            placeholder={tr("import.example")}
           />
         </label>
         {hasProgress && (
@@ -3610,22 +3822,33 @@ function ImportDialog({
               onChange={(e) => setRestoreProgress(e.target.checked)}
             />
             {personal
-              ? "Restore progress from this file (replace progress for matching questions)"
-              : "This file includes progress. Use a device-only workspace to restore it; server imports use questions only."}
+              ? tr(
+                  "import.restore_progress_from_this_file_replace_progress_for_matching",
+                )
+              : tr(
+                  "import.this_file_includes_progress_use_a_device_only_workspace",
+                )}
           </label>
         )}
         {preview && (
           <div className="import-preview" role="status">
-            <strong>Review import</strong>
+            <strong>{tr("import.review_import")}</strong>
             <p>
-              {preview.created} added · {preview.updated} updated ·{" "}
-              {preview.unchanged} unchanged · {preview.archived} archived
+              {preview.created} {tr("import.added")}
+              {preview.updated} {tr("import.updated")} {preview.unchanged}{" "}
+              {tr("import.unchanged")}
+              {preview.archived} {tr("import.archived")}
             </p>
             <p>
-              {preview.reviewReset} objectives will have progress reset
+              {preview.reviewReset}{" "}
+              {tr("import.objectives_will_have_progress_reset")}
               {restoreProgress
-                ? "; matching progress from this file will then be restored"
-                : ". Your existing progress is kept for unchanged questions."}
+                ? tr(
+                    "import.matching_progress_from_this_file_will_then_be_restored",
+                  )
+                : tr(
+                    "import.your_existing_progress_is_kept_for_unchanged_questions",
+                  )}
             </p>
           </div>
         )}
@@ -3635,23 +3858,29 @@ function ImportDialog({
             checked={replace}
             onChange={(e) => setReplace(e.target.checked)}
           />
-          Replace this deck: archive questions absent from the file
+          {tr(
+            "import.replace_this_deck_archive_questions_absent_from_the_file",
+          )}
         </label>
         {error && (
           <p className="field-error" role="alert">
-            {error}
+            {<ErrorMessage message={error} />}
           </p>
         )}
         <div className="modal-foot">
           <button className="button secondary" onClick={onClose}>
-            Cancel
+            {tr("common.cancel")}
           </button>
           <button
             className="button primary"
             disabled={busy || !raw.trim()}
             onClick={() => void submit()}
           >
-            {busy ? "Checking…" : preview ? "Apply import" : "Preview import"}
+            {busy
+              ? tr("app.checking")
+              : preview
+                ? tr("common.apply_import")
+                : tr("common.preview_import")}
             <ArrowRight size={17} />
           </button>
         </div>

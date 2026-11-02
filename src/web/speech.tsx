@@ -1,3 +1,4 @@
+import { tr, useLanguage } from "./i18n.ts";
 import React, { useEffect, useRef, useState } from "react";
 import { Volume2, Square } from "lucide-react";
 
@@ -6,11 +7,12 @@ export const localVoices = (voices: SpeechSynthesisVoice[]) =>
   voices.filter((v) => v.localService);
 export function ReadAloud({
   text,
-  label = "Read aloud",
+  label = tr("speech.readAloud"),
 }: {
   text: string;
   label?: string;
 }) {
+  useLanguage();
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [speaking, setSpeaking] = useState(false);
   const utterance = useRef<SpeechSynthesisUtterance | null>(null);
@@ -76,13 +78,13 @@ export function ReadAloud({
       disabled={!voices.length}
       title={
         voices.length
-          ? "Uses a voice installed on this device"
-          : "No local speech voice is available in this browser"
+          ? tr("speech.uses_a_voice_installed_on_this_device")
+          : tr("speech.no_local_speech_voice_is_available_in_this_browser")
       }
       onClick={toggle}
     >
       {speaking ? <Square size={15} /> : <Volume2 size={16} />}{" "}
-      {speaking ? "Stop reading" : label}
+      {speaking ? tr("speech.stop_reading") : label}
     </button>
   );
 }

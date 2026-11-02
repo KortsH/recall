@@ -1,3 +1,4 @@
+import { tr, useLanguage } from "./i18n.ts";
 import React, { useEffect, useState } from "react";
 import {
   Check,
@@ -25,7 +26,7 @@ import {
 
 type Layout = "list" | "grid2" | "grid3" | "compact";
 const label = (topic: string) =>
-  isUnassigned(topic) ? "Uncategorized" : topic;
+  isUnassigned(topic) ? tr("library.uncategorized") : topic;
 function preferences(): { layout: Layout; sidebar: boolean } {
   try {
     const p = JSON.parse(
@@ -63,6 +64,7 @@ export function QuestionLibrary({
   onMove?: (moves: TopicMove[], message: string) => Promise<boolean>;
   onFlag?: (item: Item) => void;
 }) {
+  useLanguage();
   const [prefs, setPrefs] = useState(preferences);
   const [draftTopics, setDraftTopics] = useState<string[]>([]);
   const [newTopic, setNewTopic] = useState("");
@@ -127,7 +129,10 @@ export function QuestionLibrary({
         fromTopic: byId.get(id)!.question.topic,
       }));
     if (!moves.length || busy) return;
-    const message = `Moved ${moves.length} question${moves.length === 1 ? "" : "s"} to ${label(target)}.`;
+    const message = tr("library.moved_question_to", {
+      count: moves.length,
+      value: label(target),
+    });
     const saved = onMove
       ? await onMove(moves, message)
       : moves.length === 1 &&
@@ -181,7 +186,10 @@ export function QuestionLibrary({
             parent.question.id,
           ],
         },
-        `Prerequisite added: “${source.question.question}” now requires “${parent.question.question}”.`,
+        tr("library.prerequisite_added_now_requires", {
+          question: source.question.question,
+          prerequisite: parent.question.question,
+        }),
       )
     )
       setUndo(source.question);
@@ -190,19 +198,19 @@ export function QuestionLibrary({
     if (!undo || busy) return;
     if (Array.isArray(undo)) {
       const saved = onMove
-        ? await onMove(undo, "Organization change undone.")
+        ? await onMove(undo, tr("library.organization_change_undone"))
         : undo.length === 1 &&
           byId.has(undo[0].id) &&
           (await onUpdate(
             { ...byId.get(undo[0].id)!.question, topic: undo[0].topic },
-            "Organization change undone.",
+            tr("library.organization_change_undone"),
           ));
       if (saved) setUndo(null);
     } else if (
       byId.has(undo.id) &&
       (await onUpdate(
         { ...byId.get(undo.id)!.question, depends_on: undo.depends_on },
-        "Organization change undone.",
+        tr("library.organization_change_undone"),
       ))
     )
       setUndo(null);
@@ -225,7 +233,7 @@ export function QuestionLibrary({
       <section
         className={`library-topic ${aside ? "uncategorized-topic" : ""} ${over === `topic:${t}` ? "drop-target" : ""}`}
         key={t}
-        aria-label={`${t} questions`}
+        aria-label={tr("library.questions", { value: t })}
         onDragOver={(e) => {
           if (dragging.length && e.target === e.currentTarget) {
             e.preventDefault();
@@ -256,10 +264,13 @@ export function QuestionLibrary({
             <ChevronDown className={closed ? "collapsed" : ""} size={18} />
             <h2>{label(t)}</h2>
             <span>
-              {qs.length} questions{locked ? ` · ${locked} locked` : ""}
+              {qs.length} {tr("library.questions_2")}
+              {locked ? tr("library.locked", { value: locked }) : ""}
             </span>
           </button>
-          <span className="topic-drop-label">Drop here to move</span>
+          <span className="topic-drop-label">
+            {tr("library.drop_here_to_move")}
+          </span>
         </div>
         {!closed && (
           <div className="question-list">
@@ -293,7 +304,9 @@ export function QuestionLibrary({
                   <input
                     type="checkbox"
                     className="question-select"
-                    aria-label={`Select ${i.question.id}`}
+                    aria-label={tr("library.select", {
+                      question: i.question.id,
+                    })}
                     checked={selected.includes(i.question.id)}
                     disabled={busy}
                     onChange={(e) =>
@@ -343,16 +356,21 @@ export function QuestionLibrary({
                         {i.question.id}
                         <span>·</span>
                         {i.question.flag
-                          ? "Flagged"
+                          ? tr("library.flagged")
                           : !state.unlocked
-                            ? "Locked"
+                            ? tr("common.locked")
                             : i.progress.mastered
-                              ? "Mastered"
-                              : "Available"}
-                        <span>·</span>Level {i.question.difficulty}
+                              ? tr("common.mastered")
+                              : tr("common.available")}
+                        <span>·</span>
+                        {tr("library.level")}
+                        {i.question.difficulty}
                         {(i.question.hint ||
                           i.question.variants.some((v) => v.hint)) && (
-                          <Lightbulb size={13} aria-label="Has hint" />
+                          <Lightbulb
+                            size={13}
+                            aria-label={tr("library.has_hint")}
+                          />
                         )}
                       </span>
                       <h3>{i.question.question}</h3>
@@ -366,7 +384,7 @@ export function QuestionLibrary({
                         <div className="dependency-chips">
                           <span>
                             <Link2 size={12} />
-                            Requires
+                            {tr("library.requires")}
                           </span>
                           {state.depends_on.map((id) => (
                             <span
@@ -376,7 +394,7 @@ export function QuestionLibrary({
                                   : "ready"
                               }
                               key={id}
-                              title={`${id}: ${byId.get(id)?.question.question ?? "Missing question"}`}
+                              title={`${id}: ${byId.get(id)?.question.question ?? tr("library.missing_question")}`}
                             >
                               {byId.get(id)?.question.question ?? id}
                             </span>
@@ -385,7 +403,9 @@ export function QuestionLibrary({
                       )}
                       {over === i.question.id && (
                         <span className="drop-caption">
-                          Make the dragged question depend on this one
+                          {tr(
+                            "library.make_the_dragged_question_depend_on_this_one",
+                          )}
                         </span>
                       )}
                     </div>
@@ -394,8 +414,8 @@ export function QuestionLibrary({
                   {onFlag && (
                     <button
                       className={`question-flag-button ${i.question.flag ? "flagged" : ""}`}
-                      title={i.question.flag?.note ?? "Flag for review"}
-                      aria-label={`${i.question.flag ? "Review flag" : "Flag"} ${i.question.id}`}
+                      title={i.question.flag?.note ?? tr("app.flag_for_review")}
+                      aria-label={`${i.question.flag ? tr("library.review_flag") : tr("library.flag")} ${i.question.id}`}
                       disabled={busy}
                       onClick={() => onFlag(i)}
                     >
@@ -407,9 +427,9 @@ export function QuestionLibrary({
             })}
             {!qs.length && (
               <div className="empty-topic">
-                Drop questions on this heading, or select questions and use
-                Move. Topics organize questions; they do not create
-                prerequisites.
+                {tr(
+                  "library.drop_questions_on_this_heading_or_select_questions_and",
+                )}
               </div>
             )}
           </div>
@@ -423,14 +443,14 @@ export function QuestionLibrary({
         <div
           className="library-layouts"
           role="group"
-          aria-label="Library layout"
+          aria-label={tr("library.library_layout")}
         >
           {(
             [
-              ["list", "Topic list", List],
-              ["grid2", "2-column grid", Grid2X2],
-              ["grid3", "3-column grid", Grid3X3],
-              ["compact", "Compact list", Rows3],
+              ["list", tr("library.topic_list"), List],
+              ["grid2", tr("library.2_column_grid"), Grid2X2],
+              ["grid3", tr("library.3_column_grid"), Grid3X3],
+              ["compact", tr("library.compact_list"), Rows3],
             ] as const
           ).map(([id, name, Icon]) => (
             <button
@@ -451,10 +471,14 @@ export function QuestionLibrary({
             checked={prefs.sidebar}
             onChange={(e) => setPrefs({ ...prefs, sidebar: e.target.checked })}
           />
-          Uncategorized sidebar
+          {tr("library.uncategorized_sidebar")}
         </label>
       </div>
-      <div className="topic-tabs" role="tablist" aria-label="Question topics">
+      <div
+        className="topic-tabs"
+        role="tablist"
+        aria-label={tr("library.question_topics")}
+      >
         {["", ...topics].map((t) => (
           <button
             key={t}
@@ -462,7 +486,7 @@ export function QuestionLibrary({
             aria-selected={topic === t}
             onClick={() => onTopic(t)}
           >
-            {t ? label(t) : "All topics"}
+            {t ? label(t) : tr("common.all_topics")}
             <span>
               {t
                 ? items.filter((i) => i.question.topic === t).length
@@ -472,96 +496,98 @@ export function QuestionLibrary({
         ))}
         <button className="add-topic" onClick={() => setAdding(!adding)}>
           <Plus size={14} />
-          New topic
+          {tr("library.new_topic")}
         </button>
       </div>
       {adding && (
         <form className="new-topic-form" onSubmit={addTopic}>
           <label>
-            Topic name
+            {tr("library.topic_name")}
             <input
               autoFocus
               maxLength={100}
               value={newTopic}
               onChange={(e) => setNewTopic(e.target.value)}
-              placeholder="e.g. Usage Control"
+              placeholder={tr("library.e_g_usage_control")}
             />
           </label>
           <button className="button primary" disabled={!newTopic.trim()}>
-            Create topic
+            {tr("library.create_topic")}
           </button>
         </form>
       )}
       <div className="library-filters">
         <label>
-          Flags
+          {tr("library.flags")}
           <select
-            aria-label="Filter by flags"
+            aria-label={tr("library.filter_by_flags")}
             value={flagged}
             onChange={(e) => setFlagged(e.target.value)}
           >
-            <option value="all">All questions</option>
-            <option value="with">Flagged for review</option>
-            <option value="without">Not flagged</option>
+            <option value="all">{tr("library.all_questions")}</option>
+            <option value="with">{tr("library.flagged_for_review")}</option>
+            <option value="without">{tr("library.not_flagged")}</option>
           </select>
         </label>
         <label>
-          Status
+          {tr("library.status")}
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            aria-label="Filter by learning status"
+            aria-label={tr("library.filter_by_learning_status")}
           >
-            <option value="all">Any status</option>
-            <option value="unseen">Unseen</option>
-            <option value="learning">Learning</option>
-            <option value="mastered">Mastered</option>
-            <option value="locked">Locked</option>
-            <option value="available">Available</option>
+            <option value="all">{tr("library.any_status")}</option>
+            <option value="unseen">{tr("common.unseen")}</option>
+            <option value="learning">{tr("common.learning")}</option>
+            <option value="mastered">{tr("common.mastered")}</option>
+            <option value="locked">{tr("common.locked")}</option>
+            <option value="available">{tr("common.available")}</option>
           </select>
         </label>
         <label>
-          Difficulty
+          {tr("common.difficulty")}
           <select
             value={difficulty}
             onChange={(e) => setDifficulty(e.target.value)}
-            aria-label="Filter by difficulty"
+            aria-label={tr("library.filter_by_difficulty")}
           >
-            <option value="">Any level</option>
+            <option value="">{tr("library.any_level")}</option>
             {[1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
-                Level {n}
+                {tr("library.level")}
+                {n}
               </option>
             ))}
           </select>
         </label>
         <label>
-          Hints
+          {tr("library.hints")}
           <select
             value={hints}
             onChange={(e) => setHints(e.target.value)}
-            aria-label="Filter by hints"
+            aria-label={tr("library.filter_by_hints")}
           >
-            <option value="all">Any</option>
-            <option value="with">With a hint</option>
-            <option value="without">Without hints</option>
+            <option value="all">{tr("library.any")}</option>
+            <option value="with">{tr("library.with_a_hint")}</option>
+            <option value="without">{tr("library.without_hints")}</option>
           </select>
         </label>
         <label>
-          Sort
+          {tr("library.sort")}
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            aria-label="Sort questions"
+            aria-label={tr("library.sort_questions")}
           >
-            <option value="original">Bank order</option>
-            <option value="prompt">Question A–Z</option>
-            <option value="id">ID A–Z</option>
-            <option value="difficulty">Difficulty</option>
+            <option value="original">{tr("library.bank_order")}</option>
+            <option value="prompt">{tr("library.question_a_z")}</option>
+            <option value="id">{tr("library.id_a_z")}</option>
+            <option value="difficulty">{tr("common.difficulty")}</option>
           </select>
         </label>
         <span className="library-visible-count" role="status">
-          {visible.length} of {items.length} questions
+          {visible.length} {tr("library.of")}
+          {items.length} {tr("library.questions_2")}
         </span>
         <button
           className="text-button"
@@ -573,7 +599,7 @@ export function QuestionLibrary({
             onTopic("");
           }}
         >
-          Clear filters
+          {tr("library.clear_filters")}
         </button>
       </div>
       <div className="library-selection-bar">
@@ -591,15 +617,17 @@ export function QuestionLibrary({
               )
             }
           />
-          Select visible
+          {tr("library.select_visible")}
         </label>
-        <span>{selected.length} selected</span>
+        <span>
+          {selected.length} {tr("library.selected")}
+        </span>
         <select
-          aria-label="Move selected questions to topic"
+          aria-label={tr("library.move_selected_questions_to_topic")}
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
         >
-          <option value="">Move to topic…</option>
+          <option value="">{tr("library.move_to_topic")}</option>
           {topics.map((t) => (
             <option value={t} key={t}>
               {label(t)}
@@ -611,27 +639,28 @@ export function QuestionLibrary({
           disabled={busy || !selected.length || !destination}
           onClick={() => void move(selected, destination)}
         >
-          Move selected
+          {tr("library.move_selected")}
         </button>
         {!!selected.length && (
           <button className="text-button" onClick={() => setSelected([])}>
-            Clear selection
+            {tr("library.clear_selection")}
           </button>
         )}
       </div>
       <div className="library-hint">
         <Link2 size={16} />
         <p>
-          Drag one question onto its prerequisite. Drag selected questions onto
-          a topic heading to move them together. On your phone, select and move,
-          or use <strong>Edit → Prerequisite questions</strong>.
+          {tr(
+            "library.drag_one_question_onto_its_prerequisite_drag_selected_questions",
+          )}
+          <strong>{tr("library.edit_prerequisite_questions")}</strong>.
         </p>
       </div>
       {undo && (
         <div className="library-undo">
-          Organization updated.
+          {tr("library.organization_updated")}
           <button disabled={busy} onClick={() => void undoChange()}>
-            Undo last change
+            {tr("library.undo_last_change")}
           </button>
         </div>
       )}
@@ -642,13 +671,16 @@ export function QuestionLibrary({
             .map((t) => renderGroup(t))}
           {!groups.length && (
             <div className="empty-state">
-              <h2>No matching questions.</h2>
-              <p>Try another topic or filter.</p>
+              <h2>{tr("library.no_matching_questions")}</h2>
+              <p>{tr("library.try_another_topic_or_filter")}</p>
             </div>
           )}
         </div>
         {sidebar && (
-          <aside className="library-inbox" aria-label="Uncategorized questions">
+          <aside
+            className="library-inbox"
+            aria-label={tr("library.uncategorized_questions")}
+          >
             {renderGroup(UNASSIGNED_TOPIC, true)}
           </aside>
         )}

@@ -16,6 +16,9 @@ Requested for **1 November 2026**. The preview implementation is complete; relea
 
 ## Other follow-up
 
+- [x] Bundled English/Estonian interface catalogs, live device-local language selection, Android setup translations and contributor translation checks/documentation.
+- [ ] Community translations beyond English/Estonian and review by native-speaking contributors; physical-device accessibility and voice-pack checks in each language.
+
 - [x] Device-local Light/Dark/System appearance, immediate header toggle and consistent lowercase r-and-dot branding across SVG, PWA icons and Android source.
 - [x] Explicit read-aloud using installed local browser voices, with cancellation on card changes and no answer reading before reveal.
 - [ ] Browser-integrated speech-to-text: detect on-device recognition/language-pack availability, require explicit microphone action, preview dictated text before submission and disclose any remote processing before enabling a fallback. Test physical Android/iPhone and desktop accessibility. Until then use the device keyboard or OS dictation in the answer field.

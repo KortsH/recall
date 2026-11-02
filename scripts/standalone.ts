@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { copyFile, readFile, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  readFile,
+  writeFile,
+  mkdir,
+  readdir,
+} from "node:fs/promises";
 const native = process.argv.includes("--android");
 const directory = native
   ? "mobile/android/app/build/generated/assets/recall/www"
@@ -19,9 +25,17 @@ const result = spawnSync(
   },
 );
 if (result.status !== 0) process.exit(result.status ?? 1);
+if (native) {
+  await mkdir(directory + "/locales", { recursive: true });
+  for (const file of (await readdir("src/web/locales")).filter((f) =>
+    f.endsWith(".json"),
+  ))
+    await copyFile("src/web/locales/" + file, directory + "/locales/" + file);
+}
 await copyFile("LICENSE", `${directory}/LICENSE.txt`);
 let notices = "Recall bundles these open-source dependencies.\n\n";
 for (const name of [
+  "i18next",
   "react",
   "react-dom",
   "lucide-react",
