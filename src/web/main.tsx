@@ -31,6 +31,8 @@ import {
   type ThemePreference,
 } from "./theme.ts";
 import { ReadAloud } from "./speech.tsx";
+import { Dictation } from "./dictation.tsx";
+import "./dictation.css";
 import { version as appVersion } from "../../package.json";
 import {
   saveAnswerDraft,
@@ -2563,6 +2565,21 @@ function App() {
                               placeholder={tr(
                                 "app.recall_it_in_your_own_words",
                               )}
+                            />
+                            <Dictation
+                              key={`${session.id}:${session.cursor}:${card.revision}`}
+                              draftKey={`${session.id}:${session.cursor}:${card.revision}`}
+                              disabled={busy}
+                              onInsert={(text) => {
+                                setResponse((previous: string) =>
+                                  previous.trim()
+                                    ? `${previous.trimEnd()} ${text}`
+                                    : text,
+                                );
+                                inputRef.current?.focus({
+                                  preventScroll: true,
+                                });
+                              }}
                             />
                             {session.mode !== "test" && (
                               <button

@@ -1,0 +1,51 @@
+.dictation {
+  margin: 10px 0;
+  font-size: 12px;
+}
+.dictation-tools {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.dictation-tools > button,
+.dictation-preview > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dictation summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.dictation details label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  flex-wrap: wrap;
+}
+.dictation select {
+  padding: 6px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.dictation .dictation-privacy {
+  font-size: 11px;
+  margin: 6px 0;
+}
+.dictation-preview {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.dictation-preview textarea {
+  margin-top: 6px;
+  width: 100%;
+}
+.dictation-preview > button {
+  margin: 4px 12px 0 0;
+}

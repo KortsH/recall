@@ -57,6 +57,7 @@ export function ReadAloud({
         v.lang.toLowerCase().startsWith(language.split("-")[0].toLowerCase()),
       ) ?? voices[0];
     if (!voice) return;
+    window.dispatchEvent(new Event("recall-stop-dictation"));
     window.dispatchEvent(new Event("recall-stop-reading"));
     synth.cancel();
     const next = new SpeechSynthesisUtterance(text);

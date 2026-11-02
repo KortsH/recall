@@ -21,7 +21,8 @@ Requested for **1 November 2026**. The personal-use preview is complete. Formal 
 
 - [x] Device-local Light/Dark/System appearance, immediate header toggle and consistent lowercase r-and-dot branding across SVG, PWA icons and Android source.
 - [x] Explicit read-aloud using installed local browser voices, with cancellation on card changes and no answer reading before reveal.
-- [ ] Browser-integrated speech-to-text: detect on-device recognition/language-pack availability, require explicit microphone action, preview dictated text before submission and disclose any remote processing before enabling a fallback. Test physical Android/iPhone and desktop accessibility. Until then use the device keyboard or OS dictation in the answer field.
+- [x] Browser-integrated speech-to-text for written answers: explicit microphone control, on-device default/availability checks, optional disclosed browser-service processing, language selection and editable transcript insertion. No transcription backend or automatic submission. Unsupported browsers/WebViews retain keyboard/OS dictation.
+- [ ] Physical-device speech-recognition quality, language-pack and accessibility checks across browsers; embedded WebViews may not expose recognition.
 - [x] Refresh Windows/Android preview binaries with library layouts, flags, hints, dark mode, consistent branding and local voice controls (v0.4.0-preview.1).
 - [x] App-update notices with explicit Save & reload, draft/reveal restoration and no automatic study reload. Settings shows the UI version and offers a manual update check.
 - [x] Android saved-state acknowledgement before native reload/workspace changes or incoming attachments; explicit choices for pending progress, recovery export and older-page fallback. Physical-device verification remains below.
