@@ -18,9 +18,15 @@ export function filterQuestions(items: Item[], f: QuestionFilters = {}) {
     throw new Error("Flag filter must be with or without");
   if (
     f.status &&
-    !["all", "unseen", "learning", "mastered", "locked", "available"].includes(
-      f.status,
-    )
+    ![
+      "all",
+      "unseen",
+      "unlearned",
+      "learning",
+      "mastered",
+      "locked",
+      "available",
+    ].includes(f.status)
   )
     throw new Error("Unknown learning status");
   if (f.difficulty && !/^[1-5]$/.test(f.difficulty))
@@ -62,9 +68,11 @@ export function filterQuestions(items: Item[], f: QuestionFilters = {}) {
               ? unlocked && !q.flag
               : f.status === "mastered"
                 ? p.mastered
-                : f.status === "unseen"
-                  ? !p.attempts
-                  : p.attempts > 0 && !p.mastered))
+                : f.status === "unlearned"
+                  ? !p.mastered
+                  : f.status === "unseen"
+                    ? !p.attempts
+                    : p.attempts > 0 && !p.mastered))
       );
     })
     .sort((a, b) =>

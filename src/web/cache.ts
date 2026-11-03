@@ -58,6 +58,8 @@ interface State extends Snapshot {
   draftRevision?: number;
   dirty: Record<string, boolean>;
   resetConflicts?: string[];
+  sessionConflicts?: string[];
+  recoveryArchive?: Session[];
 }
 let state: State | undefined;
 let chain: Promise<unknown> = Promise.resolve();
@@ -94,6 +96,7 @@ export const downloadStatus = () => ({
       : 0,
   pendingSessions:
     !personalMode() && state ? Object.keys(state.dirty).length : 0,
+  archivedSessions: state?.recoveryArchive?.length ?? 0,
   pendingEdits: !personalMode() ? (state?.edits?.length ?? 0) : 0,
   editConflict: state?.editConflict,
   error: lastError,
@@ -501,12 +504,24 @@ async function syncInternal(s: State) {
         >;
       }>("/sync", current);
     } catch (error) {
-      if ((error as Error & { code?: string }).code === "LEARNING_RESET") {
+      const code = (error as Error & { code?: string }).code;
+      if (code === "LEARNING_RESET" || code === "SESSION_CONFLICT") {
+        if (!current.answers.length) {
+          delete s.dirty[id];
+          delete s.sessions[id];
+          await persist();
+          continue;
+        }
         s.resetConflicts = [
           ...new Set([...(s.resetConflicts ?? []), current.deckId]),
         ];
-        lastError = (error as Error).message;
+        if (code === "SESSION_CONFLICT")
+          s.sessionConflicts = [
+            ...new Set([...(s.sessionConflicts ?? []), current.deckId]),
+          ];
+        lastError = tr("sync.resetConflict");
         await persist();
+        continue;
       }
       throw error;
     }
@@ -527,6 +542,15 @@ async function syncInternal(s: State) {
     if (result.rejected.length) lastError = tr("cache.serverQuestionsChanged");
     await persist();
   }
+  const pendingDecks = new Set(
+    Object.keys(s.dirty).map((id) => s.sessions[id].deckId),
+  );
+  s.resetConflicts = (s.resetConflicts ?? []).filter((id) =>
+    pendingDecks.has(id),
+  );
+  s.sessionConflicts = (s.sessionConflicts ?? []).filter((id) =>
+    pendingDecks.has(id),
+  );
 }
 export const syncDownloads = () =>
   serial(async () => {
@@ -557,17 +581,34 @@ export const refreshDownloads = () =>
     const s = await load();
     await syncInternal(s);
     const snapshot = await serverApi<Snapshot>("/snapshot");
+    const blocked = new Set(s.resetConflicts ?? []);
+    const pending = Object.fromEntries(
+      Object.entries(s.sessions).filter(([id]) => s.dirty[id]),
+    );
     state = {
       ...s,
       ...snapshot,
       sessions: Object.fromEntries(
-        Object.entries({ ...s.sessions, ...snapshot.sessions }).filter(
-          ([, session]) => snapshot.decks.some((d) => d.id === session.deckId),
+        Object.entries({
+          ...s.sessions,
+          ...snapshot.sessions,
+          ...pending,
+        }).filter(([, session]) =>
+          snapshot.decks.some((d) => d.id === session.deckId),
         ),
       ),
-      dirty: {},
+      decks: snapshot.decks.map((d) =>
+        blocked.has(d.id)
+          ? (s.decks.find((local) => local.id === d.id) ?? d)
+          : d,
+      ),
+      items: {
+        ...snapshot.items,
+        ...Object.fromEntries([...blocked].map((id) => [id, s.items[id]])),
+      },
+      dirty: s.dirty,
     };
-    lastError = "";
+    lastError = blocked.size ? tr("sync.resetConflict") : "";
     await persist();
   });
 /** Explicitly discard only evidence invalidated by a newer server learning reset. */
@@ -584,7 +625,13 @@ export const discardResetEvidence = () =>
       if (
         !latest ||
         !local ||
-        (latest.learning_epoch ?? 0) <= (local.learning_epoch ?? 0)
+        (!(s.sessionConflicts ?? []).includes(id) &&
+          !Object.keys(s.dirty).some(
+            (key) =>
+              s.sessions[key].deckId === id &&
+              (s.sessions[key].learningEpoch ?? 0) !==
+                (latest.learning_epoch ?? 0),
+          ))
       )
         throw new Error(
           tr("cache.the_server_reset_could_not_be_verified_pending_answers"),
@@ -606,6 +653,7 @@ export const discardResetEvidence = () =>
       s.recent[id] = snapshot.recent[id];
     }
     s.resetConflicts = [];
+    s.sessionConflicts = [];
     lastError = "";
     await persist();
   });
@@ -617,7 +665,12 @@ export const exportPendingRecovery = (deckId?: string) =>
     const sessions = Object.keys(s.dirty)
       .map((id) => s.sessions[id])
       .filter((session) => session && (!deckId || session.deckId === deckId));
-    if (!sessions.length)
+    if (
+      !sessions.length &&
+      !(s.recoveryArchive ?? []).some(
+        (session) => !deckId || session.deckId === deckId,
+      )
+    )
       throw new Error(tr("cache.no_pending_sessions_to_export"));
     return createRecovery(
       s.decks.map((d) => ({
@@ -629,8 +682,67 @@ export const exportPendingRecovery = (deckId?: string) =>
           questions: (s.items[d.id] ?? []).map((i) => i.question),
         },
       })),
-      sessions,
+      [
+        ...sessions,
+        ...(s.recoveryArchive ?? []).filter(
+          (session) => !deckId || session.deckId === deckId,
+        ),
+      ],
     );
+  });
+/** Explicit snapshot restore with server compare-and-swap; old evidence stays archived/exportable. */
+export const restoreDeviceProgress = (
+  deckId: string,
+  input: Parameters<import("../server/store.ts").Store["restoreProgress"]>[1],
+) =>
+  serial(async () => {
+    const s = await load();
+    if (personalMode() || s.edits?.some((e) => e.request.deckId === deckId))
+      throw new Error(tr("sync.publishEdits"));
+    const result = await serverApi<any>(
+      `/decks/${deckId}/restore-progress`,
+      input,
+    );
+    if (input.apply) {
+      const snapshot = await serverApi<Snapshot>("/snapshot");
+      // Only retire the target deck after the acknowledged restore. Other outboxes stay untouched.
+      s.recoveryArchive = [
+        ...new Map(
+          [
+            ...(s.recoveryArchive ?? []),
+            ...Object.keys(s.dirty)
+              .map((id) => s.sessions[id])
+              .filter((session) => session.deckId === deckId),
+          ].map((session) => [session.id, session]),
+        ).values(),
+      ];
+      for (const [id, session] of Object.entries(s.sessions))
+        if (session.deckId === deckId) {
+          delete s.sessions[id];
+          delete s.dirty[id];
+        }
+      Object.assign(
+        s.decks.find((d) => d.id === deckId)!,
+        snapshot.decks.find((d) => d.id === deckId),
+      );
+      s.items[deckId] = snapshot.items[deckId];
+      s.recent[deckId] = snapshot.recent[deckId];
+      Object.assign(
+        s.sessions,
+        Object.fromEntries(
+          Object.entries(snapshot.sessions).filter(
+            ([, session]) => session.deckId === deckId,
+          ),
+        ),
+      );
+      s.resetConflicts = (s.resetConflicts ?? []).filter((id) => id !== deckId);
+      s.sessionConflicts = (s.sessionConflicts ?? []).filter(
+        (id) => id !== deckId,
+      );
+      lastError = "";
+      await persist();
+    }
+    return result;
   });
 /** Wait for local writes before a native navigation or explicit app reload. No network. */
 export const flushDeviceState = () =>

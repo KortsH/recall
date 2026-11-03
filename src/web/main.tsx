@@ -116,6 +116,7 @@ import {
   downloadStatus,
   exportPendingRecovery,
   discardResetEvidence,
+  restoreDeviceProgress,
   flushDeviceState,
 } from "./cache.ts";
 
@@ -209,6 +210,8 @@ function App() {
     [learnSize, setLearnSize] = useState(12),
     [minutes, setMinutes] = useState(0),
     [mode, setMode] = useState("learn");
+  const [libraryStatus, setLibraryStatus] = useState("all");
+  const [restoreProgressOpen, setRestoreProgressOpen] = useState(false);
   const [items, setItems] = useState<Item[]>([]),
     [search, setSearch] = useState(""),
     [editor, setEditor] = useState<Item | null>(null);
@@ -259,6 +262,7 @@ function App() {
       shareOpen ||
       resetRequest ||
       discardResetOpen ||
+      restoreProgressOpen ||
       controlsOpen
     ),
   };
@@ -617,6 +621,7 @@ function App() {
       shareOpen ||
       resetRequest ||
       discardResetOpen ||
+      restoreProgressOpen ||
       flagRequest ||
       controlsOpen
     )
@@ -647,6 +652,7 @@ function App() {
     shareOpen,
     resetRequest,
     discardResetOpen,
+    restoreProgressOpen,
     flagRequest,
     controlsOpen,
   ]);
@@ -678,6 +684,7 @@ function App() {
         shareOpen ||
         resetRequest ||
         discardResetOpen ||
+        restoreProgressOpen ||
         flagRequest ||
         controlsOpen ||
         !session
@@ -1140,16 +1147,37 @@ function App() {
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
+                    if (session?.card && !feedback)
+                      saveAnswerDraft(personalMode(), session, {
+                        response: String(response ?? ""),
+                        selected,
+                        pairs,
+                        ...(reveal ? { reveal } : {}),
+                      });
                     await refreshDownloads();
                     await refresh();
+                    if (session) {
+                      const latest = await api<SessionView>(
+                        `/sessions/${session.id}`,
+                      ).catch(() => null);
+                      if (
+                        !latest ||
+                        latest.cursor !== session.cursor ||
+                        latest.card?.revision !== session.card?.revision
+                      )
+                        resetAnswer();
+                      setSession(latest);
+                    }
                     if (deckId) {
                       setItems(await api<Item[]>(`/decks/${deckId}/questions`));
                       setRecent(await api<any[]>(`/decks/${deckId}/sessions`));
                     }
                     setNotice(
-                      tr(
-                        "app.progress_synced_and_downloaded_quizzes_refreshed",
-                      ),
+                      downloadStatus().resetConflicts.length
+                        ? tr("sync.resetConflict")
+                        : tr(
+                            "app.progress_synced_and_downloaded_quizzes_refreshed",
+                          ),
                     );
                   })
                 }
@@ -1204,12 +1232,28 @@ function App() {
               </button>
             </div>
           )}
-        {cache.error && (
+        {cache.resetConflicts.length > 0 && (
+          <div className="cache-status" role="status">
+            {tr("sync.resetConflict")}{" "}
+            <button
+              className="text-button"
+              onClick={() => {
+                preserveDraft();
+                setSession(null);
+                setError("");
+                setSection("settings");
+              }}
+            >
+              {tr("sync.resolve")}
+            </button>
+          </div>
+        )}
+        {cache.error && !cache.resetConflicts.length && (
           <div className="cache-status" role="status">
             {<ErrorMessage message={cache.error} />}
           </div>
         )}
-        {error && (
+        {error && error !== cache.error && (
           <div className="error-banner" role="alert">
             <span>{<ErrorMessage message={error} />}</span>
             {session && (
@@ -1391,8 +1435,28 @@ function App() {
                           </span>
                           <span>
                             <i />
-                            {deck.stats.unseen} {tr("app.unseen")}
+                            <button
+                              className="text-button"
+                              onClick={() => {
+                                setLibraryStatus("unseen");
+                                setTopic("");
+                                setSection("library");
+                              }}
+                            >
+                              {deck.stats.unseen} {tr("app.unseen")}
+                            </button>
                           </span>
+                          <button
+                            className="text-button"
+                            onClick={() => {
+                              setLibraryStatus("unlearned");
+                              setTopic("");
+                              setSection("library");
+                            }}
+                          >
+                            {deck.stats.total - deck.stats.mastered}{" "}
+                            {tr("library.notLearned")}
+                          </button>
                         </div>
                         <button
                           className="text-button quick-start"
@@ -1671,6 +1735,7 @@ function App() {
                   topic={topic}
                   search={search}
                   busy={busy}
+                  initialStatus={libraryStatus}
                   onTopic={setTopic}
                   onEdit={setEditor}
                   onUpdate={updateOrganization}
@@ -2067,7 +2132,10 @@ function App() {
                     </button>
                     <button
                       className="button secondary"
-                      disabled={busy || !cache.pendingSessions}
+                      disabled={
+                        busy ||
+                        (!cache.pendingSessions && !cache.archivedSessions)
+                      }
                       onClick={() =>
                         void run(async () => {
                           const recovery = await exportPendingRecovery();
@@ -2095,6 +2163,14 @@ function App() {
                         {tr("app.discard_outdated_answers_reload_decks")}
                       </button>
                     )}
+                    <button
+                      className="button secondary"
+                      disabled={busy || !deck}
+                      onClick={() => setRestoreProgressOpen(true)}
+                    >
+                      {tr("sync.useDevice")}
+                    </button>
+                    <p className="small">{tr("sync.explain")}</p>
                     <p className="small">
                       {tr(
                         "app.if_the_server_stays_unavailable_export_pending_evidence_before",
@@ -2903,6 +2979,10 @@ function App() {
           }
           onConfirm={() =>
             void run(async () => {
+              saveJson(
+                "Recall-before-using-server.recovery.json",
+                await exportPendingRecovery(),
+              );
               await discardResetEvidence();
               setDiscardResetOpen(false);
               setSession(null);
@@ -2919,6 +2999,22 @@ function App() {
           <p>{tr("app.the_server_has_a_newer_learning_reset_these_older")}</p>
           <p>{tr("app.export_a_private_evidence_backup_if_you_want_to")}</p>
         </ResetDialog>
+      )}
+      {restoreProgressOpen && deck && (
+        <ProgressRestoreDialog
+          deckId={deckId}
+          onClose={() => setRestoreProgressOpen(false)}
+          onDone={async () => {
+            setRestoreProgressOpen(false);
+            setSession(null);
+            resetAnswer();
+            localStorage.removeItem(sessionKey());
+            setError("");
+            await refresh();
+            setItems(await api<Item[]>(`/decks/${deckId}/questions`));
+            setNotice(tr("sync.restored"));
+          }}
+        />
       )}
       {shareOpen && (
         <ShareDialog
@@ -3975,6 +4071,167 @@ function Editor({
                 ? tr("editor.add_question")
                 : tr("editor.save_correction")}
             <Check size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function ProgressRestoreDialog({
+  deckId,
+  onClose,
+  onDone,
+}: {
+  deckId: string;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const ref = useDialog(onClose),
+    [pending, setPending] = useState(false),
+    [error, setError] = useState("");
+  const [file, setFile] = useState<unknown>(),
+    [preview, setPreview] = useState<any>(),
+    [requestId] = useState(() => crypto.randomUUID());
+  const inspect = async (value: unknown) => {
+    setPending(true);
+    setError("");
+    setPreview(undefined);
+    try {
+      setFile(value);
+      setPreview(await restoreDeviceProgress(deckId, { file: value }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <div className="modal-backdrop">
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="restore-progress-title"
+        ref={ref}
+      >
+        <div className="modal-head">
+          <h2 id="restore-progress-title">{tr("sync.useDevice")}</h2>
+          <button
+            className="icon-button"
+            disabled={pending}
+            aria-label={tr("common.cancel")}
+            onClick={onClose}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <p>{tr("sync.explain")}</p>
+        <button
+          className="button secondary"
+          disabled={pending}
+          onClick={() =>
+            void (async () => {
+              try {
+                await inspect(
+                  await api(`/decks/${deckId}/portable?progress=1`),
+                );
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            })()
+          }
+        >
+          {tr("sync.previewDevice")}
+        </button>
+        <label className="field">
+          {tr("sync.chooseFile")}
+          <input
+            type="file"
+            accept=".json,application/json"
+            disabled={pending}
+            onChange={(e) => {
+              const selected = e.target.files?.[0];
+              e.target.value = "";
+              if (selected)
+                void (async () => {
+                  try {
+                    if (selected.size > 5 * 1024 * 1024)
+                      throw new Error(
+                        tr("import.choose_a_file_smaller_than_5_mb"),
+                      );
+                    await inspect(JSON.parse(await selected.text()));
+                  } catch (e) {
+                    setError((e as Error).message);
+                    setPreview(undefined);
+                  }
+                })();
+            }}
+          />
+        </label>
+        {error && (
+          <p role="alert">
+            <ErrorMessage message={error} />
+          </p>
+        )}
+        {preview && (
+          <>
+            <button
+              className="button secondary"
+              disabled={pending}
+              onClick={() =>
+                saveJson(
+                  "Recall-server-before-restore.recall.json",
+                  preview.backup,
+                )
+              }
+            >
+              {tr("sync.downloadServerBackup")}
+            </button>
+            <p role="status">
+              {tr("sync.preview", {
+                questions: preview.questions,
+                server: preview.serverMastered,
+                device: preview.deviceMastered,
+              })}
+            </p>
+            <p>{tr("sync.restoreWarning")}</p>
+          </>
+        )}
+        <div className="modal-foot">
+          <button
+            className="button secondary"
+            disabled={pending}
+            onClick={onClose}
+          >
+            {tr("common.cancel")}
+          </button>
+          <button
+            className="button primary"
+            disabled={pending || !preview}
+            onClick={() =>
+              void (async () => {
+                setPending(true);
+                setError("");
+                try {
+                  // Prepare both backups before any write. The server also retains its prior snapshot in the receipt.
+                  saveJson("Recall-device-before-restore.recall.json", file);
+                  // Server backup is retained transactionally in the restore receipt; avoid two native save pickers at once.
+                  await restoreDeviceProgress(deckId, {
+                    file,
+                    apply: true,
+                    expected: preview.expected,
+                    requestId,
+                  });
+                  await onDone();
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setPending(false);
+                }
+              })()
+            }
+          >
+            {pending ? tr("reset.working") : tr("sync.confirmRestore")}
           </button>
         </div>
       </div>

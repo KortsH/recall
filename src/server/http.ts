@@ -134,6 +134,33 @@ export function createApp(store: Store, staticDir = resolve("dist")) {
           return json(res, 200, await store.updateDeck(id, await body(req)));
         if (rest === "reset-learning" && method === "POST")
           return json(res, 200, await store.resetLearning(id, await body(req)));
+        if (rest === "restore-progress" && method === "POST")
+          return json(
+            res,
+            200,
+            await store.restoreProgress(id, await body(req)),
+          );
+        if (rest.startsWith("progress-backups/") && method === "GET")
+          return json(
+            res,
+            200,
+            await store.progressBackup(
+              id,
+              rest.slice("progress-backups/".length),
+            ),
+          );
+        if (rest === "portable" && method === "GET") {
+          const { exportPortable } = await import("../core/portable.ts");
+          return json(
+            res,
+            200,
+            await exportPortable(
+              await store.exportBank(id),
+              await store.items(id),
+              url.searchParams.get("progress") === "1",
+            ),
+          );
+        }
         if (rest === "audit" && method === "GET")
           return json(res, 200, await store.audit(id));
         if (rest === "organize" && method === "POST")

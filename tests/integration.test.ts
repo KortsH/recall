@@ -19,6 +19,7 @@ import { syncOfflineSession } from "../src/server/offline.ts";
 import { remoteBackend } from "../src/remote.ts";
 import { createRecovery } from "../src/core/recovery.ts";
 import { request } from "node:http";
+import { exportPortable } from "../src/core/portable.ts";
 import {
   parseAuthoring,
   questionVersion,
@@ -1694,4 +1695,133 @@ test("reversible questions unlock only after both directions and offline replay 
   assert.deepEqual(before.recallDirections, { forward: 1, reverse: 1 });
   await syncOfflineSession(store, local);
   assert.deepEqual((await store.question(id2, "base")).progress, before);
+});
+
+test("explicit progress restore survives a reset, previews, validates hashes, preserves questions and retries without double credit", async () => {
+  const id = await fresh();
+  const s = await store.createSession(id, { mode: "cram", count: 1 });
+  for (let n = 0; n < 1; n++) await answer(s.id);
+  const before = await store.items(id),
+    file = await exportPortable(await store.exportBank(id), before, true);
+  const reset = await store.resetLearning(id, {});
+  await store.resetLearning(id, {
+    confirm: true,
+    expectedEpoch: reset.expectedEpoch,
+  });
+  const preview = await store.restoreProgress(id, { file });
+  assert.equal(preview.dryRun, true);
+  assert.equal(
+    (await store.items(id)).reduce((n, i) => n + i.progress.attempts, 0),
+    0,
+  );
+  const invalid = structuredClone(file);
+  invalid.bank.questions[0].question = "Changed question content";
+  await assert.rejects(
+    store.restoreProgress(id, { file: invalid }),
+    /does not match/,
+  );
+  await assert.rejects(
+    store.restoreProgress(id, {
+      file,
+      apply: true,
+      expected: "old",
+      requestId: randomUUID(),
+    }),
+    /Preview|preview/,
+  );
+  const request = {
+    file,
+    apply: true,
+    expected: preview.expected,
+    requestId: randomUUID(),
+  };
+  const applied = await remoteBackend(base).restoreProgress(id, request);
+  assert.equal(applied.dryRun, false);
+  assert.deepEqual(await store.items(id), before);
+  assert.deepEqual(await store.restoreProgress(id, request), applied);
+  assert.deepEqual(
+    (await store.items(id)).map((i) => i.question),
+    before.map((i) => i.question),
+  );
+  const portableResponse = await fetch(
+    base + `/api/decks/${id}/portable?progress=1`,
+  );
+  assert.equal(portableResponse.status, 200);
+  assert.ok((await portableResponse.json()).progress);
+  const current = await store.items(id),
+    local = newSession(id, current, { mode: "cram", count: 1 });
+  local.learningEpoch = applied.learningEpoch;
+  const target = current.find(
+    (i) => i.question.id === local.queue[0].questionId,
+  )!;
+  const prior = target.progress.attempts;
+  advanceSession(
+    local,
+    target,
+    { version: local.version, revision: target.revision, response: "A" },
+    current,
+  );
+  await syncOfflineSession(store, local);
+  await syncOfflineSession(store, local);
+  assert.equal(
+    (await store.question(id, target.question.id)).progress.attempts,
+    prior + 1,
+    "Restored progress is a baseline, not discarded on the next offline upload",
+  );
+});
+
+test("two-device evidence converges by study time and an older matching session prefix uses the latest server session", async () => {
+  const id = await fresh(),
+    items = await store.items(id),
+    one = items[0];
+  const make = (correct: boolean, at: string) => {
+    const local = newSession(id, [structuredClone(one)], {
+      mode: "cram",
+      count: 1,
+    });
+    advanceSession(
+      local,
+      { ...one, progress: { ...one.progress } },
+      {
+        version: local.version,
+        revision: one.revision,
+        response: correct ? "A" : "WRONG",
+      },
+      [one],
+    );
+    local.answers[0].at = at;
+    return local;
+  };
+  const late = make(true, "2026-10-15T12:00:00.000Z"),
+    early = make(false, "2026-10-15T11:00:00.000Z");
+  await syncOfflineSession(store, late);
+  await syncOfflineSession(store, early);
+  const p = (await store.question(id, one.question.id)).progress;
+  assert.equal(p.attempts, 2);
+  assert.equal(p.streak, 1);
+  assert.equal(p.lastReviewed, late.answers[0].at);
+  const prefix = structuredClone(late);
+  prefix.answers = [];
+  prefix.cursor = 0;
+  const latest = await syncOfflineSession(store, prefix);
+  assert.equal(latest.session.answers.length, 1);
+  assert.equal(latest.progress[one.question.id].progress.attempts, 2);
+  const preview = await store.restoreProgress(id, {
+    file: await exportPortable(
+      await store.exportBank(id),
+      await store.items(id),
+      true,
+    ),
+  });
+  const another = make(true, "2026-10-15T13:00:00.000Z");
+  await syncOfflineSession(store, another);
+  await assert.rejects(
+    store.restoreProgress(id, {
+      file: preview.backup,
+      apply: true,
+      expected: preview.expected,
+      requestId: randomUUID(),
+    }),
+    /changed/,
+  );
 });

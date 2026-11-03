@@ -219,14 +219,14 @@ test("release notices respect semantic versions, preview channels and complete p
     undefined,
   );
   const result = publishedUpdate(
-    [published("v0.9.0-preview.2"), published("v0.9.0-preview.10")],
+    [published("v0.9.0-preview.2"), published("v0.9.1-preview.10")],
     "0.8.0-preview.1",
     "android",
   )!;
-  assert.equal(result.version, "0.9.0-preview.10");
+  assert.equal(result.version, "0.9.1-preview.10");
   assert.equal(
     result.url,
-    "https://github.com/KortsH/recall/releases/tag/v0.9.0-preview.10",
+    "https://github.com/KortsH/recall/releases/tag/v0.9.1-preview.10",
   );
 });
 test("update detection runs on lifecycle events, coalesces bursts and never checks merely because time passes", async () => {
@@ -284,7 +284,7 @@ test("bundled app release checks omit credentials and preserve existing notices 
     assert.equal(options?.credentials, "omit");
     assert.equal(options?.referrerPolicy, "no-referrer");
     if (fail) throw new Error("Offline");
-    return Response.json([published("v0.9.0-preview.1")]);
+    return Response.json([published("v0.9.1-preview.1")]);
   };
   const snapshots: UpdateState[] = [];
   const unsubscribe = updates.subscribeUpdates((state: UpdateState) =>
@@ -303,10 +303,10 @@ test("bundled app release checks omit credentials and preserve existing notices 
   try {
     await updates.checkAppUpdates();
     assert.equal(requests, 1, "Concurrent checks share a request");
-    assert.equal(snapshots.at(-1)?.release?.version, "0.9.0-preview.1");
+    assert.equal(snapshots.at(-1)?.release?.version, "0.9.1-preview.1");
     fail = true;
     await updates.checkAppUpdates();
-    assert.equal(snapshots.at(-1)?.release?.version, "0.9.0-preview.1");
+    assert.equal(snapshots.at(-1)?.release?.version, "0.9.1-preview.1");
     assert.match(
       snapshots.at(-1)!.error,
       /current app and learning data are kept/,
@@ -445,9 +445,9 @@ test("update banners distinguish reload from installer downloads and keep a quie
       checking: false,
       error: "",
       release: {
-        version: "0.9.0-preview.1",
+        version: "0.9.1-preview.1",
         platform: "android" as const,
-        url: "https://github.com/KortsH/recall/releases/tag/v0.9.0-preview.1",
+        url: "https://github.com/KortsH/recall/releases/tag/v0.9.1-preview.1",
       },
     },
     deferred: false,
@@ -460,7 +460,7 @@ test("update banners distinguish reload from installer downloads and keep a quie
   const installer = renderToStaticMarkup(
     React.createElement(UpdateNotice, props),
   );
-  assert.match(installer, /Recall 0.9.0-preview.1 is available/);
+  assert.match(installer, /Recall 0.9.1-preview.1 is available/);
   assert.match(installer, /View download/);
   assert.doesNotMatch(installer, /Save &amp; reload/);
   const reminder = renderToStaticMarkup(

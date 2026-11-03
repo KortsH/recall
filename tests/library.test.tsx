@@ -6,7 +6,11 @@ import { QuestionLibrary } from "../src/web/library.tsx";
 import { parseBank } from "../src/core/bank.ts";
 import { validatePrerequisites } from "../src/core/prerequisites.ts";
 import { emptyProgress, type Question } from "../src/core/types.ts";
-import { planOrganization, type TopicMove } from "../src/core/organization.ts";
+import {
+  planOrganization,
+  filterQuestions,
+  type TopicMove,
+} from "../src/core/organization.ts";
 
 test("library drag/drop sets the correct dependency direction, rejects cycles, moves topics and undoes", async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', {
@@ -266,6 +270,20 @@ test("large-library views, filters and selected-card drag/drop use one undoable 
     assert.match(document.body.textContent!, /Needs review/);
     await act(async () => button("Clear filters").click());
     assert.equal(document.querySelectorAll(".question-row").length, 100);
+    await act(async () => {
+      const quick = [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          ".library-quick-filters button",
+        ),
+      ].find((b) => b.textContent?.startsWith("Unseen"))!;
+      quick.click();
+    });
+    assert.equal(document.querySelectorAll(".question-row").length, 100);
+    assert.equal(
+      document.querySelector(".library-quick-filters [aria-pressed=true]")
+        ?.textContent,
+      "Unseen 100",
+    );
     assert.ok(
       items.every((i) => i.revision === 1 && i.progress.attempts === 0),
     );
@@ -273,4 +291,41 @@ test("large-library views, filters and selected-card drag/drop use one undoable 
     await act(async () => root.unmount());
     dom.window.close();
   }
+});
+
+test("not learned includes seen but unmastered objectives, while unseen excludes them and keeps prerequisite locks", () => {
+  const questions = parseBank({
+    deck: "Filters",
+    questions: [
+      { id: "a", question: "A", answer: "A" },
+      { id: "b", question: "B", answer: "B", depends_on: ["a"] },
+      { id: "c", question: "C", answer: "C" },
+    ],
+  }).questions;
+  const items = questions.map((question) => ({
+    question,
+    revision: 1,
+    progress: emptyProgress(),
+  }));
+  items[0].progress = { ...emptyProgress(), attempts: 1, wrong: 1 };
+  items[2].progress = {
+    ...emptyProgress(),
+    attempts: 3,
+    correct: 3,
+    streak: 3,
+    recalls: 2,
+    mastered: true,
+  };
+  assert.deepEqual(
+    filterQuestions(items, { status: "unlearned" }).map((i) => i.question.id),
+    ["a", "b"],
+  );
+  assert.deepEqual(
+    filterQuestions(items, { status: "unseen" }).map((i) => i.question.id),
+    ["b"],
+  );
+  assert.deepEqual(
+    filterQuestions(items, { status: "locked" }).map((i) => i.question.id),
+    ["b"],
+  );
 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { parseBank } from "../src/core/bank.ts";
 import { emptyProgress } from "../src/core/types.ts";
+import { parsePortable } from "../src/core/portable.ts";
 const bank = parseBank({
   deck: "Reset fixture",
   questions: [
@@ -15,6 +16,101 @@ const bank = parseBank({
       depends_on: ["base"],
     },
   ],
+});
+
+test("device snapshot restore retries an acknowledged upload after a download failure, preserves other outboxes and archives old evidence", async (t) => {
+  setup(false);
+  let epoch = 0,
+    restored: any,
+    failDownload = false,
+    applied = 0;
+  const snapshot = () => ({
+    downloadedAt: new Date().toISOString(),
+    decks: ["a", "b"].map((id) => ({
+      id,
+      name: id,
+      description: "",
+      created_at: new Date().toISOString(),
+      learning_epoch: id === "a" ? epoch : 0,
+    })),
+    items: Object.fromEntries(
+      ["a", "b"].map((id) => [
+        id,
+        bank.questions.map((question) => ({
+          question,
+          revision: 1,
+          progress:
+            id === "a" && restored?.[question.id]
+              ? restored[question.id].progress
+              : emptyProgress(),
+        })),
+      ]),
+    ),
+    sessions: {},
+    recent: { a: [], b: [] },
+  });
+  t.mock.method(globalThis, "fetch", async (url: any, options: any) => {
+    if (url === "/api/snapshot") {
+      if (failDownload) {
+        failDownload = false;
+        throw new Error("Download failed");
+      }
+      return Response.json(snapshot());
+    }
+    if (url === "/api/decks/a/restore-progress") {
+      const input = JSON.parse(options.body),
+        parsed = parsePortable(input.file);
+      if (input.apply && !restored) {
+        restored = parsed.progress;
+        epoch++;
+        applied++;
+        failDownload = true;
+      }
+      return Response.json({
+        dryRun: !input.apply,
+        expected: "token",
+        learningEpoch: epoch,
+        questions: 2,
+        backup: input.file,
+      });
+    }
+    throw new Error("Unexpected request " + url);
+  });
+  const cache: typeof import("../src/web/cache.ts") = await import(
+    new URL("../src/web/cache.ts?restore-device", import.meta.url).href
+  );
+  for (const id of ["a", "b"]) {
+    const s = await cache.api<any>(`/decks/${id}/sessions`, { mode: "learn" });
+    await cache.api(`/sessions/${s.id}/answer`, {
+      version: s.version,
+      revision: 1,
+      response: "A",
+    });
+  }
+  const file = await cache.api<any>("/decks/a/portable?progress=1");
+  await cache.restoreDeviceProgress("a", { file });
+  assert.equal(applied, 0);
+  const input = {
+    file,
+    apply: true,
+    expected: "token",
+    requestId: crypto.randomUUID(),
+  };
+  await assert.rejects(
+    cache.restoreDeviceProgress("a", input),
+    /Download failed/,
+  );
+  assert.equal(cache.downloadStatus().pending, 2);
+  await cache.restoreDeviceProgress("a", input);
+  assert.equal(applied, 1);
+  assert.equal(cache.downloadStatus().pending, 1);
+  assert.equal(
+    (await cache.api<any>("/decks/a/questions/base")).progress.attempts,
+    1,
+  );
+  const evidence = await cache.exportPendingRecovery();
+  assert.equal(evidence.sessions.length, 2);
+  assert.equal(cache.downloadStatus().archivedSessions, 1);
 });
 function setup(personal: boolean) {
   const values = new Map([
@@ -118,7 +214,8 @@ test("personal reset previews without writes, preserves questions/other decks, r
 test("stale downloaded evidence stays exportable until explicit discard, without losing another deck outbox", async (t) => {
   setup(false);
   let epoch = 0,
-    unavailable = false;
+    unavailable = false,
+    syncedB = false;
   const snapshot = () => ({
     downloadedAt: new Date().toISOString(),
     decks: ["a", "b"].map((id) => ({
@@ -134,7 +231,16 @@ test("stale downloaded evidence stays exportable until explicit discard, without
         bank.questions.map((question) => ({
           question,
           revision: 1,
-          progress: emptyProgress(),
+          progress:
+            id === "b" && question.id === "base" && syncedB
+              ? {
+                  ...emptyProgress(),
+                  attempts: 1,
+                  correct: 1,
+                  streak: 1,
+                  recognition: 1,
+                }
+              : emptyProgress(),
         })),
       ]),
     ),
@@ -153,6 +259,7 @@ test("stale downloaded evidence stays exportable until explicit discard, without
           { error: "Learning was reset", code: "LEARNING_RESET" },
           { status: 409 },
         );
+      if (s.deckId === "b") syncedB = true;
       return Response.json({ session: s, rejected: [], progress: {} });
     }
     throw Error("Unexpected request " + url);
@@ -172,16 +279,28 @@ test("stale downloaded evidence stays exportable until explicit discard, without
     sessions.push(s);
   }
   epoch = 1;
-  await assert.rejects(cache.syncDownloads(), /reset/);
-  assert.equal(cache.downloadStatus().pending, 2);
+  await cache.syncDownloads();
+  assert.equal(
+    cache.downloadStatus().pending,
+    1,
+    "A reset conflict must not block the other deck",
+  );
   assert.deepEqual(cache.downloadStatus().resetConflicts, ["a"]);
-  assert.equal((await cache.exportPendingRecovery()).sessions.length, 2);
+  assert.equal((await cache.exportPendingRecovery()).sessions.length, 1);
+  await cache.refreshDownloads();
+  assert.equal(
+    (await api<any[]>("/decks/a/questions")).find(
+      (i) => i.question.id === "base",
+    ).progress.attempts,
+    1,
+    "Refreshing must keep conflicted device progress",
+  );
   unavailable = true;
   await assert.rejects(cache.discardResetEvidence(), /Unavailable/);
-  assert.equal(cache.downloadStatus().pending, 2);
+  assert.equal(cache.downloadStatus().pending, 1);
   unavailable = false;
   await cache.discardResetEvidence();
-  assert.equal(cache.downloadStatus().pending, 1);
+  assert.equal(cache.downloadStatus().pending, 0);
   assert.equal(
     (await api<any>("/decks/a/questions/base")).progress.attempts,
     0,

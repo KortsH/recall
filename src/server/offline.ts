@@ -7,6 +7,7 @@ import type { Session, Attempt } from "../core/types.ts";
 import { emptyProgress } from "../core/types.ts";
 import { recallDirection } from "../core/questions.ts";
 import { choiceConnections } from "../core/feedback.ts";
+import { reconcileProgress } from "./progress.ts";
 
 /** Merge append-only attempt evidence. Never trust a client's claimed correctness. */
 export async function syncOfflineSession(store: Store, input: Session) {
@@ -46,11 +47,34 @@ export async function syncOfflineSession(store: Store, input: Session) {
     const prior = row?.data as Session | undefined;
     if (prior && (prior.deckId !== input.deckId || prior.mode !== input.mode))
       throw new AppError("Session identity conflict", 409);
-    if (prior && prior.answers.length > input.answers.length)
-      throw new AppError(
-        "The server has newer session answers. Refresh before continuing.",
-        409,
-      );
+    if (prior && prior.answers.length > input.answers.length) {
+      const key = (a: Attempt) =>
+        JSON.stringify([
+          a.questionId,
+          a.variantId,
+          a.revision,
+          a.response,
+          !!a.hintUsed,
+          !!a.mentalRecall,
+        ]);
+      if (!input.answers.every((a, n) => key(a) === key(prior.answers[n])))
+        throw new AppError(
+          "An existing attempt cannot be rewritten. This session has different answers on another device. Export pending answers before resolving it.",
+          409,
+          "SESSION_CONFLICT",
+        );
+      const items = await store.items(input.deckId, db, true);
+      return {
+        session: prior,
+        rejected: [],
+        progress: Object.fromEntries(
+          items.map((i) => [
+            i.question.id,
+            { revision: i.revision, progress: i.progress },
+          ]),
+        ),
+      };
+    }
     if (!prior)
       await db.query("INSERT INTO sessions(id,deck_id,data) VALUES($1,$2,$3)", [
         input.id,
@@ -60,6 +84,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
     const all = await store.items(input.deckId, db, true);
     const answers: Attempt[] = [];
     const rejected: string[] = [];
+    const changed = new Set<string>();
     for (let index = 0; index < input.answers.length; index++) {
       const submitted = input.answers[index];
       const entry = input.queue[index];
@@ -96,7 +121,11 @@ export async function syncOfflineSession(store: Store, input: Session) {
           JSON.stringify(old.data.response) !==
             JSON.stringify(submitted.response))
       )
-        throw new AppError("An existing attempt cannot be rewritten", 409);
+        throw new AppError(
+          "An existing attempt cannot be rewritten. This session has different answers on another device. Export pending answers before resolving it.",
+          409,
+          "SESSION_CONFLICT",
+        );
       const stale = item.archived || item.revision !== submitted.revision;
       let attempt: Attempt;
       if (old && old.data.correct !== null)
@@ -115,7 +144,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
           submitted.rating,
           input.mode === "test",
           Number.isFinite(Date.parse(submitted.at))
-            ? submitted.at
+            ? new Date(submitted.at).toISOString()
             : new Date().toISOString(),
           submitted.hintUsed === true || prior?.hinted?.cursor === index,
           submitted.mentalRecall === true,
@@ -123,23 +152,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
         if (entry.retentionCheck) attempt.retentionCheck = true;
         const connections = choiceConnections(attempt, all);
         if (connections) attempt.confusedWith = connections;
-        if (attempt.correct !== null) {
-          item.progress = updateProgress(
-            item.progress,
-            attempt.correct,
-            attempt.format,
-            attempt.selfAssessed,
-            new Date(),
-            attempt.rating,
-            attempt.skill,
-            attempt.hintUsed,
-            recallDirection(item.question, attempt.variantId),
-          );
-          await db.query(
-            "INSERT INTO progress(deck_id,question_id,data) VALUES($1,$2,$3) ON CONFLICT(deck_id,question_id) DO UPDATE SET data=$3",
-            [input.deckId, item.question.id, item.progress],
-          );
-        }
+        if (attempt.correct !== null) changed.add(item.question.id);
       }
       delete (attempt as Attempt & { answerImage?: unknown }).answerImage;
       if (old)
@@ -179,6 +192,9 @@ export async function syncOfflineSession(store: Store, input: Session) {
       session.id,
       session,
     ]);
+    for (const item of all)
+      if (changed.has(item.question.id))
+        await reconcileProgress(db, input.deckId, item, epoch);
     return {
       session,
       rejected: [...new Set(rejected)],

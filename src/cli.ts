@@ -26,7 +26,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.9.0-preview.1");
+  .version("0.9.1-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",
@@ -265,6 +265,57 @@ program
     const bank = await readBank(file, o.deck);
     validatePrerequisites(bank.questions, !!o.partial);
     print({ valid: true, deck: bank.deck, questions: bank.questions.length });
+  });
+program
+  .command("restore-progress <deck> <file>")
+  .description(
+    "Preview or explicitly replace server progress from a portable snapshot; question content is unchanged",
+  )
+  .option("--apply")
+  .option("--expected <fingerprint>")
+  .option("--request-id <uuid>")
+  .option("--backup <file>")
+  .action(async (deck, file, o) => {
+    const backend = await connect(),
+      d = await backend.deck(deck),
+      data = JSON.parse((await readFile(file, "utf8")).replace(/^\uFEFF/, ""));
+    if (o.apply && (!o.expected || !o.requestId || !o.backup))
+      throw new Error(
+        "Apply requires --expected from preview, --request-id UUID and --backup file",
+      );
+    const preview = await backend.restoreProgress(d.id, { file: data });
+    if (o.apply) {
+      await writeFile(
+        o.backup,
+        JSON.stringify(preview.backup, null, 2) + "\n",
+        { flag: "wx" },
+      );
+      const result = await backend.restoreProgress(d.id, {
+        file: data,
+        apply: true,
+        expected: o.expected,
+        requestId: o.requestId,
+      });
+      const { backup, ...summary } = result;
+      print(summary);
+    } else {
+      const { backup, ...summary } = preview;
+      print(summary);
+    }
+  });
+program
+  .command("progress-backup <deck> <requestId>")
+  .requiredOption("-o, --output <file>")
+  .action(async (deck, requestId, o) => {
+    const backend = await connect(),
+      d = await backend.deck(deck);
+    await writeFile(
+      o.output,
+      JSON.stringify(await backend.progressBackup(d.id, requestId), null, 2) +
+        "\n",
+      { flag: "wx" },
+    );
+    print({ output: o.output });
   });
 program
   .command("decks")
@@ -553,7 +604,7 @@ program
   .option("--flagged <filter>", "with or without")
   .option(
     "--status <status>",
-    "unseen, learning, mastered, locked or available",
+    "unseen, unlearned, learning, mastered, locked or available",
   )
   .option("--difficulty <level>", "1–5")
   .option("--hints <filter>", "with or without")

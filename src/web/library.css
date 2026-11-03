@@ -425,3 +425,17 @@
     font-size: 12px;
   }
 }
+
+.library-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.library-quick-filters .button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.library-quick-filters strong {
+  margin-left: 6px;
+}

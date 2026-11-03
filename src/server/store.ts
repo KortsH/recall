@@ -189,6 +189,29 @@ export class Store {
     const { syncOfflineSession } = await import("./offline.ts");
     return syncOfflineSession(this, input);
   }
+  async restoreProgress(
+    deckId: string,
+    input: {
+      file: unknown;
+      apply?: boolean;
+      expected?: string;
+      requestId?: string;
+    },
+  ) {
+    const { restoreProgress } = await import("./progress.ts");
+    return restoreProgress(this, deckId, input);
+  }
+  async progressBackup(deckId: string, requestId: string) {
+    await this.deck(deckId);
+    const row = (
+      await this.pool.query(
+        "SELECT result FROM progress_receipts WHERE id::text=$1 AND deck_id=$2",
+        [requestId, deckId],
+      )
+    ).rows[0];
+    if (!row) throw new AppError("Progress backup not found", 404);
+    return row.result.backup;
+  }
   async items(
     deckId: string,
     db: DB = this.pool,
@@ -621,6 +644,9 @@ export class Store {
       if (input.expectedEpoch !== deck.learning_epoch)
         throw new AppError("Learning changed. Preview the reset again.", 409);
       await db.query("DELETE FROM progress WHERE deck_id=$1", [deckId]);
+      await db.query("DELETE FROM progress_baselines WHERE deck_id=$1", [
+        deckId,
+      ]);
       await db.query("UPDATE attempts SET invalidated=true WHERE deck_id=$1", [
         deckId,
       ]);

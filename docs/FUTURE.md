@@ -45,3 +45,5 @@ Requested for **1 November 2026**. The personal-use preview is complete. Formal 
 - Additional past-paper exercises: Chinese Wall write rule and multi-step HRU reasoning. Aim for roughly 40% recall / 60% application in later banks. The compact foundation bank intentionally remains recall-heavy.
 
 Any host that supports Node + PostgreSQL can run Recall. Private VPN access and an existing Docker database network are deployment choices, not requirements of the learning engine.
+
+- [x] Clear unseen/not-learned library filters; reset/session-conflict recovery, deliberate backed-up server progress restore, latest-server selection, chronological cross-device evidence merge and live portable export.

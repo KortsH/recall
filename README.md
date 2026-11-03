@@ -1,8 +1,12 @@
 # Recall
 
+**Finding what remains:** the question library has one-click **Not learned** (all unmastered objectives) and **Unseen** (never attempted) filters with counts. The deck summary links directly to both. Locked questions stay marked; browsing does not bypass Learn prerequisites.
+
+**Phone/laptop progress:** normal sync merges answers. If a reset causes a conflict, local progress stays safe. Settings offers **Use this device’s progress** (preview and back up before replacing server mastery) or **Use latest server progress**. You can also restore from a quiz file with progress. See [sync and recovery](docs/PORTABLE.md#phone-and-laptop-sync-conflicts).
+
 A free, open-source exam study tool. Start with multiple choice, build active recall, and share quizzes as files. Use it on your device without an account or subscription; connecting your own server is optional.
 
-[Try the guided sample](https://kortsh.github.io/recall/#guide) · [Open Recall](https://kortsh.github.io/recall/) · [Windows download](https://github.com/KortsH/recall/releases/download/v0.9.0-preview.1/Recall-Setup.exe) · [Android download](https://github.com/KortsH/recall/releases/download/v0.9.0-preview.1/Recall-Android.apk) · [Release details](https://github.com/KortsH/recall/releases/tag/v0.9.0-preview.1)
+[Try the guided sample](https://kortsh.github.io/recall/#guide) · [Open Recall](https://kortsh.github.io/recall/) · [Windows download](https://github.com/KortsH/recall/releases/download/v0.9.1-preview.1/Recall-Setup.exe) · [Android download](https://github.com/KortsH/recall/releases/download/v0.9.1-preview.1/Recall-Android.apk) · [Release details](https://github.com/KortsH/recall/releases/tag/v0.9.1-preview.1)
 
 ## Start here — no coding required
 

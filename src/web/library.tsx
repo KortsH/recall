@@ -54,6 +54,7 @@ export function QuestionLibrary({
   onUpdate,
   onMove,
   onFlag,
+  initialStatus = "all",
 }: {
   items: Item[];
   topic: string;
@@ -64,6 +65,7 @@ export function QuestionLibrary({
   onUpdate: (question: Question, message: string) => Promise<boolean>;
   onMove?: (moves: TopicMove[], message: string) => Promise<boolean>;
   onFlag?: (item: Item) => void;
+  initialStatus?: string;
 }) {
   useLanguage();
   const [prefs, setPrefs] = useState(preferences);
@@ -76,7 +78,8 @@ export function QuestionLibrary({
   const [undo, setUndo] = useState<Question | TopicMove[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [destination, setDestination] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(initialStatus);
+  useEffect(() => setStatus(initialStatus), [initialStatus]);
   const [difficulty, setDifficulty] = useState("");
   const [hints, setHints] = useState("all");
   const [sort, setSort] = useState("original");
@@ -523,6 +526,33 @@ export function QuestionLibrary({
           </button>
         </form>
       )}
+      <div
+        className="library-quick-filters"
+        role="group"
+        aria-label={tr("library.quickStatus")}
+      >
+        {(["all", "unlearned", "unseen", "mastered"] as const).map((value) => (
+          <button
+            key={value}
+            className="button secondary"
+            aria-pressed={status === value}
+            onClick={() => setStatus(value)}
+          >
+            {tr(
+              value === "all"
+                ? "library.all_questions"
+                : value === "unlearned"
+                  ? "library.notLearned"
+                  : value === "unseen"
+                    ? "common.unseen"
+                    : "common.mastered",
+            )}{" "}
+            <strong>
+              {filterQuestions(items, { topic, search, status: value }).length}
+            </strong>
+          </button>
+        ))}
+      </div>
       <div className="library-filters">
         <label>
           {tr("library.flags")}
@@ -545,6 +575,7 @@ export function QuestionLibrary({
           >
             <option value="all">{tr("library.any_status")}</option>
             <option value="unseen">{tr("common.unseen")}</option>
+            <option value="unlearned">{tr("library.notLearned")}</option>
             <option value="learning">{tr("common.learning")}</option>
             <option value="mastered">{tr("common.mastered")}</option>
             <option value="locked">{tr("common.locked")}</option>

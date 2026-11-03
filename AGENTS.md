@@ -1,5 +1,7 @@
 # Working on Recall
 
+Sync conflicts must preserve local progress and allow other outboxes to sync. Never rewrite old learningEpoch evidence. Explicit restore-progress validates hashes, previews a full server fingerprint, keeps a backup receipt, starts a new generation and establishes progress_baselines; current-generation offline evidence is replayed chronologically on that baseline. Preserve idempotency and question revisions. Restore only on explicit user confirmation. The latest-server choice backs up conflicting pending evidence. Test out-of-order devices, matching older session prefixes, reset conflicts, acknowledged-write/download-failure retries and another deck's outbox.
+
 Recall is a small, single-user study tool, usable in a device-only workspace or through a private server. Prioritise a smooth study loop and correct progress over infrastructure. No in-app AI, PDF ingestion, cloud accounts, or paid APIs. Android bundles the study UI; Windows has a per-user installer. Read `docs/PORTABLE.md` for file sharing and `docs/FUTURE.md` for remaining work.
 
 ## Where things live

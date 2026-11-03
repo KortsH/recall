@@ -20,7 +20,24 @@ Export with **Include my learning progress**, then import on the other device an
 
 Progress is tied to a SHA-256 hash of the question's semantic content. Incompatible progress is rejected when restoring. Explanation, topic, concept, difficulty, tags and prerequisite-only changes do not change this hash. Corrected answer/grading content does. Re-importing the same progress file cannot inflate attempts. The file contains progress counters/dates, not saved typed responses or session history.
 
-Progress restore is currently supported in device-only workspaces. A server import accepts the questions from the same file; server progress remains in PostgreSQL. For a complete server migration, use a PostgreSQL backup. These are distinct operations.
+Device-only imports can restore progress directly. Ordinary server question imports keep server progress. To deliberately replace server progress, use **Settings → Use this device’s progress**, preview either this device or a quiz file with progress, compare mastery counts, and confirm **Back up & replace server progress**. The device backup downloads before the write; the server also retains its previous snapshot. Optional **Download server progress backup** saves that snapshot separately. Only matching question IDs/content hashes are accepted; this operation never changes questions or combines snapshot counters. A complete server migration still uses a PostgreSQL backup.
+
+## Phone and laptop sync conflicts
+
+Connect both devices to the same private server. Each downloaded workspace keeps its own local copy; **Sync progress & refresh quizzes** uploads evidence and fetches the current server state. Routine sync merges independent study sessions. Delayed uploads are replayed in study-time order, so an older phone answer cannot undo a more recent laptop recall merely because it arrived later. Matching older copies of a session use its longer server history. Divergent answers and pre-reset evidence remain local for explicit review; one conflict does not block other sessions/decks.
+
+If the server was reset, Recall keeps the conflicting local mastery visible and offers two choices. On the device with the progress you want, choose **Use this device’s progress** and inspect the preview before replacing server progress. On another device, choose **Use latest server progress** to back up conflicting answers and download the server’s current state. A restore starts a new learning generation and closes old sessions; it does not relabel/replay pre-reset evidence. Pending evidence retired by an explicit restore remains available in the private recovery export. Normal sharing exports remain questions-only unless progress is requested. No automatic last-device-wins replacement can silently erase another device’s progress.
+
+The CLI exposes the same restore with a preview token and idempotent request ID:
+
+```sh
+npm run recall -- restore-progress "My quiz" my-progress.recall.json
+npm run recall -- restore-progress "My quiz" my-progress.recall.json --apply --expected TOKEN_FROM_PREVIEW --request-id YOUR_UUID --backup private/server-before-restore.recall.json
+npm run recall -- progress-backup "My quiz" YOUR_UUID -o private/server-backup.recall.json
+npm run recall -- questions "My quiz" --status unlearned --json
+```
+
+The apply token changes if server questions/progress change after preview. Reusing the same request ID/file returns the original receipt without applying twice. Backups contain private learner data; keep them out of Git and public sharing. CLI backup outputs refuse to overwrite existing files.
 
 Device-only storage is IndexedDB, isolated from the downloaded server workspace. It makes no quiz API requests, including on first launch, import, editing or study. Browser profiles, the public browser app, the local Windows address and Android are separate workspaces. Files transfer quizzes/progress between them. Clearing app/site data removes local learning data, so keep exported backups.
 

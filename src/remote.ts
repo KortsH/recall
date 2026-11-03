@@ -22,6 +22,8 @@ export type Backend = Pick<
   | "archiveQuestion"
   | "updateDeck"
   | "recoverSession"
+  | "restoreProgress"
+  | "progressBackup"
   | "resetLearning"
   | "applyAuthoring"
 >;
@@ -43,6 +45,10 @@ export function remoteBackend(base: string): Backend {
   };
   const enc = encodeURIComponent;
   return {
+    progressBackup: (id, requestId) =>
+      call(`/decks/${enc(id)}/progress-backups/${enc(requestId)}`),
+    restoreProgress: (id, input) =>
+      call(`/decks/${enc(id)}/restore-progress`, input),
     applyAuthoring: (batch, options = {}) =>
       call("/authoring" + (options.dryRun ? "?dryRun=1" : ""), batch),
     resetLearning: (id, input) =>
