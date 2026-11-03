@@ -98,6 +98,18 @@ export const walkthroughSteps = [
     fields: ["id", "flag"],
   },
   {
+    id: "pictures",
+    question: "guide-graph",
+    variant: "choice",
+    fields: ["image", "src", "alt", "caption", "answerImage"],
+  },
+  {
+    id: "math",
+    question: "guide-equation",
+    variant: "written",
+    fields: ["question", "answer", "requiredParts"],
+  },
+  {
     id: "make",
     question: "guide-first",
     variant: "choice",

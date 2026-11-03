@@ -1,6 +1,9 @@
 import React from "react";
 import { tr, useLanguage } from "./i18n.ts";
 import type { Attempt } from "../core/types.ts";
+import type { QuizImage } from "../core/media.ts";
+import { RichText } from "./rich-text.tsx";
+import { ImageFigure } from "./media.tsx";
 
 export function responseText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -26,16 +29,22 @@ export function SubmittedAnswer({
   return (
     <div className="submitted-answer">
       <span className="eyebrow">{tr("app.your_answer")}</span>
-      <p>{text.trim() ? text : tr("study.no_written_answer")}</p>
+      <p>
+        {text.trim() ? <RichText text={text} /> : tr("study.no_written_answer")}
+      </p>
       {connections?.map((connection) => (
         <div className="choice-connection" key={connection.answer}>
           {connections.length > 1 && (
-            <p className="choice-connection-answer">{connection.answer}</p>
+            <p className="choice-connection-answer">
+              <RichText text={connection.answer} />
+            </p>
           )}
           <span>{tr("study.answer_belongs_to")}</span>
           <ul>
             {connection.questions.slice(0, 2).map((q) => (
-              <li key={`${q.questionId}:${q.variantId}`}>{q.question}</li>
+              <li key={`${q.questionId}:${q.variantId}`}>
+                <RichText text={q.question} />
+              </li>
             ))}
           </ul>
           {connection.questions.length > 2 && (
@@ -47,7 +56,9 @@ export function SubmittedAnswer({
               </summary>
               <ul>
                 {connection.questions.slice(2).map((q) => (
-                  <li key={`${q.questionId}:${q.variantId}`}>{q.question}</li>
+                  <li key={`${q.questionId}:${q.variantId}`}>
+                    <RichText text={q.question} />
+                  </li>
                 ))}
               </ul>
             </details>
@@ -64,12 +75,14 @@ export function AnswerComparison({
   answer,
   connections,
   correct,
+  image,
 }: {
   value: unknown;
   mental?: boolean;
   answer: string;
   connections?: Attempt["confusedWith"];
   correct?: boolean | null;
+  image?: QuizImage;
 }) {
   useLanguage();
   const modelOnly = mental || correct === true;
@@ -84,7 +97,10 @@ export function AnswerComparison({
       )}
       <div className="model-answer">
         <span className="eyebrow">{tr("app.model_answer")}</span>
-        <p>{answer}</p>
+        <p>
+          <RichText text={answer} />
+        </p>
+        <ImageFigure image={image} />
       </div>
     </div>
   );

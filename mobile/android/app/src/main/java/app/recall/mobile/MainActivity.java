@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
             }catch(Exception e){pendingExport=null;Toast.makeText(this,text("native.prepareError"),Toast.LENGTH_LONG).show();}
         });
         web.setWebChromeClient(new WebChromeClient(){@Override public boolean onShowFileChooser(WebView view,ValueCallback<Uri[]> callback,FileChooserParams params){
-            if(picker!=null)picker.onReceiveValue(null);picker=callback;Intent open=new Intent(Intent.ACTION_OPEN_DOCUMENT);open.addCategory(Intent.CATEGORY_OPENABLE);open.setType("*/*");open.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/json","text/plain","application/octet-stream"});
+            boolean images=false;for(String accept:params.getAcceptTypes())if(accept!=null&&accept.startsWith("image/"))images=true; if(picker!=null)picker.onReceiveValue(null);picker=callback;Intent open=new Intent(Intent.ACTION_OPEN_DOCUMENT);open.addCategory(Intent.CATEGORY_OPENABLE);open.setType(images?"image/*":"*/*");open.putExtra(Intent.EXTRA_MIME_TYPES,images?new String[]{"image/png","image/jpeg","image/webp"}:new String[]{"application/json","text/plain","application/octet-stream"});
             try{startActivityForResult(open,OPEN_JSON);return true;}catch(Exception e){picker.onReceiveValue(null);picker=null;return false;}
         }});
         if(saved==null||web.restoreState(saved)==null)web.loadUrl(deviceOnly?LOCAL_PAGE:server);

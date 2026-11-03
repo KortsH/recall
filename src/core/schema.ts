@@ -1,7 +1,21 @@
 import { z } from "zod";
 import type { Bank, Question } from "./types.ts";
 import { validatePrerequisites } from "./prerequisites.ts";
+import { MAX_IMAGE_BYTES, validateImageSource } from "./media.ts";
 const text = z.string().trim().min(1).max(20000);
+const image = z
+  .object({
+    src: z
+      .string()
+      .max(Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64)
+      .refine(
+        (src) => validateImageSource(src),
+        "Use an embedded PNG/JPEG/WebP of at most 1 MiB and 16 megapixels",
+      ),
+    alt: z.string().trim().min(1).max(2000),
+    caption: z.string().max(2000).optional(),
+  })
+  .strict();
 const grading = {
   options: z.array(text).min(2).max(12).optional(),
   correct: z.array(text).min(1).optional(),
@@ -11,6 +25,8 @@ const grading = {
 };
 const variantSchema = z
   .object({
+    image: image.optional(),
+    answerImage: image.optional(),
     id: text,
     hint: text.optional(),
     skill: z.enum(["recall", "application"]).optional(),
@@ -34,6 +50,8 @@ const variantSchema = z
   .strict();
 const questionSchema = z
   .object({
+    image: image.optional(),
+    answerImage: image.optional(),
     id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/),
     topic: text.default("General"),
     flag: z
@@ -53,6 +71,8 @@ const questionSchema = z
     reversible: z.boolean().optional(),
     reverse: z
       .object({
+        image: image.optional(),
+        answerImage: image.optional(),
         question: text,
         answer: text,
         acceptedAnswers: grading.acceptedAnswers,

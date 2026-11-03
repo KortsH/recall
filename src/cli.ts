@@ -6,6 +6,7 @@ import { writeFile, readFile } from "node:fs/promises";
 import { createPool, migrate } from "./server/db.ts";
 import { Store } from "./server/store.ts";
 import { readBank } from "./core/bank.ts";
+import { packBank, imageFromFile } from "./media-files.ts";
 import { remoteBackend, type Backend } from "./remote.ts";
 import { auditQuestions } from "./core/audit.ts";
 import { parseRecovery } from "./core/recovery.ts";
@@ -25,7 +26,7 @@ import {
 const program = new Command()
   .name("recall")
   .description("Local, adaptive exam practice. No AI service required.")
-  .version("0.8.2-preview.1");
+  .version("0.9.0-preview.1");
 program.option(
   "--server <url>",
   "Use a shared server instead of a direct PostgreSQL connection",
@@ -46,6 +47,49 @@ async function connect() {
   return store;
 }
 const print = (value: unknown) => console.log(JSON.stringify(value, null, 2));
+program
+  .command("question-image <deck> <id> [file]")
+  .description(
+    "Attach or remove an embedded question/model image using normal revision checks",
+  )
+  .option("--answer", "Change the model-answer image")
+  .option("--variant <id>", "Choose an authored variant or reverse")
+  .option("--alt <text>", "Required image description")
+  .option("--caption <text>")
+  .option("--clear", "Remove the image")
+  .option("--dry-run")
+  .action(async (deck, id, file, o) => {
+    if (!!file === !!o.clear)
+      throw new Error("Supply an image file, or --clear");
+    const image = file
+      ? await imageFromFile(file, o.alt ?? "", o.caption)
+      : undefined;
+    const backend = await connect(),
+      d = await backend.deck(deck),
+      item = await backend.question(d.id, id),
+      question = structuredClone(item.question);
+    const target = o.variant
+      ? o.variant === "reverse"
+        ? question.reverse
+        : question.variants.find((v) => v.id === o.variant)
+      : question;
+    if (!target)
+      throw new Error(
+        "Unknown authored variant; use the base question or an authored reverse/variant id",
+      );
+    const key = o.answer ? "answerImage" : "image";
+    if (image) target[key] = image;
+    else delete target[key];
+    if (!o.dryRun)
+      await backend.editQuestion(d.id, id, question, item.revision);
+    print({
+      id,
+      field: key,
+      variant: o.variant ?? null,
+      hasImage: !!image,
+      dryRun: !!o.dryRun,
+    });
+  });
 async function readEditBackup(file: string) {
   const raw = await readFile(file, "utf8");
   if (Buffer.byteLength(raw) > 5 * 1024 * 1024)
@@ -297,13 +341,17 @@ program
 program
   .command("pack <file>")
   .requiredOption("-o, --output <file>")
-  .description("Make a portable quiz file without a server or database")
+  .description(
+    "Embed relative image files and make a portable quiz file without a server or database",
+  )
   .action(async (file, o) => {
-    const bank = await readBank(file);
-    await writeFile(
-      o.output,
-      JSON.stringify(await exportPortable(bank), null, 2) + "\n",
-    );
+    const bank = await packBank(file);
+    const content = JSON.stringify(await exportPortable(bank), null, 2) + "\n";
+    if (Buffer.byteLength(content) > 5 * 1024 * 1024)
+      throw new Error(
+        "Portable quiz exceeds 5 MiB; resize images or split the deck",
+      );
+    await writeFile(o.output, content);
     print({
       output: o.output,
       questions: bank.questions.length,

@@ -11,6 +11,26 @@ import { prerequisiteStatus } from "./prerequisites.ts";
 import type { Item, Session, Attempt } from "./types.ts";
 import { insertRetentionCheck } from "./retention.ts";
 import { choiceConnections } from "./feedback.ts";
+import type { QuizImage } from "./media.ts";
+
+/** Project images from the current revision; do not duplicate base64 blobs in attempt history. */
+export function presentAttempt(
+  attempt: Attempt,
+  items: Item[],
+): Attempt & { answerImage?: QuizImage } {
+  const shown: Attempt & { answerImage?: QuizImage } = { ...attempt };
+  delete shown.answerImage;
+  const item = items.find(
+    (i) =>
+      i.question.id === attempt.questionId &&
+      !i.archived &&
+      i.revision === attempt.revision,
+  );
+  const image =
+    item && resolveVariant(item.question, attempt.variantId).answerImage;
+  if (image) shown.answerImage = image;
+  return shown;
+}
 
 export interface AnswerInput {
   version: number;
@@ -265,6 +285,7 @@ export function revealAnswer(
   };
   return {
     answer: v.answer,
+    ...(v.answerImage ? { answerImage: v.answerImage } : {}),
     explanation: v.explanation ?? item.question.explanation,
     rubric: v.rubric ?? item.question.rubric ?? [],
     ...(mental ? { mental: true } : {}),
@@ -460,7 +481,7 @@ export function sessionView(s: Session, items: Item[]) {
         )
       : null;
   const valid = s.answers.map((a, index) => ({
-    ...a,
+    ...presentAttempt(a, items),
     index,
     outdated:
       !!s.learningReset ||

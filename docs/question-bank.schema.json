@@ -29,6 +29,52 @@
       "items": {
         "type": "object",
         "properties": {
+          "image": {
+            "type": "object",
+            "properties": {
+              "src": {
+                "type": "string",
+                "maxLength": 1398168
+              },
+              "alt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "caption": {
+                "type": "string",
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "src",
+              "alt"
+            ],
+            "additionalProperties": false
+          },
+          "answerImage": {
+            "type": "object",
+            "properties": {
+              "src": {
+                "type": "string",
+                "maxLength": 1398168
+              },
+              "alt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "caption": {
+                "type": "string",
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "src",
+              "alt"
+            ],
+            "additionalProperties": false
+          },
           "id": {
             "type": "string",
             "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$"
@@ -105,6 +151,52 @@
           "reverse": {
             "type": "object",
             "properties": {
+              "image": {
+                "type": "object",
+                "properties": {
+                  "src": {
+                    "type": "string",
+                    "maxLength": 1398168
+                  },
+                  "alt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "caption": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "src",
+                  "alt"
+                ],
+                "additionalProperties": false
+              },
+              "answerImage": {
+                "type": "object",
+                "properties": {
+                  "src": {
+                    "type": "string",
+                    "maxLength": 1398168
+                  },
+                  "alt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "caption": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "src",
+                  "alt"
+                ],
+                "additionalProperties": false
+              },
               "question": {
                 "type": "string",
                 "minLength": 1,
@@ -240,6 +332,52 @@
             "items": {
               "type": "object",
               "properties": {
+                "image": {
+                  "type": "object",
+                  "properties": {
+                    "src": {
+                      "type": "string",
+                      "maxLength": 1398168
+                    },
+                    "alt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "caption": {
+                      "type": "string",
+                      "maxLength": 2000
+                    }
+                  },
+                  "required": [
+                    "src",
+                    "alt"
+                  ],
+                  "additionalProperties": false
+                },
+                "answerImage": {
+                  "type": "object",
+                  "properties": {
+                    "src": {
+                      "type": "string",
+                      "maxLength": 1398168
+                    },
+                    "alt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "caption": {
+                      "type": "string",
+                      "maxLength": 2000
+                    }
+                  },
+                  "required": [
+                    "src",
+                    "alt"
+                  ],
+                  "additionalProperties": false
+                },
                 "id": {
                   "type": "string",
                   "minLength": 1,

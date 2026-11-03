@@ -2,7 +2,7 @@
 
 A free, open-source exam study tool. Start with multiple choice, build active recall, and share quizzes as files. Use it on your device without an account or subscription; connecting your own server is optional.
 
-[Try the guided sample](https://kortsh.github.io/recall/#guide) · [Open Recall](https://kortsh.github.io/recall/) · [Windows download](https://github.com/KortsH/recall/releases/download/v0.8.2-preview.1/Recall-Setup.exe) · [Android download](https://github.com/KortsH/recall/releases/download/v0.8.2-preview.1/Recall-Android.apk) · [Release details](https://github.com/KortsH/recall/releases/tag/v0.8.2-preview.1)
+[Try the guided sample](https://kortsh.github.io/recall/#guide) · [Open Recall](https://kortsh.github.io/recall/) · [Windows download](https://github.com/KortsH/recall/releases/download/v0.9.0-preview.1/Recall-Setup.exe) · [Android download](https://github.com/KortsH/recall/releases/download/v0.9.0-preview.1/Recall-Android.apk) · [Release details](https://github.com/KortsH/recall/releases/tag/v0.9.0-preview.1)
 
 ## Start here — no coding required
 
@@ -51,6 +51,10 @@ Optional features, only where useful:
   flashcard, multiple_choice, multiple_select or matching. Matching uses
   pairs with unique left/right strings.
 - tags: labels for organization.
+- LaTeX: use $...$ inline or $$...$$ for display equations. Double each
+  backslash in JSON. This renders math; it does not provide algebra grading.
+- Optional image/answerImage: I will attach pictures in Recall's editor.
+  Do not invent base64 data or put remote URLs in the bank.
 
 Use the example and field reference below. Ordinary questions do not need
 all optional features. For updates, use my exported bank, preserve its ids,
@@ -87,6 +91,8 @@ The first answer is checked against aliases. The second is open prose: compare y
 If import reports an error, give that message to the assistant and ask for a corrected **complete JSON object**. Do not paste fragments or an explanation around the JSON. Review question count, wording, answers and proposed archives in the import preview.
 
 ## How one question becomes several ways to learn
+
+**Pictures and equations:** attach a picture in the question editor; exports embed it in the JSON so friends can import it offline without separate files or a server. LaTeX renders locally in prompts, answers and choices. Start with the [pictures/math example](examples/media-math.json) or read the [authoring guide](docs/MEDIA.md) for JSON escaping, image fields, CLI packing and grading rules. Blank Enter or **Alt+5** reveals an open question for mental self-assessment; bare **5** works outside text inputs.
 
 One record is one learning objective, with a stable id and shared progress. Written recall and a flashcard exist automatically. Learn introduces new objectives with single-answer recognition, preferring authored single-choice options or using other bank answers for introductory choices, then moves to recall in small working sets. You do not need duplicate records for each format.
 
@@ -147,6 +153,8 @@ Optional fields can be omitted. Defaults describe behavior; they need not appear
 | `id` | Required stable string | Identifies the objective for updates, progress and prerequisites. Use 1–120 letters/digits/dots/underscores/hyphens, starting with a letter/digit. Keep it stable. |
 | `question` | Required string | Forward prompt. |
 | `answer` | Required string | Forward model answer shown after answering/revealing. |
+| `image` | Optional; no picture | Prompt image object with required src (embedded PNG/JPEG/WebP data URL) and alt description; optional caption. Use the editor to attach/resize a picture, or CLI pack to embed a relative file. |
+| `answerImage` | Optional; no picture | Same image structure, shown with the model after reveal/feedback. Never included in the unanswered card. |
 | `topic` | Optional; `"General"` | Groups the library; does not create dependencies. |
 | `concept` | Optional; question text | Connects related objectives for separation in practice. |
 | `skill` | Optional; `"recall"` | `"recall"` or `"application"`; labels skill/results, without imposing a content ratio. |
@@ -170,11 +178,11 @@ Exact checking preserves negation, signs and mathematical directions. With neith
 
 ### The reverse object
 
-Required: `question`, `answer`. Optional: its own `acceptedAnswers`, `requiredParts`, `rubric`, `explanation`, `hint`, with the meanings above. Forward hints/rubrics are not reused. There is no separate reverse id, topic, difficulty, dependency list or progress record. Reverse choice/matching prompts belong in appropriate authored variants, not unsupported reverse fields.
+Required: `question`, `answer`. Optional: its own `image`, `answerImage`, `acceptedAnswers`, `requiredParts`, `rubric`, `explanation`, `hint`, with the meanings above. Forward images/hints/rubrics are not reused. There is no separate reverse id, topic, difficulty, dependency list or progress record. Reverse choice/matching prompts belong in appropriate authored variants, not unsupported reverse fields.
 
 ### Objects inside variants
 
-Each requires `id`, `type`, `question`, `answer`. Optional common fields: `explanation`, `hint`, `skill`, `rubric`. Skill inherits the objective's skill when omitted. Explicit hints override the objective hint; ordinary variant feedback can use the objective explanation/rubric as fallback.
+Each requires `id`, `type`, `question`, `answer`. Optional common fields: `image`, `answerImage`, `explanation`, `hint`, `skill`, `rubric`. Skill inherits the objective's skill when omitted. Explicit hints override the objective hint; ordinary variant feedback can use the objective explanation/rubric as fallback.
 
 | Type | Additional fields and behavior |
 | --- | --- |

@@ -1,5 +1,6 @@
 const BASE = new URL(self.registration.scope).pathname;
 const SHELL = "recall-shell-__BUILD__";
+const PRECACHE = /*__PRECACHE__*/ [];
 self.addEventListener("install", (event) =>
   event.waitUntil(
     (async () => {
@@ -12,13 +13,16 @@ self.addEventListener("install", (event) =>
         ...html.matchAll(/(?:src|href)="([^\"]*\/assets\/[^\"]+)"/g),
       ].map((m) => m[1]);
       await cache.addAll([
-        ...assets,
-        ...[
-          "manifest.webmanifest",
-          "icon-192.png",
-          "icon-512.png",
-          "recall.svg",
-        ].map((p) => BASE + p),
+        ...new Set([
+          ...assets,
+          ...PRECACHE.map((p) => BASE + p),
+          ...[
+            "manifest.webmanifest",
+            "icon-192.png",
+            "icon-512.png",
+            "recall.svg",
+          ].map((p) => BASE + p),
+        ]),
       ]);
       // Existing tabs continue running. They receive controllerchange and offer Save & reload.
       await self.skipWaiting();
@@ -46,6 +50,7 @@ self.addEventListener("fetch", (event) => {
   if (
     event.request.method !== "GET" ||
     url.origin !== self.location.origin ||
+    url.pathname === BASE + "releases.json" ||
     url.pathname.startsWith("/api/")
   )
     return;

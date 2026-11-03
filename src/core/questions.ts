@@ -12,6 +12,8 @@ export function variants(q: Question): Variant[] {
                 ? "multiple_select"
                 : "multiple_choice",
             question: q.question,
+            image: q.image,
+            answerImage: q.answerImage,
             answer: q.answer,
             options: q.options,
             correct: q.correct ?? [q.answer],
@@ -21,6 +23,8 @@ export function variants(q: Question): Variant[] {
       : []),
     {
       id: "written",
+      image: q.image,
+      answerImage: q.answerImage,
       type: "written",
       question: q.question,
       answer: q.answer,
@@ -31,12 +35,19 @@ export function variants(q: Question): Variant[] {
     },
     {
       id: "flashcard",
+      image: q.image,
+      answerImage: q.answerImage,
       type: "flashcard",
       question: q.question,
       answer: q.answer,
       skill: q.skill,
     },
-    ...q.variants.map((v) => ({ ...v, skill: v.skill ?? q.skill })),
+    ...q.variants.map((v) => ({
+      ...v,
+      skill: v.skill ?? q.skill,
+      image: v.image ?? q.image,
+      answerImage: v.answerImage ?? q.answerImage,
+    })),
     ...(q.reversible && q.reverse
       ? [
           {
@@ -72,6 +83,8 @@ export function resolveVariant(q: Question, id: string): Variant {
   if (id === "learn-choice")
     return {
       id,
+      image: q.image,
+      answerImage: q.answerImage,
       type: "multiple_choice",
       question: q.question,
       answer: q.answer,

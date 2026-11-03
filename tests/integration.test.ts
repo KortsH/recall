@@ -9,7 +9,12 @@ import { createPool, migrate, databaseUrl } from "../src/server/db.ts";
 import { Store } from "../src/server/store.ts";
 import { parseBank } from "../src/core/bank.ts";
 import { createApp } from "../src/server/http.ts";
-import { newSession, advanceSession, requestHint } from "../src/core/study.ts";
+import {
+  newSession,
+  advanceSession,
+  requestHint,
+  revealAnswer,
+} from "../src/core/study.ts";
 import { syncOfflineSession } from "../src/server/offline.ts";
 import { remoteBackend } from "../src/remote.ts";
 import { createRecovery } from "../src/core/recovery.ts";
@@ -64,6 +69,117 @@ async function fresh() {
   });
   return result.deckId;
 }
+
+test("media is portable across live/offline study, model images stay hidden until reveal/results, and attempts do not duplicate images", async () => {
+  const src =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  const make = () =>
+    parseBank({
+      deck: "Media " + randomUUID(),
+      questions: [
+        {
+          id: "graph",
+          question: "Read $x$ from the graph.",
+          answer: "$x=2$",
+          acceptedAnswers: ["2"],
+          image: { src, alt: "The prompt graph" },
+          answerImage: { src, alt: "The worked solution" },
+        },
+      ],
+    });
+  const id = (await store.importBank(make())).deckId,
+    remote = remoteBackend(base);
+  const exam = await store.createSession(id, { mode: "test", count: 1 });
+  assert.equal(exam.card!.image!.alt, "The prompt graph");
+  assert.ok(!JSON.stringify(exam).includes("The worked solution"));
+  const result = await remote.answer(exam.id, {
+    version: exam.version,
+    revision: 1,
+    response: "2",
+  });
+  assert.equal(result.feedback, null);
+  assert.equal(
+    result.session.result!.answers[0].answerImage!.alt,
+    "The worked solution",
+  );
+  assert.ok(
+    !JSON.stringify((await store.loadSession(exam.id)).answers).includes(
+      "data:image",
+    ),
+  );
+  const second = (await store.importBank(make())).deckId,
+    items = await store.items(second),
+    local = newSession(second, items, { mode: "cram", count: 1 });
+  const shown = revealAnswer(local, items[0], {
+    version: 0,
+    revision: 1,
+    response: "",
+    mental: true,
+  });
+  assert.equal(shown.answerImage!.alt, "The worked solution");
+  advanceSession(
+    local,
+    items[0],
+    { version: 0, revision: 1, response: "", rating: "good" },
+    items,
+  );
+  const synced = await syncOfflineSession(store, local);
+  assert.ok(!JSON.stringify(synced.session.answers).includes("data:image"));
+  const view = await store.getSession(local.id);
+  assert.equal(view.result!.answers[0].answerImage!.alt, "The worked solution");
+  const png = join(
+    await mkdtemp(join(tmpdir(), "recall-image-cli-")),
+    "point.png",
+  );
+  await writeFile(png, Buffer.from(src.split(",")[1], "base64"));
+  const cli = (args: string[]) =>
+    new Promise<any>((resolve, reject) => {
+      const child = spawn(
+        process.execPath,
+        [
+          "--import",
+          "tsx",
+          "src/cli.ts",
+          "--server",
+          base,
+          "question-image",
+          second,
+          "graph",
+          ...args,
+        ],
+        { cwd: process.cwd() },
+      );
+      let stdout = "",
+        stderr = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code !== 0) reject(new Error(stderr));
+        else {
+          try {
+            resolve(JSON.parse(stdout));
+          } catch (error) {
+            reject(error);
+          }
+        }
+      });
+    });
+  await cli([png, "--alt", "Updated graph", "--dry-run"]);
+  assert.equal((await store.question(second, "graph")).revision, 1);
+  await cli([png, "--alt", "Updated graph"]);
+  assert.equal((await store.question(second, "graph")).revision, 2);
+  assert.equal((await store.question(second, "graph")).progress.attempts, 0);
+  assert.equal(
+    (await store.getSession(exam.id)).result!.answers[0].answerImage!.alt,
+    "The worked solution",
+    "Another deck is unchanged",
+  );
+});
 
 test("wrong-choice context is shared by live/offline answers, rebuilt on sync and hidden during Test", async () => {
   const make = () =>

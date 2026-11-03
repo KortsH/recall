@@ -1,6 +1,9 @@
+import type { QuizImage } from "./media.ts";
 export type Format =
   "multiple_choice" | "multiple_select" | "written" | "flashcard" | "matching";
 export interface Variant {
+  image?: QuizImage;
+  answerImage?: QuizImage;
   hint?: string;
   skill?: "recall" | "application";
   id: string;
@@ -16,8 +19,12 @@ export interface Variant {
   rubric?: string[];
 }
 export interface Question {
+  image?: QuizImage;
+  answerImage?: QuizImage;
   reversible?: boolean;
   reverse?: {
+    image?: QuizImage;
+    answerImage?: QuizImage;
     question: string;
     answer: string;
     acceptedAnswers?: string[];
@@ -141,6 +148,7 @@ export interface Attempt {
   at: string;
 }
 export interface PublicCard {
+  image?: QuizImage;
   answerParts?: number;
   retentionCheck?: boolean;
   hasHint?: boolean;

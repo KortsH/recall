@@ -479,10 +479,12 @@ test("update banners distinguish reload from installer downloads and keep a quie
 });
 
 test("service worker serves the current shell and preserves older assets while study tabs are open", async () => {
-  const code = (await readFile("public/sw.js", "utf8")).replace(
-    "__BUILD__",
-    "new",
-  );
+  const code = (await readFile("public/sw.js", "utf8"))
+    .replace("__BUILD__", "new")
+    .replace(
+      "/*__PRECACHE__*/ []",
+      JSON.stringify(["assets/formula.woff2", "assets/app.js"]),
+    );
   const callbacks = new Map<string, (e: any) => void>(),
     current = new Map<string, Response>([["/", new Response("NEW")]]),
     old = new Map<string, Response>([
@@ -499,12 +501,18 @@ test("service worker serves the current shell and preserves older assets while s
   });
   let removed = 0,
     claimed = 0;
+  let precached: string[] = [];
   const globals = {
     URL,
     Response,
-    fetch: async () => new Response("network"),
+    fetch: async () => new Response('<script src="/assets/app.js"></script>'),
     caches: {
-      open: async () => cache(current),
+      open: async () => ({
+        ...cache(current),
+        addAll: async (urls: string[]) => {
+          precached = urls;
+        },
+      }),
       match: async (r: any) => cache(old).match(r),
       keys: async () => ["recall-shell-old", "recall-shell-new"],
       delete: async () => {
@@ -525,6 +533,19 @@ test("service worker serves the current shell and preserves older assets while s
     },
   };
   vm.runInNewContext(code, globals);
+  let installation: Promise<void> | undefined;
+  callbacks.get("install")!({
+    waitUntil: (p: Promise<void>) => {
+      installation = p;
+    },
+  });
+  await installation;
+  assert.ok(
+    precached.includes("/assets/formula.woff2"),
+    "Formula fonts must be available before the first offline equation",
+  );
+  assert.equal(precached.filter((url) => url === "/assets/app.js").length, 1);
+  current.set("/", new Response("NEW"));
   const request = async (url: string, mode: string) => {
     let promise: Promise<Response> | undefined;
     callbacks.get("fetch")!({
@@ -550,6 +571,11 @@ test("service worker serves the current shell and preserves older assets while s
     await request("https://recall.example/api/snapshot", "cors"),
     undefined,
     "Quiz API requests must not be cached",
+  );
+  assert.equal(
+    await request("https://recall.example/releases.json", "cors"),
+    undefined,
+    "Release discovery must bypass the shell cache",
   );
   let activation: Promise<void> | undefined;
   callbacks.get("activate")!({

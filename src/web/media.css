@@ -1,0 +1,105 @@
+.math-display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 5px 0;
+  white-space: normal;
+}
+.math-inline {
+  white-space: normal;
+}
+.math-display .katex-display {
+  margin: 0.5em 0;
+}
+.quiz-image {
+  margin: 16px 0;
+  min-width: 0;
+}
+.quiz-image-open {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  max-width: 100%;
+  cursor: zoom-in;
+}
+.quiz-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+}
+.quiz-image figcaption {
+  margin-top: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.image-enlarge-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.image-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #15131de8;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 500;
+}
+.image-dialog {
+  width: min(1400px, 94vw);
+  max-width: 96vw;
+  max-height: 94vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  color: var(--text);
+}
+.image-dialog > button {
+  display: block;
+  margin: 0 0 12px auto;
+}
+.image-dialog img {
+  width: 100%;
+  max-width: 100%;
+  max-height: 76vh;
+  object-fit: contain;
+  background: white;
+}
+.image-editor {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+.image-editor small {
+  line-height: 1.6;
+  color: var(--muted);
+}
+.media-preview {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.media-preview summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.media-preview h3 {
+  overflow-wrap: anywhere;
+}
+.mental-shortcut {
+  margin-left: 6px;
+  font: inherit;
+  font-size: 10px;
+  opacity: 0.75;
+}

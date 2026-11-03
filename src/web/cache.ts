@@ -15,6 +15,7 @@ import { emptyProgress } from "../core/types.ts";
 import {
   newSession,
   advanceSession,
+  presentAttempt,
   sessionView,
   prepareSession,
   requestHint,
@@ -973,7 +974,10 @@ export async function api<T>(
             feedback:
               session.mode === "test"
                 ? null
-                : { ...attempt, rubric: attempt.rubric ?? [] },
+                : {
+                    ...presentAttempt(attempt, items),
+                    rubric: attempt.rubric ?? [],
+                  },
           };
         }
       } else if (rest === "finish") {

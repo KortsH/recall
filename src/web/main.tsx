@@ -19,6 +19,7 @@ import {
   keyLabel,
   validContinueKey,
   continuesFeedback,
+  mentalAnswerShortcut,
   type StudyControls,
 } from "./controls.ts";
 import { parsePortable, exportPortable } from "../core/portable.ts";
@@ -35,6 +36,11 @@ import {
 } from "./theme.ts";
 import { ReadAloud } from "./speech.tsx";
 import { AnswerComparison } from "./answers.tsx";
+import { RichText } from "./rich-text.tsx";
+import { ImageFigure, ImageEditor } from "./media.tsx";
+import type { QuizImage } from "../core/media.ts";
+import "katex/dist/katex.min.css";
+import "./media.css";
 import { resolveVariant } from "../core/questions.ts";
 import { Dictation } from "./dictation.tsx";
 import "./dictation.css";
@@ -119,7 +125,7 @@ type Deck = Awaited<ReturnType<Store["decks"]>>[number];
 type SessionView = Awaited<ReturnType<Store["getSession"]>>;
 const sessionKey = () =>
   personalMode() ? "recall-session-personal" : "recall-session";
-type Feedback = Attempt & { rubric?: string[] };
+type Feedback = Attempt & { rubric?: string[]; answerImage?: QuizImage };
 type Reveal = Awaited<ReturnType<Store["reveal"]>>;
 const fmt = (s: string) =>
   ["learn", "cram", "flashcards", "test"].includes(s)
@@ -669,6 +675,7 @@ function App() {
         e.isComposing ||
         editor ||
         importOpen ||
+        shareOpen ||
         resetRequest ||
         discardResetOpen ||
         flagRequest ||
@@ -678,6 +685,18 @@ function App() {
         return;
       const target = e.target as HTMLElement;
       const typing = ["TEXTAREA", "INPUT", "SELECT"].includes(target.tagName);
+      if (
+        mentalAnswerShortcut(e, typing) &&
+        card?.format === "written" &&
+        session.mode !== "test" &&
+        !busy &&
+        !feedback &&
+        !reveal
+      ) {
+        e.preventDefault();
+        revealMental();
+        return;
+      }
       if (
         e.key === "Enter" &&
         (e.metaKey || e.ctrlKey) &&
@@ -2255,7 +2274,9 @@ function App() {
                   {feedback.hintUsed && <small>{tr("app.hint_used")}</small>}
                 </div>
                 <div className="eyebrow">{feedback.topic}</div>
-                <h2>{feedback.question}</h2>
+                <h2>
+                  <RichText text={feedback.question} />
+                </h2>
                 <ReadAloud
                   text={feedback.answer}
                   label={tr("app.read_model_answer")}
@@ -2273,9 +2294,12 @@ function App() {
                   answer={feedback.answer}
                   connections={feedback.confusedWith}
                   correct={feedback.correct}
+                  image={feedback.answerImage}
                 />
                 {feedback.explanation && (
-                  <p className="explanation">{feedback.explanation}</p>
+                  <p className="explanation">
+                    <RichText text={feedback.explanation} />
+                  </p>
                 )}
                 <div className="feedback-bottom">
                   <button
@@ -2346,7 +2370,13 @@ function App() {
                         <Flag size={17} />
                       </button>
                     </div>
-                    <h2>{card.question}</h2>
+                    <h2>
+                      <RichText text={card.question} />
+                    </h2>
+                    <ImageFigure
+                      key={`${card.questionId}:${card.revision}`}
+                      image={card.image}
+                    />
                     <ReadAloud
                       text={card.question}
                       label={tr("app.read_question")}
@@ -2512,7 +2542,9 @@ function App() {
                                   }}
                                 >
                                   <span className="option-number">{i + 1}</span>
-                                  <span>{option}</span>
+                                  <span>
+                                    <RichText text={option} />
+                                  </span>
                                   {card.format === "multiple_choice" &&
                                   controls.autoSubmitSingle ? (
                                     <ArrowRight
@@ -2650,12 +2682,15 @@ function App() {
                           value={session.revealed?.response ?? actualResponse}
                           mental={reveal.mental}
                           answer={reveal.answer}
+                          image={reveal.answerImage}
                         />
                         <ReadAloud
                           text={reveal.answer}
                           label={tr("app.read_model_answer")}
                         />
-                        <p className="explanation">{reveal.explanation}</p>
+                        <p className="explanation">
+                          <RichText text={reveal.explanation} />
+                        </p>
                         {reveal.rubric.length > 0 && (
                           <ul>
                             {reveal.rubric.map((x) => (
@@ -2726,9 +2761,12 @@ function App() {
                                       ? tr("app.arrow_keys_for_more")
                                       : "",
                                 })
-                              : tr(
-                                  "app.enter_to_check_shift_enter_for_a_new_line",
-                                )}
+                              : card.format === "written" &&
+                                  session.mode !== "test"
+                                ? tr("study.open_shortcuts")
+                                : tr(
+                                    "app.enter_to_check_shift_enter_for_a_new_line",
+                                  )}
                         </span>
                         <div className="answer-actions">
                           {card.format === "written" &&
@@ -2740,6 +2778,9 @@ function App() {
                                 onClick={revealMental}
                               >
                                 {tr("app.answer_in_my_head")}
+                                <kbd className="mental-shortcut">
+                                  {tr("study.mental_shortcut")}
+                                </kbd>
                               </button>
                             )}
                           {(card.format !== "multiple_choice" ||
@@ -3021,7 +3062,7 @@ function Results({
                     : "↻"}
             </span>
             <span>
-              {a.question}
+              <RichText text={a.question} />
               <small>
                 {a.topic}
                 {a.selfAssessed ? tr("results.self_assessed") : ""}
@@ -3040,8 +3081,11 @@ function Results({
               answer={a.answer}
               connections={a.confusedWith}
               correct={a.correct}
+              image={a.answerImage}
             />
-            <p className="explanation">{a.explanation}</p>
+            <p className="explanation">
+              <RichText text={a.explanation} />
+            </p>
             {a.rubric && (
               <ul className="result-rubric">
                 {a.rubric.map((point) => (
@@ -3490,9 +3534,13 @@ function Editor({
     [raw, setRaw] = useState(JSON.stringify(item.question, null, 2)),
     [error, setError] = useState("");
   const ref = useDialog(onClose);
+  const [imageJobs, setImageJobs] = useState(0);
+  const imageBusy = (loading: boolean) =>
+    setImageJobs((count) => Math.max(0, count + (loading ? 1 : -1)));
   const field = (key: keyof Question, value: any) =>
-    setQ({ ...q, [key]: value });
+    setQ((current) => ({ ...current, [key]: value }));
   const save = () => {
+    if (imageJobs > 0) return;
     try {
       const value = advanced
         ? JSON.parse(raw)
@@ -3769,6 +3817,61 @@ function Editor({
                 </>
               )}
             </fieldset>
+            <p className="small">{tr("media.mathHelp")}</p>
+            <ImageEditor
+              label={tr("media.questionImage")}
+              value={q.image}
+              onChange={(image) => field("image", image)}
+              onBusy={imageBusy}
+            />
+            <ImageEditor
+              label={tr("media.answerImage")}
+              value={q.answerImage}
+              onChange={(image) => field("answerImage", image)}
+              onBusy={imageBusy}
+            />
+            {q.reversible && q.reverse && (
+              <>
+                <ImageEditor
+                  label={tr("media.reverseImage")}
+                  value={q.reverse.image}
+                  onChange={(image) =>
+                    setQ((current) => ({
+                      ...current,
+                      reverse: current.reverse && { ...current.reverse, image },
+                    }))
+                  }
+                  onBusy={imageBusy}
+                />
+                <ImageEditor
+                  label={tr("media.reverseAnswerImage")}
+                  value={q.reverse.answerImage}
+                  onChange={(answerImage) =>
+                    setQ((current) => ({
+                      ...current,
+                      reverse: current.reverse && {
+                        ...current.reverse,
+                        answerImage,
+                      },
+                    }))
+                  }
+                  onBusy={imageBusy}
+                />
+              </>
+            )}
+            <details className="media-preview">
+              <summary>{tr("media.preview")}</summary>
+              <h3>
+                <RichText text={q.question} />
+              </h3>
+              <ImageFigure image={q.image} />
+              <AnswerComparison
+                value=""
+                mental
+                answer={q.answer}
+                image={q.answerImage}
+              />
+            </details>
             <label className="field">
               {tr("common.explanation")}
               <textarea
@@ -3861,7 +3964,11 @@ function Editor({
           >
             {tr("common.cancel")}
           </button>
-          <button className="button primary" disabled={busy} onClick={save}>
+          <button
+            className="button primary"
+            disabled={busy || imageJobs > 0}
+            onClick={save}
+          >
             {busy
               ? tr("app.saving")
               : item.revision === 0

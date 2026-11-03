@@ -50,6 +50,7 @@ Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --f
 - Device-only mode must work on first launch with zero quiz API requests, including import/edit/export. Sharing defaults to questions only. Progress restore must be explicit and idempotent, with content-hash checks; never add counters from two exported snapshots. Validate the complete graph before applying any local changes.
 - Never embed deployment addresses or credentials in installers, static web assets or APKs. Android native file handling is origin-bound, main-frame only, capped at 5 MB, and limited to user-selected JSON imports/exports. Do not expose a general filesystem bridge.
 - Build installers with `desktop/windows/build.ps1`, then run `npm run test:installer` on Windows. Android's Gradle pre-build bundles the standalone UI. Release assets must contain synthetic app assets only; real study banks stay outside Git and public downloads.
+  Build the public Recall-Web.zip from a fresh generic `npm run build:standalone`, not Windows' platform-specific build/windows/web.zip. The embedded Windows and Android bundles retain their native platform for correct update downloads.
 - `--server URL` or `RECALL_SERVER_URL` selects HTTP; otherwise the CLI uses PostgreSQL directly. Do not expose PostgreSQL to the internet for agents or mobile clients.
 - Downloaded clients pick up changes on explicit refresh. Sync progress before replacing downloads. Offline evidence for edited/archived questions is retained but excluded from mastery.
 - MC success alone cannot establish mastery. Self-assessment must stay explicit.
@@ -57,6 +58,7 @@ Scripted agents can use `session-start`, `session`, `answer --file`, `reveal --f
 - Corrections reset affected mastery and invalidate obsolete results. Preserve progress for explanation-only changes.
 - Keep submitted answers atomic and idempotent through session-version checks and row locks.
 - Do not add executable question templates. Formats are declarative data.
+- Media is self-contained validated PNG/JPEG/WebP data, never remote URLs or SVG. Preserve prompt/model/reverse image separation and Test secrecy. Project model images for display from the matching revision rather than duplicating blobs in attempts. Read docs/MEDIA.md. KaTeX uses trust:false, bounded expansion and fresh macros; plain HTML stays text. Precache the bundled formula fonts for offline use. Keyboard5 must not steal numeric typing; Alt+5/blank Enter reveal mental recall without awarding credit.
 - Run `npm test`, `npm run test:integration`, and `npm run build` for engine/API changes. Integration tests require a disposable PostgreSQL test server with CREATEDB access. UI changes should also be checked in the browser at desktop and mobile widths.
 - Regenerate the schema using `npm run schema` after bank-schema changes.
 

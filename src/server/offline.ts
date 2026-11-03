@@ -141,6 +141,7 @@ export async function syncOfflineSession(store: Store, input: Session) {
           );
         }
       }
+      delete (attempt as Attempt & { answerImage?: unknown }).answerImage;
       if (old)
         await db.query(
           "UPDATE attempts SET data=$3,invalidated=$4 WHERE session_id=$1 AND ordinal=$2",

@@ -1,4 +1,5 @@
 import { tr, useLanguage } from "./i18n.ts";
+import { RichText } from "./rich-text.tsx";
 import React, { useEffect, useState } from "react";
 import {
   Check,
@@ -375,8 +376,12 @@ export function QuestionLibrary({
                           />
                         )}
                       </span>
-                      <h3>{i.question.question}</h3>
-                      <p>{i.question.answer}</p>
+                      <h3>
+                        <RichText text={i.question.question} />
+                      </h3>
+                      <p>
+                        <RichText text={i.question.answer} />
+                      </p>
                       {i.question.flag && (
                         <p className="flag-note">
                           <Flag size={12} /> {i.question.flag.note}

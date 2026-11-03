@@ -85,3 +85,26 @@ export function continuesFeedback(
       event.key.toLowerCase() === controls.continueKey.toLowerCase())
   );
 }
+
+export function mentalAnswerShortcut(
+  event: {
+    key: string;
+    altKey?: boolean;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    shiftKey?: boolean;
+    repeat?: boolean;
+    isComposing?: boolean;
+  },
+  typing: boolean,
+) {
+  return (
+    event.key === "5" &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    !event.repeat &&
+    !event.isComposing &&
+    (!typing || !!event.altKey)
+  );
+}

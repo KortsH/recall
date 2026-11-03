@@ -21,6 +21,9 @@ import type { Attempt, Item } from "../core/types.ts";
 import { emptyProgress } from "../core/types.ts";
 import { AnswerComparison } from "./answers.tsx";
 import { choiceConnections } from "../core/feedback.ts";
+import { RichText } from "./rich-text.tsx";
+import { ImageFigure } from "./media.tsx";
+import { mentalAnswerShortcut } from "./controls.ts";
 import { saveJson } from "./files.ts";
 import {
   newWalkthroughItems,
@@ -425,6 +428,21 @@ function QuestionPreview({
       ref={region}
       tabIndex={-1}
       onKeyDown={(e) => {
+        const typing = ["TEXTAREA", "INPUT", "SELECT"].includes(
+          (e.target as HTMLElement).tagName,
+        );
+        if (
+          !comparison &&
+          card.format === "written" &&
+          mentalAnswerShortcut(
+            { ...e, isComposing: e.nativeEvent.isComposing },
+            typing,
+          )
+        ) {
+          e.preventDefault();
+          revealMental();
+          return;
+        }
         if (
           e.defaultPrevented ||
           e.nativeEvent.isComposing ||
@@ -469,7 +487,10 @@ function QuestionPreview({
       }}
     >
       <span className="eyebrow">{tr("guide.previewLabel")}</span>
-      <h3>{card.question}</h3>
+      <h3>
+        <RichText text={card.question} />
+      </h3>
+      <ImageFigure image={card.image} />
       {comparison ? (
         <>
           {feedback && (
@@ -483,9 +504,12 @@ function QuestionPreview({
             answer={v.answer}
             connections={feedback?.confusedWith}
             correct={feedback?.correct}
+            image={v.answerImage}
           />
           {(v.explanation ?? item.question.explanation) && (
-            <p>{v.explanation ?? item.question.explanation}</p>
+            <p>
+              <RichText text={v.explanation ?? item.question.explanation} />
+            </p>
           )}
           {revealed && !feedback && (
             <>
@@ -552,7 +576,7 @@ function QuestionPreview({
                   }}
                 >
                   <span>{n + 1}</span>
-                  {option}
+                  <RichText text={option} />
                 </button>
               ))}
             </div>

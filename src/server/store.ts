@@ -1,5 +1,6 @@
 import {
   advanceSession,
+  presentAttempt,
   sessionView,
   newSession,
   prepareSession,
@@ -798,12 +799,8 @@ export class Store {
           409,
         );
       const ordinal = s.cursor;
-      const { attempt, progress } = advanceSession(
-        s,
-        item,
-        input,
-        await this.items(s.deckId, db),
-      );
+      const context = await this.items(s.deckId, db);
+      const { attempt, progress } = advanceSession(s, item, input, context);
       await db.query(
         "INSERT INTO attempts(session_id,ordinal,deck_id,question_id,revision,data) VALUES($1,$2,$3,$4,$5,$6)",
         [s.id, ordinal, s.deckId, item.question.id, item.revision, attempt],
@@ -819,7 +816,10 @@ export class Store {
         feedback:
           s.mode === "test"
             ? null
-            : { ...attempt, rubric: attempt.rubric ?? [] },
+            : {
+                ...presentAttempt(attempt, context),
+                rubric: attempt.rubric ?? [],
+              },
       };
     });
   }

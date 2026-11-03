@@ -14,7 +14,7 @@ import { resolveVariant } from "../src/core/questions.ts";
 import { setLanguage } from "../src/web/i18n.ts";
 
 test("the downloadable walkthrough and every README JSON example validate, and the reference names every supported field", async () => {
-  assert.equal(walkthroughBank.questions.length, 9);
+  assert.equal(walkthroughBank.questions.length, 11);
   const ids = new Set(walkthroughBank.questions.map((q) => q.id));
   for (const step of walkthroughSteps) {
     assert.ok(ids.has(step.question));

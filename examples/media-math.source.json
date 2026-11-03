@@ -1,0 +1,50 @@
+{
+  "deck": "Pictures and equations",
+  "description": "Original examples of portable images and locally rendered LaTeX.",
+  "questions": [
+    {
+      "id": "graph-slope",
+      "topic": "Graphs",
+      "question": "Use the diagram. What is the slope $m$ of the line?",
+      "answer": "\\[m=\\frac{5-1}{2-0}=2\\]",
+      "acceptedAnswers": [
+        "2",
+        "m=2"
+      ],
+      "image": {
+        "src": "assets/line-graph.jpg",
+        "alt": "A line passes through (0, 1) and (2, 5).",
+        "caption": "Read two points from the graph."
+      },
+      "options": [
+        "$m=1$",
+        "$m=2$",
+        "$m=3$",
+        "$m=5$"
+      ],
+      "correct": [
+        "$m=2$"
+      ],
+      "explanation": "The slope is the change in $y$ divided by the change in $x$.",
+      "reversible": false
+    },
+    {
+      "id": "quadratic-roots",
+      "topic": "Equations",
+      "question": "Find both solutions of $x^2-5x+6=0$. Separate them with a semicolon.",
+      "answer": "\\[(x-2)(x-3)=0\\] So $x=2$ or $x=3$.",
+      "requiredParts": [
+        [
+          "2",
+          "x=2"
+        ],
+        [
+          "3",
+          "x=3"
+        ]
+      ],
+      "explanation": "The two required parts can be entered in either order. This checks explicit answers; it is not symbolic algebra grading.",
+      "reversible": false
+    }
+  ]
+}

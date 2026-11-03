@@ -45,6 +45,7 @@ for (const name of [
   "react-dom",
   "lucide-react",
   "zod",
+  "katex",
   "@fontsource/dm-sans",
   "@fontsource/manrope",
 ]) {

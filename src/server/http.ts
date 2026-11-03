@@ -11,11 +11,17 @@ import { syncOfflineSession } from "./offline.ts";
 import { allowedHost } from "./access.ts";
 
 async function body(req: IncomingMessage) {
+  // Authoring carries both base and edited snapshots, including embedded pictures.
+  const limit =
+    req.url?.split("?")[0] === "/api/authoring"
+      ? 16 * 1024 * 1024
+      : 5 * 1024 * 1024;
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 5 * 1024 * 1024) throw new AppError("Request exceeds 5 MB", 413);
+    if (size > limit)
+      throw new AppError(`Request exceeds ${limit / 1024 / 1024} MiB`, 413);
     chunks.push(chunk);
   }
   try {
