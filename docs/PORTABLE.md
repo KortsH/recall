@@ -131,7 +131,7 @@ npm run recall -- reset-learning "My quiz"
 npm run recall -- reset-learning "My quiz" --apply
 ```
 
-Historical server attempt evidence is retained and marked invalid. A per-deck learning generation prevents pre-reset sessions and offline recovery files from restoring progress. Other downloaded clients must reload the reset deck using the current app. If old pending answers block sync, Settings offers **Export unsynced progress**, then **Discard outdated answers & reload decks**. The discard action verifies a newer server generation and affects only those outdated decks; pending work for other decks stays local.
+Historical server attempt evidence is retained and marked invalid. A per-deck learning generation prevents pre-reset sessions and offline recovery files from silently restoring progress. Other downloaded clients must reload the reset deck using the current app. Settings offers **Export unsynced progress** and **Use latest server progress**; choosing the server prepares a backup and replaces only conflicting device downloads. Pending work for other decks stays local. To keep local mastery instead, use the separate previewed **Use this device’s progress** snapshot restore described above. Normal sync never relabels old evidence as current.
 
 A portable progress backup can be restored explicitly in a device-only workspace. Full server rollback uses the owner's PostgreSQL backup. Downloading a backup or previewing a reset does not perform the reset.
 
