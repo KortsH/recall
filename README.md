@@ -94,9 +94,103 @@ The first answer is checked against aliases. The second is open prose: compare y
 
 If import reports an error, give that message to the assistant and ask for a corrected **complete JSON object**. Do not paste fragments or an explanation around the JSON. Review question count, wording, answers and proposed archives in the import preview.
 
+## Pictures, graphs and LaTeX formulas
+
+Open **Read a picture** and **Render an equation** in the [guided sample](https://kortsh.github.io/recall/#guide) to try these features. You can jump straight to them; you do not need to finish the earlier chapters. The [ready-to-import picture/math bank](examples/media-math.json) includes the actual picture bytes and is also part of the downloadable tutorial quiz.
+
+### The easiest workflow: ask an assistant, then attach the picture
+
+1. Give your online assistant the notes, graph or equation and the quiz prompt above. Ask for a clear question, a worked model answer, plausible choices and explicit checking rules. Add the instruction below.
+2. Paste its JSON into **Question library → Import → Preview import → Apply import**. The assistant should leave image fields out; attach the actual file yourself rather than copying invented base64 or a path from its answer.
+3. Edit the question. Under **Question picture**, choose a PNG, JPEG or WebP, write the required picture description and optionally add a caption. Put worked-solution pictures under **Model-answer picture**, so they appear after reveal/feedback rather than giving away the answer.
+4. Open **Preview question and model**, check the formula and graph labels, then save. **Export** embeds the picture in the quiz file. Your friend can import that single file on computer or phone, offline; no image host or separate upload is needed.
+
+Add this to your assistant prompt:
+
+```text
+For graphs, make the question precise about what to read or calculate.
+Use $...$ for inline LaTeX and $$...$$ for a formula on its own line.
+Escape each LaTeX backslash as two backslashes inside JSON strings.
+Keep ordinary explanations as normal text, not one enormous math formula.
+Give short acceptedAnswers or requiredParts for exact numerical results;
+for a proof or explanation, use a rubric and self-assessment instead.
+Use consistent units and notation. Do not infer symbolic algebra grading.
+Leave image and answerImage out: I will attach the source pictures in
+Recall's editor. Do not invent base64 data, URLs or local file paths.
+```
+
+### Copyable example: a graph and an equation
+
+Import this complete bank, then attach the [example graph](examples/assets/line-graph.jpg) to `slope-001` in the editor. The diagram question is ready to study once its picture is attached. Alternatively, import [media-math.json](examples/media-math.json) to get the picture already embedded.
+
+```json
+{
+  "deck": "Graphs and algebra",
+  "questions": [
+    {
+      "id": "slope-001",
+      "topic": "Graphs",
+      "question": "Use the diagram. What is the slope $m$ of the line?",
+      "answer": "$$m=\\frac{5-1}{2-0}=2$$",
+      "options": ["$m=1$", "$m=2$", "$m=3$", "$m=5$"],
+      "correct": ["$m=2$"],
+      "acceptedAnswers": ["2", "m=2"],
+      "explanation": "Slope is the change in $y$ divided by the change in $x$.",
+      "reversible": false
+    },
+    {
+      "id": "roots-001",
+      "topic": "Equations",
+      "question": "Find both solutions of $x^2-5x+6=0$.",
+      "answer": "$(x-2)(x-3)=0$, so $x=2$ or $x=3$.",
+      "requiredParts": [["2", "x=2"], ["3", "x=3"]],
+      "explanation": "Enter both roots separated by a semicolon, such as 2; 3.",
+      "reversible": false
+    }
+  ]
+}
+```
+
+The first objective uses rendered choices for recognition and accepts `2` or `m=2` during written recall. The second requires both roots, in either order. **Rendering is not algebra grading:** equivalent expressions such as `x+x`, `2x` and `2*x` need authored aliases if you want automatic checking. For longer derivations, omit exact-check fields and let the learner compare with the model and rate themselves.
+
+### Write math so it displays clearly
+
+In normal editor text fields, type ordinary LaTeX. In JSON, double each backslash:
+
+| Purpose | Type in the editor | Write as a JSON string value |
+| --- | --- | --- |
+| Inline formula in a sentence | `$x^2+y^2=z^2$` | `"$x^2+y^2=z^2$"` |
+| Fraction on its own line | `$$\frac{a}{b}$$` | `"$$\\frac{a}{b}$$"` |
+| Square root | `$\sqrt{x}$` | `"$\\sqrt{x}$"` |
+| Units | `$5\,\mathrm{m/s}$` | `"$5\\,\\mathrm{m/s}$"` |
+
+Use inline math for short symbols and display math for a worked step. Keep choices brief and similar in length; every `correct` entry must exactly match its raw `options` string, including math delimiters. Use `explanation` for the reasoning, rather than repeating the answer. Formulas render in prompts, model/submitted answers, explanations, choices and captions. KaTeX and fonts are bundled for offline use; no external equation service is needed. Unsupported formulas remain readable source, and ordinary HTML is not rendered.
+
+Crop pictures to the useful graph or diagram, keep axis labels/units legible on a phone, and use clear contrast. The required `alt` description should describe the useful visual information without supplying a result the student must calculate. A caption can direct attention to labelled points; a worked solution belongs in the model answer. The editor accepts source pictures up to 10 MiB/16 megapixels, resizes to at most 2048 pixels on the long edge, and fits each embedded picture under 1 MiB. The full shareable file must stay under 5 MiB.
+
+### How image JSON and CLI authoring work
+
+`image` and `answerImage` use the same object: `src` contains embedded PNG/JPEG/WebP data, `alt` is a required description, and `caption` is optional. They also work inside authored `variants` and `reverse`; reverse images are authored separately. The editor and exporter create the real data URLs for you. Normal import rejects local paths, remote URLs and SVG. See the [complete media guide](docs/MEDIA.md) for all limits and inheritance rules.
+
+An agent working with files can prepare a draft with a relative `image.src`, such as `assets/graph.png`, inside the bank's directory. This draft must be **packed before import**. A complete working example is included:
+
+```sh
+npm run recall -- pack examples/media-math.source.json -o private/math.recall.json
+npm run recall -- validate private/math.recall.json
+```
+
+To attach a file to an existing question, preview first, then repeat without `--dry-run`:
+
+```sh
+npm run recall -- question-image "My quiz" graph-001 private/graph.png --alt "Axes and two labelled points" --dry-run
+npm run recall -- question-image "My quiz" graph-001 private/graph.png --alt "Axes and two labelled points"
+```
+
+Add `--answer` for a model-answer picture, `--variant reverse` for the reverse direction, or `--clear` without a file to remove it. Picture changes reset that objective's mastery, just like a corrected question. Default exports contain questions and pictures, with no learner progress.
+
 ## How one question becomes several ways to learn
 
-**Pictures and equations:** attach a picture in the question editor; exports embed it in the JSON so friends can import it offline without separate files or a server. LaTeX renders locally in prompts, answers and choices. Start with the [pictures/math example](examples/media-math.json) or read the [authoring guide](docs/MEDIA.md) for JSON escaping, image fields, CLI packing and grading rules. Blank Enter or **Alt+5** reveals an open question for mental self-assessment; bare **5** works outside text inputs.
+Blank Enter or **Alt+5** reveals an open question for mental self-assessment; bare **5** works outside text inputs.
 
 One record is one learning objective, with a stable id and shared progress. Written recall and a flashcard exist automatically. Learn introduces new objectives with single-answer recognition, preferring authored single-choice options or using other bank answers for introductory choices, then moves to recall in small working sets. You do not need duplicate records for each format.
 

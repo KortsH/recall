@@ -762,5 +762,12 @@
   "sync.restoreWarning": "This replaces progress for the matching questions. A device backup will be downloaded and the server keeps its previous snapshot. Active sessions close; other devices must refresh. Their old answers remain protected from accidental replay.",
   "sync.confirmRestore": "Back up & replace server progress",
   "sync.restored": "Progress restored. Refresh your other devices and choose the latest server progress there.",
-  "sync.downloadServerBackup": "Download server progress backup"
+  "sync.downloadServerBackup": "Download server progress backup",
+  "guide.pictures.attach": "In your own deck: Question library → edit the question → Question picture → choose your file. Put a worked solution in Model-answer picture.",
+  "guide.pictures.check": "Describe the axes or labelled points without giving away the result. Preview the question and model, and check that small labels are readable on a phone.",
+  "guide.pictures.share": "Save and export. The quiz file contains the picture bytes, so your friend needs no separate file, URL or image server.",
+  "guide.math.editorLabel": "Type this in the model-answer editor",
+  "guide.math.jsonLabel": "The same answer field inside JSON",
+  "guide.math.renderLabel": "What the learner sees",
+  "guide.math.authorTip": "JSON needs two backslashes where the editor needs one. Keep explanations as ordinary text and use display math for a worked step. These delimiters render the formula; acceptedAnswers, requiredParts or self-assessment decide how it is checked."
 }

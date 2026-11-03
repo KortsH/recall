@@ -762,5 +762,12 @@
   "sync.restoreWarning": "See asendab vastavate küsimuste edenemise. Seadme varukoopia laaditakse alla ja server säilitab eelmise tõmmise. Aktiivsed seansid suletakse; teisi seadmeid tuleb värskendada. Nende vanu vastuseid ei rakendata kogemata uuesti.",
   "sync.confirmRestore": "Varunda ja asenda serveri edenemine",
   "sync.restored": "Edenemine taastatud. Värskenda teisi seadmeid ja vali seal uusim serveri edenemine.",
-  "sync.downloadServerBackup": "Laadi serveri edenemise varukoopia alla"
+  "sync.downloadServerBackup": "Laadi serveri edenemise varukoopia alla",
+  "guide.pictures.attach": "Oma pakis: küsimuste kogu → muuda küsimust → küsimuse pilt → vali fail. Lahenduskäigu pilt lisa näidisvastuse pildiks.",
+  "guide.pictures.check": "Kirjelda telgi või märgitud punkte vastust ette ütlemata. Vaata küsimuse ja näidisvastuse eelvaadet ning kontrolli, et väikesed sildid oleksid telefonis loetavad.",
+  "guide.pictures.share": "Salvesta ja ekspordi. Küsimustiku fail sisaldab pildiandmeid, seega pole sõbral vaja eraldi faili, URL-i ega pildiserverit.",
+  "guide.math.editorLabel": "Kirjuta see näidisvastuse redaktorisse",
+  "guide.math.jsonLabel": "Sama vastuseväli JSON-is",
+  "guide.math.renderLabel": "Mida õppija näeb",
+  "guide.math.authorTip": "JSON-is on vaja kahte kurakriipsu seal, kus redaktoris piisab ühest. Kirjuta selgitused tavalise tekstina ja kasuta eraldi real valemit lahenduskäigu jaoks. Eraldajad kuvavad valemi; vastuse kontrollimise määravad acceptedAnswers, requiredParts või enesehindamine."
 }

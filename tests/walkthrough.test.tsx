@@ -212,6 +212,23 @@ test("guided practice uses the shared rules without network or workspace writes,
     );
     await chapter("defaults");
     assert.ok(document.querySelectorAll(".guide-option").length >= 2);
+    await chapter("pictures");
+    assert.equal(
+      document.querySelectorAll(".guide-authoring-steps li").length,
+      3,
+    );
+    assert.ok(document.querySelector(".guide-card .quiz-image img"));
+    await chapter("math");
+    const example = JSON.parse(
+      document.querySelector(".guide-authoring-example pre code")!.textContent!,
+    );
+    assert.equal(example.answer, "$$\\frac{1}{2}$$");
+    assert.ok(document.querySelector(".guide-formula-result .katex math"));
+    assert.equal(
+      walkthroughSteps.length,
+      16,
+      "Authoring help must not add more chapters",
+    );
     await chapter("make");
     const prompt = document.querySelector<HTMLTextAreaElement>(
       ".guide-prompt textarea",

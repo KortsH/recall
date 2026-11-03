@@ -79,6 +79,7 @@ export function Walkthrough({ onClose }: { onClose: () => void }) {
               flag: { note: tr("guide.flagExample"), allowDependents: false },
             }
           : source;
+  const fractionExample = "$$\\frac{1}{2}$$";
   return (
     <main className="walkthrough">
       <header className="guide-header">
@@ -240,6 +241,30 @@ export function Walkthrough({ onClose }: { onClose: () => void }) {
                   : tr("guide.featureNotice")}
               </summary>
               <p>{tr(key("why"))}</p>
+              {step.id === "pictures" && (
+                <ol className="guide-authoring-steps">
+                  <li>{tr("guide.pictures.attach")}</li>
+                  <li>{tr("guide.pictures.check")}</li>
+                  <li>{tr("guide.pictures.share")}</li>
+                </ol>
+              )}
+              {step.id === "math" && (
+                <div className="guide-authoring-example">
+                  <strong>{tr("guide.math.editorLabel")}</strong>
+                  <code>{fractionExample}</code>
+                  <strong>{tr("guide.math.jsonLabel")}</strong>
+                  <pre>
+                    <code>
+                      {JSON.stringify({ answer: fractionExample }, null, 2)}
+                    </code>
+                  </pre>
+                  <strong>{tr("guide.math.renderLabel")}</strong>
+                  <div className="guide-formula-result">
+                    <RichText text={fractionExample} />
+                  </div>
+                  <p>{tr("guide.math.authorTip")}</p>
+                </div>
+              )}
               <strong>{tr("guide.defaultsLabel")}</strong>
               <p>{tr(key("defaults"))}</p>
               <span className="eyebrow">{tr("guide.fieldsLabel")}</span>
