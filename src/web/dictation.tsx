@@ -54,6 +54,8 @@ export function Dictation({
   onReady,
   disabled = false,
   draftKey,
+  language,
+  label,
 }: {
   value: string;
   onChange: (text: string) => void;
@@ -61,11 +63,14 @@ export function Dictation({
   onReady?: () => void;
   disabled?: boolean;
   draftKey: string;
+  language?: string;
+  label?: string;
 }) {
   useLanguage();
   const [prefs, setPrefs] = useState(preferences);
   const [phase, setPhase] = useState<"idle" | "checking" | "listening">("idle");
   const [error, setError] = useState("");
+  const recognitionLanguage = language ?? prefs.lang;
   const answer = useRef(value),
     changeAnswer = useRef(onChange),
     submitAnswer = useRef(onSubmit),
@@ -145,6 +150,10 @@ export function Dictation({
   useEffect(() => {
     if (disabled) cancel();
   }, [disabled]);
+  useEffect(() => {
+    cancel();
+    setError("");
+  }, [language]);
   function change(next: typeof prefs) {
     cancel();
     setError("");
@@ -183,7 +192,7 @@ export function Dictation({
       if (!valid()) return;
       const prefix = answer.current;
       let received = false;
-      r.lang = prefs.lang;
+      r.lang = recognitionLanguage;
       r.continuous = true;
       r.interimResults = true;
       if ("processLocally" in r) r.processLocally = !prefs.remote;
@@ -250,7 +259,7 @@ export function Dictation({
         r.processLocally = true;
         if (Constructor!.available) {
           const result = await Constructor!.available({
-            langs: [prefs.lang],
+            langs: [recognitionLanguage],
             processLocally: true,
           });
           if (!valid()) return;
@@ -271,6 +280,10 @@ export function Dictation({
   const languages = [
     ...new Set([
       prefs.lang,
+      recognitionLanguage,
+      "es-ES",
+      "es-MX",
+      "nl-NL",
       ...availableLanguages.map((l) => speechLanguage(l.code)),
       navigator.language,
     ]),
@@ -314,15 +327,15 @@ export function Dictation({
                 ? tr("dictation.stop")
                 : phase === "checking"
                   ? tr("dictation.checking")
-                  : tr("dictation.start")}
+                  : (label ?? tr("dictation.start"))}
             </button>
             <details ref={options}>
               <summary>{tr("dictation.options")}</summary>
               <label>
                 {tr("dictation.language")}
                 <select
-                  disabled={disabled || phase !== "idle"}
-                  value={prefs.lang}
+                  disabled={disabled || phase !== "idle" || !!language}
+                  value={recognitionLanguage}
                   onChange={(e) => change({ ...prefs, lang: e.target.value })}
                 >
                   {languages.map((lang) => (

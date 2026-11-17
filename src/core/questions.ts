@@ -1,72 +1,82 @@
 import type { Question, Variant } from "./types.ts";
+import { reverseSpeech } from "./speech.ts";
 
 /** Browser-safe question projection. No filesystem, database, or Node dependencies. */
 export function variants(q: Question): Variant[] {
-  return [
-    ...(q.options
-      ? [
-          {
-            id: "choice",
-            type:
-              (q.correct?.length ?? 1) > 1
-                ? "multiple_select"
-                : "multiple_choice",
-            question: q.question,
-            image: q.image,
-            answerImage: q.answerImage,
-            answer: q.answer,
-            options: q.options,
-            correct: q.correct ?? [q.answer],
-            skill: q.skill,
-          } as Variant,
-        ]
-      : []),
-    {
-      id: "written",
-      image: q.image,
-      answerImage: q.answerImage,
-      type: "written",
-      question: q.question,
-      answer: q.answer,
-      acceptedAnswers: q.acceptedAnswers,
-      requiredParts: q.requiredParts,
-      rubric: q.rubric,
-      skill: q.skill,
-    },
-    {
-      id: "flashcard",
-      image: q.image,
-      answerImage: q.answerImage,
-      type: "flashcard",
-      question: q.question,
-      answer: q.answer,
-      skill: q.skill,
-    },
-    ...q.variants.map((v) => ({
-      ...v,
-      skill: v.skill ?? q.skill,
-      image: v.image ?? q.image,
-      answerImage: v.answerImage ?? q.answerImage,
-    })),
-    ...(q.reversible && q.reverse
-      ? [
-          {
-            ...q.reverse,
-            rubric: q.reverse.rubric ?? [],
-            id: "reverse",
-            type: "written" as const,
-            skill: q.skill,
-          },
-          {
-            ...q.reverse,
-            rubric: q.reverse.rubric ?? [],
-            id: "reverse-flashcard",
-            type: "flashcard" as const,
-            skill: q.skill,
-          },
-        ]
-      : []),
-  ];
+  return (
+    [
+      ...(q.options
+        ? [
+            {
+              id: "choice",
+              type:
+                (q.correct?.length ?? 1) > 1
+                  ? "multiple_select"
+                  : "multiple_choice",
+              question: q.question,
+              image: q.image,
+              answerImage: q.answerImage,
+              answer: q.answer,
+              options: q.options,
+              correct: q.correct ?? [q.answer],
+              skill: q.skill,
+            } as Variant,
+          ]
+        : []),
+      {
+        id: "written",
+        image: q.image,
+        answerImage: q.answerImage,
+        type: "written",
+        question: q.question,
+        answer: q.answer,
+        acceptedAnswers: q.acceptedAnswers,
+        requiredParts: q.requiredParts,
+        rubric: q.rubric,
+        skill: q.skill,
+      },
+      {
+        id: "flashcard",
+        image: q.image,
+        answerImage: q.answerImage,
+        type: "flashcard",
+        question: q.question,
+        answer: q.answer,
+        skill: q.skill,
+      },
+      ...q.variants.map((v) => ({
+        ...v,
+        skill: v.skill ?? q.skill,
+        image: v.image ?? q.image,
+        answerImage: v.answerImage ?? q.answerImage,
+      })),
+      ...(q.reversible && q.reverse
+        ? [
+            {
+              ...q.reverse,
+              rubric: q.reverse.rubric ?? [],
+              id: "reverse",
+              type: "written" as const,
+              skill: q.skill,
+            },
+            {
+              ...q.reverse,
+              rubric: q.reverse.rubric ?? [],
+              id: "reverse-flashcard",
+              type: "flashcard" as const,
+              skill: q.skill,
+            },
+          ]
+        : []),
+    ] as Variant[]
+  ).map((v) => ({
+    ...v,
+    speech:
+      v.speech ??
+      (v.id === "reverse" || v.id === "reverse-flashcard"
+        ? reverseSpeech(q.speech)
+        : q.speech),
+  }));
 }
 export const recallDirection = (
   q: Question,
@@ -83,6 +93,7 @@ export function resolveVariant(q: Question, id: string): Variant {
   if (id === "learn-choice")
     return {
       id,
+      speech: q.speech,
       image: q.image,
       answerImage: q.answerImage,
       type: "multiple_choice",

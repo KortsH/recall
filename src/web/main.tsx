@@ -35,6 +35,7 @@ import {
   type ThemePreference,
 } from "./theme.ts";
 import { ReadAloud } from "./speech.tsx";
+import { PronunciationPractice } from "./pronunciation.tsx";
 import { AnswerComparison } from "./answers.tsx";
 import { RichText } from "./rich-text.tsx";
 import { ImageFigure, ImageEditor } from "./media.tsx";
@@ -2355,6 +2356,7 @@ function App() {
                 </h2>
                 <ReadAloud
                   text={feedback.answer}
+                  lang={feedback.speech?.answerLang}
                   label={tr("app.read_model_answer")}
                 />
                 {feedback.hintUsed && (
@@ -2371,6 +2373,12 @@ function App() {
                   connections={feedback.confusedWith}
                   correct={feedback.correct}
                   image={feedback.answerImage}
+                />
+                <PronunciationPractice
+                  key={`${feedback.questionId}:${feedback.variantId}:${feedback.at}`}
+                  question={feedback.question}
+                  answer={feedback.answer}
+                  speech={feedback.speech}
                 />
                 {feedback.explanation && (
                   <p className="explanation">
@@ -2455,6 +2463,7 @@ function App() {
                     />
                     <ReadAloud
                       text={card.question}
+                      lang={card.speech?.questionLang}
                       label={tr("app.read_question")}
                     />
                     {card.hasHint && session.mode !== "test" && !reveal && (
@@ -2724,6 +2733,7 @@ function App() {
                               key={`${session.id}:${session.cursor}:${card.revision}`}
                               draftKey={`${session.id}:${session.cursor}:${card.revision}`}
                               disabled={busy}
+                              language={card.speech?.answerLang}
                               value={response}
                               onChange={setResponse}
                               onSubmit={() => submit()}
@@ -2762,7 +2772,14 @@ function App() {
                         />
                         <ReadAloud
                           text={reveal.answer}
+                          lang={reveal.speech?.answerLang}
                           label={tr("app.read_model_answer")}
+                        />
+                        <PronunciationPractice
+                          key={`${session.id}:${session.cursor}:${card.revision}`}
+                          question={card.question}
+                          answer={reveal.answer}
+                          speech={reveal.speech}
                         />
                         <p className="explanation">
                           <RichText text={reveal.explanation} />

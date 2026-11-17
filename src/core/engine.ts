@@ -362,6 +362,7 @@ export function publicCard(
   };
   return {
     ...(entry.retentionCheck ? { retentionCheck: true } : {}),
+    ...(v.speech ? { speech: v.speech } : {}),
     ...(v.image ? { image: v.image } : {}),
     ...(v.requiredParts ? { answerParts: v.requiredParts.length } : {}),
     questionId: item.question.id,

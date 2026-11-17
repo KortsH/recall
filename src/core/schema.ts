@@ -3,6 +3,14 @@ import type { Bank, Question } from "./types.ts";
 import { validatePrerequisites } from "./prerequisites.ts";
 import { MAX_IMAGE_BYTES, validateImageSource } from "./media.ts";
 const text = z.string().trim().min(1).max(20000);
+const speechLanguage = z.string().regex(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i);
+const speech = z
+  .object({
+    questionLang: speechLanguage,
+    answerLang: speechLanguage,
+    practice: z.enum(["question", "answer"]).optional(),
+  })
+  .strict();
 const image = z
   .object({
     src: z
@@ -25,6 +33,7 @@ const grading = {
 };
 const variantSchema = z
   .object({
+    speech: speech.optional(),
     image: image.optional(),
     answerImage: image.optional(),
     id: text,
@@ -50,6 +59,7 @@ const variantSchema = z
   .strict();
 const questionSchema = z
   .object({
+    speech: speech.optional(),
     image: image.optional(),
     answerImage: image.optional(),
     id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/),
@@ -185,6 +195,7 @@ export function semanticContent(q: Question): string {
     depends_on,
     hint,
     flag,
+    speech,
     reversible,
     ...content
   } = q;
@@ -196,7 +207,8 @@ export function semanticContent(q: Question): string {
             Object.entries(value)
               .filter(
                 ([k, v]) =>
-                  !["explanation", "hint"].includes(k) && v !== undefined,
+                  !["explanation", "hint", "speech"].includes(k) &&
+                  v !== undefined,
               )
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([k, v]) => [k, canonical(v)]),

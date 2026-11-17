@@ -769,5 +769,15 @@
   "guide.math.editorLabel": "Type this in the model-answer editor",
   "guide.math.jsonLabel": "The same answer field inside JSON",
   "guide.math.renderLabel": "What the learner sees",
-  "guide.math.authorTip": "JSON needs two backslashes where the editor needs one. Keep explanations as ordinary text and use display math for a worked step. These delimiters render the formula; acceptedAnswers, requiredParts or self-assessment decide how it is checked."
+  "guide.math.authorTip": "JSON needs two backslashes where the editor needs one. Keep explanations as ordinary text and use display math for a worked step. These delimiters render the formula; acceptedAnswers, requiredParts or self-assessment decide how it is checked.",
+  "speech.installLanguageVoice": "Install a local voice for {{lang}} in your device’s speech/language settings.",
+  "pronunciation.title": "Speaking practice",
+  "pronunciation.listen": "Listen",
+  "pronunciation.slow": "Listen slowly",
+  "pronunciation.disclaimer": "Checks which words the browser recognises, not your accent or individual sounds. Practice does not affect mastery. A missing voice requires a device language pack.",
+  "pronunciation.speak": "Say it back",
+  "pronunciation.heard": "Heard: {{text}}",
+  "pronunciation.check": "Check spoken words",
+  "pronunciation.matched": "The expected words were recognised. Listen and compare the sounds yourself, too.",
+  "pronunciation.retry": "Different words were recognised. Listen again, check the microphone/language, and retry. This alone does not prove your pronunciation was wrong."
 }

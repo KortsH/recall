@@ -20,6 +20,7 @@ export function presentAttempt(
 ): Attempt & { answerImage?: QuizImage } {
   const shown: Attempt & { answerImage?: QuizImage } = { ...attempt };
   delete shown.answerImage;
+  delete shown.speech;
   const item = items.find(
     (i) =>
       i.question.id === attempt.questionId &&
@@ -29,6 +30,8 @@ export function presentAttempt(
   const image =
     item && resolveVariant(item.question, attempt.variantId).answerImage;
   if (image) shown.answerImage = image;
+  if (item)
+    shown.speech = resolveVariant(item.question, attempt.variantId).speech;
   return shown;
 }
 
@@ -285,6 +288,7 @@ export function revealAnswer(
   };
   return {
     answer: v.answer,
+    ...(v.speech ? { speech: v.speech } : {}),
     ...(v.answerImage ? { answerImage: v.answerImage } : {}),
     explanation: v.explanation ?? item.question.explanation,
     rubric: v.rubric ?? item.question.rubric ?? [],

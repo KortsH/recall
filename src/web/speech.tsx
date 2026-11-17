@@ -5,12 +5,31 @@ import { Volume2, Square } from "lucide-react";
 /** Device voices only: quiz text is never sent to a remote speech service by Recall. */
 export const localVoices = (voices: SpeechSynthesisVoice[]) =>
   voices.filter((v) => v.localService);
+export function selectVoice(
+  voices: SpeechSynthesisVoice[],
+  language: string,
+  strict = false,
+) {
+  const local = localVoices(voices),
+    lang = language.toLowerCase();
+  return (
+    local.find((v) => v.lang.toLowerCase() === lang) ??
+    local.find(
+      (v) => v.lang.toLowerCase().split("-")[0] === lang.split("-")[0],
+    ) ??
+    (strict ? undefined : local[0])
+  );
+}
 export function ReadAloud({
   text,
   label = tr("speech.readAloud"),
+  lang,
+  rate = 1,
 }: {
   text: string;
   label?: string;
+  lang?: string;
+  rate?: number;
 }) {
   useLanguage();
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -41,8 +60,13 @@ export function ReadAloud({
     if (utterance.current && supported) window.speechSynthesis.cancel();
     utterance.current = null;
     setSpeaking(false);
-  }, [text, supported]);
+  }, [text, lang, rate, supported]);
   if (!supported) return null;
+  const voice = selectVoice(
+    voices,
+    lang || document.documentElement.lang || navigator.language || "en",
+    !!lang,
+  );
   function toggle() {
     const synth = window.speechSynthesis;
     if (speaking) {
@@ -50,12 +74,6 @@ export function ReadAloud({
       setSpeaking(false);
       return;
     }
-    const language =
-      document.documentElement.lang || navigator.language || "en";
-    const voice =
-      voices.find((v) =>
-        v.lang.toLowerCase().startsWith(language.split("-")[0].toLowerCase()),
-      ) ?? voices[0];
     if (!voice) return;
     window.dispatchEvent(new Event("recall-stop-dictation"));
     window.dispatchEvent(new Event("recall-stop-reading"));
@@ -64,6 +82,7 @@ export function ReadAloud({
     utterance.current = next;
     next.voice = voice;
     next.lang = voice.lang;
+    next.rate = Math.max(0.5, Math.min(1.5, rate));
     next.onend = next.onerror = () => {
       setSpeaking(false);
       utterance.current = null;
@@ -76,11 +95,13 @@ export function ReadAloud({
       type="button"
       className="text-button read-aloud"
       aria-pressed={speaking}
-      disabled={!voices.length}
+      disabled={!voice}
       title={
-        voices.length
+        voice
           ? tr("speech.uses_a_voice_installed_on_this_device")
-          : tr("speech.no_local_speech_voice_is_available_in_this_browser")
+          : lang
+            ? tr("speech.installLanguageVoice", { lang })
+            : tr("speech.no_local_speech_voice_is_available_in_this_browser")
       }
       onClick={toggle}
     >

@@ -67,6 +67,34 @@ The versioned JSON bank is independent of the UI. An externally generated file c
 
 ## Generated formats
 
+### Language learning and speaking practice
+
+Add optional `speech` metadata to an objective (or an explicit variant) to select each side's language:
+
+```json
+{
+  "id": "es-bread",
+  "question": "bread",
+  "answer": "el pan",
+  "acceptedAnswers": ["el pan", "pan"],
+  "speech": { "questionLang": "en-US", "answerLang": "es-ES" },
+  "reversible": true,
+  "reverse": {
+    "question": "el pan",
+    "answer": "bread",
+    "acceptedAnswers": ["bread"]
+  }
+}
+```
+
+Use BCP 47 tags such as `es-ES`, `es-MX`, `nl-NL` and `en-US`. Reverse recall swaps the languages and practises the original target-language side. `speech.practice` can choose `"question"` instead of the default `"answer"`. Keep each spoken side in a single language: put instructions and grammar notes in `explanation`. CLI/UI import, export and the editor's JSON tab preserve this metadata. Speech-only changes do not reset progress.
+
+After revealing/submitting an answer, expand **Speaking practice** for normal/slow playback and **Say it back**. The check compares expected words with the browser transcript, ignoring case and punctuation. It is **not** a phoneme, accent or pronunciation-quality score, and never grades the quiz or changes mastery. Recognition can mishear correct speech or infer words from imperfect speech. Listen and compare the sounds yourself, too. Public Test cards expose only language tags, never hidden pronunciation/model text.
+
+Playback uses installed **local** device voices matching the requested language. Install an operating-system speech/language pack if a matching voice is missing. Recall never substitutes an English or cloud voice for Spanish/Dutch; a same-language regional voice can be used. Dictation selects the answer language automatically. Recognition requires a supported browser and secure context, and is unavailable in some browsers/Android WebViews. On-device recognition is the default and may need an installed language model. **Voice options → Allow browser speech service** explicitly permits that browser's service, which may send audio to its provider. Recall adds no transcription backend, stores no audio, and never silently enables this option. Typing and self-assessment remain available.
+
+### Format selection
+
 Learn can present an existing question as recognition without changing its bank data. It prefers an authored single-choice variant; otherwise it builds options from distinct existing answers, preferring the same topic and excluding known aliases. No new facts/questions are generated. Small banks use fewer choices; if no distractor exists, the model answer and an explicit “I don’t know yet” choice provide the introductory step. Review distractor suitability for your material; authored choices remain preferable for subtle overlapping definitions. `learn-choice` is reserved for this session-only projection and never changes content hashes or question revisions.
 
 Each record provides a written question and flashcard automatically. `options` adds a choice question. `correct` is a list of exact option strings; omit it for a single correct option matching `answer`. Multiple correct strings create a multiple-select question. Distractors must be plausible and demonstrably wrong under the stated assumptions.

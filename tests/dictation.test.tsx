@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { Dictation, type Recognition } from "../src/web/dictation.tsx";
 import { setLanguage } from "../src/web/i18n.ts";
 
-async function setup(Constructor?: unknown, initial = "") {
+async function setup(Constructor?: unknown, initial = "", language?: string) {
   const dom = new JSDOM('<div id="root"></div>', {
     url: "https://recall.example.test",
   });
@@ -51,6 +51,7 @@ async function setup(Constructor?: unknown, initial = "") {
           }}
         />
         <Dictation
+          language={language}
           draftKey={id}
           disabled={disabled}
           value={value}
@@ -115,6 +116,18 @@ class LocalRecognition implements Recognition {
     this.aborts++;
   }
 }
+
+test("a language card uses its answer language independently of the interface", async () => {
+  const h = await setup(LocalRecognition, "", "nl-NL");
+  try {
+    await h.render();
+    await h.click("Dictate answer");
+    assert.equal(LocalRecognition.instances.at(-1)!.lang, "nl-NL");
+    assert.equal(document.querySelector("select")!.value, "nl-NL");
+  } finally {
+    await h.close();
+  }
+});
 
 test("continuous dictation writes into the answer, survives long pauses and browser disconnects, and stops only on user action", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -187,14 +200,12 @@ test("Enter stops and submits current dictated text without a separate Stop; sub
     );
     const late = r.onresult!;
     await act(async () =>
-      document
-        .querySelector("textarea")!
-        .dispatchEvent(
-          new h.dom.window.KeyboardEvent("keydown", {
-            key: "Enter",
-            bubbles: true,
-          }),
-        ),
+      document.querySelector("textarea")!.dispatchEvent(
+        new h.dom.window.KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+        }),
+      ),
     );
     assert.deepEqual(h.submitted, ["My spoken answer"]);
     assert.ok(r.aborts > 0);
@@ -207,14 +218,12 @@ test("Enter stops and submits current dictated text without a separate Stop; sub
     await act(async () => next.onend?.());
     const count = LocalRecognition.instances.length;
     await act(async () =>
-      h
-        .button("Stop dictation")
-        .dispatchEvent(
-          new h.dom.window.KeyboardEvent("keydown", {
-            key: "Enter",
-            bubbles: true,
-          }),
-        ),
+      h.button("Stop dictation").dispatchEvent(
+        new h.dom.window.KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+        }),
+      ),
     );
     await act(async () => t.mock.timers.tick(15000));
     assert.equal(LocalRecognition.instances.length, count);
@@ -262,14 +271,12 @@ test("browser-service opt-in remains explicit, permission errors stop retrying, 
     let bubbled = 0;
     document.addEventListener("keydown", () => bubbled++);
     await act(async () =>
-      h
-        .button("Dictate answer")
-        .dispatchEvent(
-          new h.dom.window.KeyboardEvent("keydown", {
-            key: "Enter",
-            bubbles: true,
-          }),
-        ),
+      h.button("Dictate answer").dispatchEvent(
+        new h.dom.window.KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+        }),
+      ),
     );
     assert.equal(bubbled, 0);
     await h.click("Dictate answer");

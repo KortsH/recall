@@ -259,6 +259,7 @@ Optional fields can be omitted. Defaults describe behavior; they need not appear
 | `explanation` | Optional; empty string | Explains why the answer is right. Explanation-only changes preserve mastery. |
 | `difficulty` | Optional; `1` | Author's integer 1–5 label/filter, not grading strictness or an unlock threshold. |
 | `tags` | Optional; `[]` | String labels for organization/review. |
+| `speech` | Optional; interface/device language | Language tags `questionLang` and `answerLang`, plus optional `practice: "question" \| "answer"`. Selects local playback/dictation and post-answer speaking practice. Reverse swaps sides. Metadata-only changes preserve progress. |
 | `options` | Optional; 2–12 unique strings | Authored choice answers. Without them, Learn can build introductory choices from other answers. |
 | `correct` | Optional; `[answer]` when options exist | Exact strings from `options`, never indexes. One means single choice; several means select-all. Requires options; if omitted, answer must exactly match its correct option. |
 | `acceptedAnswers` | Optional nonempty string list | Complete short-answer aliases; normalizes case, spacing and limited punctuation, without inferring arbitrary paraphrases. |
@@ -538,3 +539,7 @@ npm run --silent recall -- --server https://recall.example.net questions "My qui
 ```
 
 By default the CLI uses `RECALL_SERVER_URL` if configured, otherwise the local `DATABASE_URL`. Check the destination before writing. Use `--deck "My quiz"` on import when the JSON's deck name differs from the intended destination. Exporting questions keeps dependencies, hints and review notes; add `--portable` for a shareable `.recall.json` file, and `--progress` only when intentionally including personal learning data.
+
+### Language decks and speaking practice
+
+To learn vocabulary, use a short English prompt and the target-language answer, then author a reverse question to practise both directions. Nouns are easier to use when learned with their article; teach sentences with inflected verb forms as separate application objectives, linked to the useful word cards through `depends_on`. Add `speech: {"questionLang":"en-US","answerLang":"es-ES"}` (or `nl-NL`) to select local playback and dictation languages automatically. After an answer is revealed, **Speaking practice** offers normal/slow audio and an optional “say it back” word-recognition check. It does not claim to score your accent and never changes mastery. Install a matching local voice if needed; microphone support and on-device language models depend on the browser. Browser-service recognition requires an explicit opt-in. See [language-bank JSON and voice details](docs/QUESTION_BANK.md#language-learning-and-speaking-practice).

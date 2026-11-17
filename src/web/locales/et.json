@@ -769,5 +769,15 @@
   "guide.math.editorLabel": "Kirjuta see näidisvastuse redaktorisse",
   "guide.math.jsonLabel": "Sama vastuseväli JSON-is",
   "guide.math.renderLabel": "Mida õppija näeb",
-  "guide.math.authorTip": "JSON-is on vaja kahte kurakriipsu seal, kus redaktoris piisab ühest. Kirjuta selgitused tavalise tekstina ja kasuta eraldi real valemit lahenduskäigu jaoks. Eraldajad kuvavad valemi; vastuse kontrollimise määravad acceptedAnswers, requiredParts või enesehindamine."
+  "guide.math.authorTip": "JSON-is on vaja kahte kurakriipsu seal, kus redaktoris piisab ühest. Kirjuta selgitused tavalise tekstina ja kasuta eraldi real valemit lahenduskäigu jaoks. Eraldajad kuvavad valemi; vastuse kontrollimise määravad acceptedAnswers, requiredParts või enesehindamine.",
+  "speech.installLanguageVoice": "Paigalda seadme kõne- või keeleseadetes keele {{lang}} kohalik hääl.",
+  "pronunciation.title": "Rääkimise harjutamine",
+  "pronunciation.listen": "Kuula",
+  "pronunciation.slow": "Kuula aeglaselt",
+  "pronunciation.disclaimer": "Kontrollib brauseri tuvastatud sõnu, mitte aktsenti ega üksikuid häälikuid. Harjutamine ei muuda omandatust. Puuduva hääle jaoks paigalda seadmesse keelepakett.",
+  "pronunciation.speak": "Ütle järele",
+  "pronunciation.heard": "Tuvastatud: {{text}}",
+  "pronunciation.check": "Kontrolli öeldud sõnu",
+  "pronunciation.matched": "Oodatud sõnad tuvastati. Kuula ja võrdle ka ise hääldust.",
+  "pronunciation.retry": "Tuvastati teised sõnad. Kuula uuesti, kontrolli mikrofoni ja keelt ning proovi veel. See üksi ei tõesta, et hääldus oli vale."
 }

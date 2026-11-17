@@ -1,7 +1,9 @@
 import type { QuizImage } from "./media.ts";
+import type { SpeechSettings } from "./speech.ts";
 export type Format =
   "multiple_choice" | "multiple_select" | "written" | "flashcard" | "matching";
 export interface Variant {
+  speech?: SpeechSettings;
   image?: QuizImage;
   answerImage?: QuizImage;
   hint?: string;
@@ -19,6 +21,7 @@ export interface Variant {
   rubric?: string[];
 }
 export interface Question {
+  speech?: SpeechSettings;
   image?: QuizImage;
   answerImage?: QuizImage;
   reversible?: boolean;
@@ -118,6 +121,7 @@ export interface Session {
   revealed?: { cursor: number; response: unknown; mental?: boolean };
 }
 export interface Attempt {
+  speech?: SpeechSettings;
   confusedWith?: {
     answer: string;
     questions: {
@@ -148,6 +152,7 @@ export interface Attempt {
   at: string;
 }
 export interface PublicCard {
+  speech?: SpeechSettings;
   image?: QuizImage;
   answerParts?: number;
   retentionCheck?: boolean;
